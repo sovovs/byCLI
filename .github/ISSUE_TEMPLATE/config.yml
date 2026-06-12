@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/sovovs/byCLI#readme
+    about: Check the README and docs before opening an issue.
+  - name: 🧪 Testing Guide
+    url: https://github.com/sovovs/byCLI/blob/main/TESTING.md
+    about: How to run and write tests for byCLI.

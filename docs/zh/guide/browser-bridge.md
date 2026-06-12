@@ -1,0 +1,75 @@
+# Browser Bridge 设置
+
+> **⚠️ 重要**: 浏览器命令复用你的 Chrome 登录会话。运行命令前必须在 Chrome 中登录目标网站。
+
+byCLI 通过轻量级 **Browser Bridge** Chrome 扩展 + 微守护进程连接浏览器（零配置，自动启动）。
+
+## 扩展安装
+
+### 方法 1：下载预构建版本（推荐）
+
+1. 前往 GitHub [Releases 页面](https://github.com/sovovs/byCLI/releases) 下载最新的 `bycli-extension-v{version}.zip`。
+2. 解压后打开 `chrome://extensions`，启用**开发者模式**。
+3. 点击**加载已解压的扩展程序**，选择解压后的文件夹。
+
+### 方法 2：加载源码（开发者）
+
+1. 打开 `chrome://extensions`，启用**开发者模式**。
+2. 点击**加载已解压的扩展程序**，选择仓库中的 `extension/` 目录。
+
+## 验证
+
+```bash
+bycli doctor            # 检查扩展 + 守护进程连接
+```
+
+## 多 Tab 定位
+
+浏览器命令必须紧跟一个 `<session>` 位置参数。同一个多步骤流程使用同一个 session；并行任务使用不同 session 隔离。
+
+```bash
+bycli browser baidu open https://www.baidu.com/
+bycli browser baidu tab list
+bycli browser baidu tab new https://www.baidu.com/
+bycli browser baidu eval --tab <targetId> 'document.title'
+bycli browser baidu tab select <targetId>
+bycli browser baidu get title
+bycli browser baidu tab close <targetId>
+```
+
+规则如下：
+
+- `bycli browser <session> open <url>` 和 `bycli browser <session> tab new [url]` 都会返回 `targetId`。
+- `bycli browser <session> tab list` 会打印当前已存在 tab 的 `targetId`。
+- `--tab <targetId>` 会把单条 browser 命令路由到对应 tab。
+- `tab new` 只会新建 tab，不会改变默认浏览器目标。
+- `tab select <targetId>` 会把该 tab 设为后续未显式指定 target 的 `bycli browser ...` 命令默认目标。
+- `tab close <targetId>` 会关闭该 tab；如果它正好是当前默认目标，会一并清掉这条默认绑定。
+
+## Session 生命周期
+
+如果你希望多条 `bycli browser` 命令持续操作同一个页面，请使用稳定的 session 名称：
+
+```bash
+bycli browser my-session open https://example.com
+bycli browser my-session state
+bycli browser my-session extract "main"
+```
+
+byCLI 拥有的 browser session 使用交互式 tab lease，默认空闲超时为 10 分钟。完成后可以显式释放：
+
+```bash
+bycli browser my-session close
+```
+
+如果要把 byCLI 绑定到你已经手动打开的 Chrome tab，请使用 `bycli browser <session> bind`。绑定 session 没有 owned session 的 idle close 计时器，会一直保持到 `unbind`、tab 关闭、窗口关闭或 daemon 重启。对于 byCLI 自己创建的 owned session，使用 `--window foreground` 可以在可见自动化窗口里观察 byCLI 操作；使用 `--window background` 可以让这个自动化窗口留在后台。
+
+## Daemon 生命周期
+
+Daemon 在首次运行浏览器命令时自动启动，之后保持常驻运行。
+
+```bash
+bycli daemon stop      # 优雅关停
+```
+
+Daemon 为常驻模式，会一直运行直到你显式停止（`bycli daemon stop`）或卸载包。

@@ -1,0 +1,27 @@
+byCLI
+Copyright 2026 sovovs
+
+This product includes software developed as part of the opencli project.
+
+  opencli
+  Copyright 2025 jackwener and the opencli contributors
+  https://github.com/jackwener/opencli
+  https://github.com/jackwener/opencli/graphs/contributors
+  Licensed under the Apache License, Version 2.0.
+
+byCLI is a derivative work of opencli, distributed under the terms of the
+Apache License, Version 2.0 (see the LICENSE file).
+
+The WeChat article download adapter (clis/weixin/download.js) is ported from:
+
+  wechat-article-to-markdown
+  https://github.com/jackwener/wechat-article-to-markdown
+
+Modifications made in byCLI include, but are not limited to:
+  - Renaming the project, CLI binary, npm package, runtime data directory,
+    environment variables, and daemon bridge header from "opencli" to "bycli".
+  - Additional and updated site adapters and tests.
+
+The original copyright and attribution notices from opencli are retained in
+the LICENSE file and throughout the source as required by Section 4 of the
+Apache License, Version 2.0.
