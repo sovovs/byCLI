@@ -1288,13 +1288,16 @@ function getPluginSource(dir: string): string | undefined {
 function parseSource(
   source: string,
 ): ParsedSource | null {
+  // Strip either the legacy `bycli-plugin-` or the current `opencli-plugin-`
+  // repo-name prefix when deriving the local plugin name.
+  const PLUGIN_NAME_PREFIX = /^(?:bycli|opencli)-plugin-/;
   if (source.startsWith('file://')) {
     try {
       const localPath = path.resolve(fileURLToPath(source));
       return {
         type: 'local',
         localPath,
-        name: path.basename(localPath).replace(/^bycli-plugin-/, ''),
+        name: path.basename(localPath).replace(PLUGIN_NAME_PREFIX, ''),
       };
     } catch {
       return null;
@@ -1306,7 +1309,7 @@ function parseSource(
     return {
       type: 'local',
       localPath,
-      name: path.basename(localPath).replace(/^bycli-plugin-/, ''),
+      name: path.basename(localPath).replace(PLUGIN_NAME_PREFIX, ''),
     };
   }
 
@@ -1316,7 +1319,7 @@ function parseSource(
   );
   if (githubSubMatch) {
     const [, user, repo, sub] = githubSubMatch;
-    const name = repo.replace(/^bycli-plugin-/, '');
+    const name = repo.replace(PLUGIN_NAME_PREFIX, '');
     return {
       type: 'git',
       cloneUrl: `https://github.com/${user}/${repo}.git`,
@@ -1329,7 +1332,7 @@ function parseSource(
   const githubMatch = source.match(/^github:([\w.-]+)\/([\w.-]+)$/);
   if (githubMatch) {
     const [, user, repo] = githubMatch;
-    const name = repo.replace(/^bycli-plugin-/, '');
+    const name = repo.replace(PLUGIN_NAME_PREFIX, '');
     return {
       type: 'git',
       cloneUrl: `https://github.com/${user}/${repo}.git`,
@@ -1343,7 +1346,7 @@ function parseSource(
   );
   if (urlMatch) {
     const [, user, repo] = urlMatch;
-    const name = repo.replace(/^bycli-plugin-/, '');
+    const name = repo.replace(PLUGIN_NAME_PREFIX, '');
     return {
       type: 'git',
       cloneUrl: `https://github.com/${user}/${repo}.git`,
@@ -1359,7 +1362,7 @@ function parseSource(
     const pathPart = sshUrlMatch[1];
     const segments = pathPart.split('/');
     const repoSegment = segments.pop()!;
-    const name = repoSegment.replace(/^bycli-plugin-/, '');
+    const name = repoSegment.replace(PLUGIN_NAME_PREFIX, '');
     return { type: 'git', cloneUrl: source, name };
   }
 
@@ -1369,7 +1372,7 @@ function parseSource(
     const pathPart = scpMatch[1];
     const segments = pathPart.split('/');
     const repoSegment = segments.pop()!;
-    const name = repoSegment.replace(/^bycli-plugin-/, '');
+    const name = repoSegment.replace(PLUGIN_NAME_PREFIX, '');
     return { type: 'git', cloneUrl: source, name };
   }
 
@@ -1381,7 +1384,7 @@ function parseSource(
     const pathPart = genericHttpMatch[1];
     const segments = pathPart.split('/');
     const repoSegment = segments.pop()!;
-    const name = repoSegment.replace(/^bycli-plugin-/, '');
+    const name = repoSegment.replace(PLUGIN_NAME_PREFIX, '');
     // Ensure clone URL ends with .git
     const cloneUrl = source.endsWith('.git') ? source : `${source}.git`;
     return { type: 'git', cloneUrl, name };

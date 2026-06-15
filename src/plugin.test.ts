@@ -56,16 +56,21 @@ describe('parseSource', () => {
   });
 
   it('parses https URL format', () => {
-    const result = _parseSource('https://github.com/ByteYue/bycli-plugin-hot-digest');
+    const result = _parseSource('https://github.com/ByteYue/opencli-plugin-hot-digest');
     expect(result).toEqual({
       type: 'git',
-      cloneUrl: 'https://github.com/ByteYue/bycli-plugin-hot-digest.git',
+      cloneUrl: 'https://github.com/ByteYue/opencli-plugin-hot-digest.git',
       name: 'hot-digest',
     });
   });
 
   it('strips bycli-plugin- prefix from name', () => {
     const result = _parseSource('github:user/bycli-plugin-my-tool');
+    expect(result!.name).toBe('my-tool');
+  });
+
+  it('strips opencli-plugin- prefix from name', () => {
+    const result = _parseSource('github:user/opencli-plugin-my-tool');
     expect(result!.name).toBe('my-tool');
   });
 

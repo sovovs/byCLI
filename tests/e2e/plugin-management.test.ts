@@ -1,6 +1,6 @@
 /**
  * E2E integration tests for plugin management commands.
- * Uses a real GitHub plugin (bycli-plugin-hot-digest) to verify the full
+ * Uses a real GitHub plugin (opencli-plugin-hot-digest) to verify the full
  * install → list → update → uninstall lifecycle in an isolated HOME.
  */
 
@@ -13,7 +13,7 @@ import { runCli, parseJsonOutput } from './helpers.js';
 const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-plugin-e2e-'));
 const BYCLI_HOME = path.join(TEST_HOME, '.bycli');
 const PLUGINS_DIR = path.join(BYCLI_HOME, 'plugins');
-const PLUGIN_SOURCE = 'github:ByteYue/bycli-plugin-hot-digest';
+const PLUGIN_SOURCE = 'github:ByteYue/opencli-plugin-hot-digest';
 const PLUGIN_NAME = 'hot-digest';
 const PLUGIN_DIR = path.join(PLUGINS_DIR, PLUGIN_NAME);
 const LOCK_FILE = path.join(BYCLI_HOME, 'plugins.lock.json');
@@ -63,7 +63,7 @@ describe('plugin management E2E', () => {
     expect(lock[PLUGIN_NAME].source).toMatchObject({
       kind: 'git',
     });
-    expect(lock[PLUGIN_NAME].source.url).toContain('bycli-plugin-hot-digest');
+    expect(lock[PLUGIN_NAME].source.url).toContain('opencli-plugin-hot-digest');
     expect(lock[PLUGIN_NAME].installedAt).toBeTruthy();
   }, 60_000);
 
