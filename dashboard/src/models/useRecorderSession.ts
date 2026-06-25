@@ -55,8 +55,11 @@ export default function useRecorderSession() {
       action: RecorderAction,
       call: () => Promise<RequestEnvelope<T>>,
       onSuccess: (data: T) => { next: SessionState; patch?: Partial<SessionData> },
+      fromStateOverride?: SessionState,
     ) => {
-      if (!isActionAllowed(action, state)) {
+      // 合并动作(如 bindAndNavigate)串联两步时,setState 异步、闭包 state 仍是旧值,
+      // 故允许显式传入第二步的校验起点;默认用当前 state。
+      if (!isActionAllowed(action, fromStateOverride ?? state)) {
         setError({ code: 'invalid_state', message: '非法状态转移', hint: INVALID_STATE_HINT });
         return false;
       }
@@ -100,6 +103,21 @@ export default function useRecorderSession() {
       run('confirmAuth', () => client.confirmAuth(), () => ({ next: 'auth_confirmed' })),
     navigate: (url: string) =>
       run('navigate', () => client.navigate(url), (d) => ({ next: 'page_ready', patch: { targetUrl: d.url } })),
+    // 一步合并:新建录制会话 + 自动导航打开录制页(用户只需输 URL、点一次)。在 model 内串联 bind→navigate,
+    // 给 navigate 显式传 bind 后的 'session_bound' 作校验起点(避免 setState 异步导致的 stale-state invalid_state)。
+    bindAndNavigate: async (url: string) => {
+      const bound = await run('bind', () => client.bind('existing'), (d) => ({
+        next: d.awaitingLogin ? 'awaiting_user_login' : 'session_bound',
+        patch: { sessionId: d.sessionId },
+      }));
+      if (!bound) return false;
+      return run(
+        'navigate',
+        () => client.navigate(url),
+        (d) => ({ next: 'page_ready', patch: { targetUrl: d.url } }),
+        'session_bound',
+      );
+    },
     // 每个样本两步驱动(05 章 line 50 + Capture Sample Protocol):capture/start 开窗 → capture/read 关窗冻结。
     captureA: async () => {
       const started = await run('captureStart', () => client.captureStart('A'), () => ({ next: state }));

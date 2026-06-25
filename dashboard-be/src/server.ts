@@ -103,6 +103,10 @@ function handleBind(ctx: Ctx, body: Record<string, unknown>, res: ServerResponse
   if (mode !== 'bind_existing_page' && mode !== 'create_page_await_user_login' && mode !== 'bind_existing_context') {
     return sendFail(res, 'validation_failed', 'invalid bind mode');
   }
+  // 单会话模型:bind / 新建即「开新一轮录制」,先取消所有既有会话清空活跃槽,再建新会话。
+  // 否则被放弃的旧会话(未走到 done/failed/cancelled)会占满 RECORDER_MAX_ACTIVE_SESSIONS,
+  // 下次 bind 撞 createSession 的 queue_full(「cannot create session」)。语义=放弃上一轮录制。
+  ctx.registry.cancelAll();
   try {
     const session = ctx.registry.createSession({
       contextId,

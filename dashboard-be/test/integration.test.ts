@@ -60,6 +60,18 @@ describe('契约咬合:前端 client → be', () => {
     expect(res.ok).toBe(false);
     expect(res.error?.code).toBe('daemon_unavailable');
   });
+
+  it('单会话:重复 bind 永不撞 queue_full(每次 bind 前清空旧会话槽)', async () => {
+    // 默认 RECORDER_MAX_ACTIVE_SESSIONS=2;连续 bind 远超上限次都应成功——旧会话被 cancelAll 取消、槽腾出。
+    let lastSid = '';
+    for (let i = 0; i < 5; i++) {
+      const r = await client.bind('existing');
+      expect(r.ok, `第 ${i + 1} 次 bind 应成功:${JSON.stringify(r.error)}`).toBe(true);
+      expect(r.data?.sessionId).toMatch(/^rec_/);
+      expect(r.data?.sessionId).not.toBe(lastSid); // 每次都是新会话
+      lastSid = r.data!.sessionId;
+    }
+  });
 });
 
 describe('同源 UI 托管(①)', () => {

@@ -39,6 +39,7 @@ export default function Workbench() {
             onBind={actions.bind}
             onConfirmAuth={actions.confirmAuth}
             onNavigate={actions.navigate}
+            onBindAndNavigate={actions.bindAndNavigate}
           />
         );
       case 'session_bound':
@@ -63,6 +64,7 @@ export default function Workbench() {
             onBind={actions.bind}
             onConfirmAuth={actions.confirmAuth}
             onNavigate={actions.navigate}
+            onBindAndNavigate={actions.bindAndNavigate}
           />
         );
       case 'capture_a':
