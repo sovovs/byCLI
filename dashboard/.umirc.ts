@@ -36,19 +36,15 @@ export default defineConfig({
   routes: [
     {
       path: '/',
-      redirect: '/docs',
-    },
-    {
-      name: '方案文档',
-      path: '/docs',
-      icon: 'FileText',
-      component: './Docs',
+      redirect: '/workbench',
     },
     {
       name: '录制工作台',
       path: '/workbench',
       icon: 'Experiment',
       component: './Workbench',
+      // 单页应用:顶栏只保留品牌标识,不展示导航项(与页面 H1 重复)。
+      hideInMenu: true,
     },
   ],
   npmClient: 'pnpm',
