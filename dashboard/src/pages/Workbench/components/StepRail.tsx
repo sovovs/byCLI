@@ -12,14 +12,28 @@ interface Props {
   failed?: boolean;
 }
 
-const STATUS_LABEL = { done: '已完成', active: '当前步骤', pending: '未开始', failed: '失败' } as const;
+export type StepStatus = 'done' | 'active' | 'pending' | 'failed';
+
+const STATUS_LABEL: Record<StepStatus, string> = {
+  done: '已完成',
+  active: '当前步骤',
+  pending: '未开始',
+  failed: '失败',
+};
+
+/** 单步状态推导(纯函数,便于单测):current=已到达步序;done 态 current=步数 → 全 done。 */
+export function stepStatus(index: number, current: number, failed?: boolean): StepStatus {
+  if (failed && index === current) return 'failed';
+  if (index < current) return 'done';
+  if (index === current) return 'active';
+  return 'pending';
+}
 
 export default function StepRail({ steps, current, failed }: Props) {
   return (
     <ol className="wb-rail" aria-label="录制流程进度">
       {steps.map((s, i) => {
-        const status =
-          failed && i === current ? 'failed' : i < current ? 'done' : i === current ? 'active' : 'pending';
+        const status = stepStatus(i, current, failed);
         return (
           <li
             key={s.key}

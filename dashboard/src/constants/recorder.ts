@@ -31,7 +31,7 @@ export const STATE_ORDER: Record<SessionState, number> = {
   capture_b: 4,
   ranked: 5,
   draft_created: 6,
-  verifying: 7,
+  verifying: 6, // verify 步(索引6)进行中:rail 高亮该步为 active,失败时也定位到此步(非越界 7)
   done: 7,
   failed: -1,
   cancelled: -1,
