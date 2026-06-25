@@ -29,9 +29,11 @@ import { PKG_VERSION } from './version.js';
 import { DEFAULT_CONTEXT_ID } from './browser/profile.js';
 import { createAdapterDraft, recoverInitTransactions, type InitInput } from './recorder/highlevel/init.js';
 import { verifyAdapter, type VerifyInput } from './recorder/highlevel/verify.js';
-import { defaultRunnerPort, setDefaultRunnerDaemonPort } from './recorder/runner/runner-port.js';
+import { defaultRunnerPort, setDefaultRunnerDaemonPort, setDefaultRunnerObservability, setDefaultRunnerTempGuard } from './recorder/runner/runner-port.js';
+import { createMetrics } from '@sovovs/bycli-recorder-core';
+import { createRecorderLogger, type LogLevel } from './recorder/observability/logger.js';
 import { reapOrphanedVerifyRuns } from './recorder/runner/reap.js';
-import { resolveTempPolicy, resolveRunnerConfig } from './recorder/runner/config.js';
+import { resolveTempPolicy, resolveRunnerConfig, resolveTempCapacity } from './recorder/runner/config.js';
 import { defaultSessionKeyRegistry } from './recorder/runner/session-keys.js';
 import { recordExtensionVersion } from './update-check.js';
 import {
@@ -47,6 +49,19 @@ const PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_POR
 // Page reaches us, not a freshly-spawned daemon. Must run before the first /v1/verify
 // builds the default runner singleton.
 setDefaultRunnerDaemonPort(PORT);
+
+// ─── Observability (#1b · 09) ────────────────────────────────────────
+// daemon/runner-side structured logs + metrics (M8 only did dashboard-be). The metrics instance is
+// a process singleton, shared by reference into the runner port (#1c) so GET /metrics shows runner
+// counters too. LOG_LEVEL is read once at startup — the daemon has no ConfigPort, so no hot reload
+// here (that's a larger, separate milestone); a malformed value falls back to 'info'.
+const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+const envLogLevel = process.env.LOG_LEVEL ?? '';
+const metrics = createMetrics();
+const logger = createRecorderLogger((LOG_LEVELS as readonly string[]).includes(envLogLevel) ? (envLogLevel as LogLevel) : 'info');
+// Share these singletons with the verify runner (#1c) BEFORE the first defaultRunnerPort() use, so
+// runner counters surface on GET /metrics and runner logs share the daemon's level.
+setDefaultRunnerObservability(metrics, logger);
 
 // ─── State ───────────────────────────────────────────────────────────
 
@@ -163,6 +178,7 @@ function unregisterExtensionConnection(ws: WebSocket): void {
       });
       if (failure.countAsCommandResultUnknown) {
         commandResultUnknownCount++;
+        metrics.inc('daemon_command_result_unknown_total'); // #1b: structured metric alongside the /status field
         log.warn(`[daemon] Command result unknown after extension disconnect (id=${id}, action=${p.action}, context=${contextId})`);
       }
       p.reject(new DaemonCommandFailure(failure.message, failure.errorCode, failure.errorHint, failure.status));
@@ -196,6 +212,10 @@ function jsonResponse(
   data: unknown,
   extraHeaders?: Record<string, string>,
 ): void {
+  // Stash any errorCode for the request-completion metrics choke point (#1b), so handlers don't
+  // each have to wire it through. Only the bounded ErrorCode enum reaches a label/log field.
+  const ec = (data as { errorCode?: unknown } | null)?.errorCode;
+  if (typeof ec === 'string') (res as ServerResponse & { __errorCode?: string }).__errorCode = ec;
   res.writeHead(status, { 'Content-Type': 'application/json', ...extraHeaders });
   res.end(JSON.stringify(data));
 }
@@ -223,6 +243,27 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   const url = req.url ?? '/';
   const pathname = url.split('?')[0];
+
+  // Request-completion metrics choke point (#1b · 09): one place records type/status/errorCode +
+  // latency, no per-handler scatter. Only the high-level surface (/v1/*) and the /command bridge are
+  // counted; the dynamic /v1/requests/{id} segment collapses to a bounded route template so the
+  // `operation` label can't grow unboundedly. /v1/* operations also get a structured log line
+  // (low volume, the recording ops); /command is counted but not logged (per-command WS bridge is
+  // high volume). Never logs headers/token/body — only operation/status/errorCode/durationMs.
+  const reqStarted = Date.now();
+  res.on('finish', () => {
+    let operation: string | null = null;
+    if (pathname.startsWith('/v1/requests/')) operation = 'v1.requests';
+    else if (pathname.startsWith('/v1/')) operation = `v1${pathname.slice(3).replace(/\//g, '.')}`; // /v1/init → v1.init
+    else if (pathname === '/command') operation = 'command';
+    if (!operation) return;
+    const status = res.statusCode < 400 ? 'ok' : 'failed';
+    const errorCode = (res as ServerResponse & { __errorCode?: string }).__errorCode;
+    const durationMs = Date.now() - reqStarted;
+    metrics.inc('daemon_requests_total', { operation, status, errorCode });
+    if (operation === 'v1.verify') metrics.observe('daemon_verify_duration_ms', durationMs);
+    if (operation.startsWith('v1')) logger.info(`daemon.${operation}`, { status, errorCode, durationMs });
+  });
 
   // Health-check endpoint — no X-byCLI header required.
   // Used by the extension to silently probe daemon reachability before
@@ -288,9 +329,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         const status = result.errorCode === 'validation_failed' ? 400
           : result.errorCode === 'queue_full' ? 429 // 03: queue/concurrency exceeded
           : 500;
+        // requestId/sessionId correlation the choke point (res-only) can't see (09:89).
+        logger.warn('daemon.verify', { sessionId: body.sessionId, status: 'failed', errorCode: result.errorCode });
         jsonResponse(res, status, { ok: false, errorCode: result.errorCode, error: result.reason });
         return;
       }
+      logger.info('daemon.verify', { requestId: result.requestId, sessionId: body.sessionId, stage: 'accepted' });
       jsonResponse(res, 200, { ok: true, data: { requestId: result.requestId } });
     } catch (err) {
       jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });
@@ -314,6 +358,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
     // RunStatus (queued|running|succeeded|failed|timeout|cancelled) maps 1:1 to request status;
     // summary is null while queued/running, a VerifySummary once terminal (M6c adds queued).
+    logger.debug('daemon.requests', { requestId, status: runStatus.status });
     jsonResponse(res, 200, { ok: true, data: { requestId, status: runStatus.status, result: runStatus.summary } });
     return;
   }
@@ -349,6 +394,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
       port: PORT,
     });
+    return;
+  }
+
+  // Metrics scrape (#1b · 09): loopback diagnostic, same X-byCLI posture as /status (no token).
+  // The counter/histogram registry is pure data in recorder-core; this endpoint (http-bound) stays
+  // in the daemon transport layer. Values are non-sensitive enums/counts only (09).
+  if (req.method === 'GET' && pathname === '/metrics') {
+    jsonResponse(res, 200, { ok: true, ...metrics.snapshot() });
     return;
   }
 
@@ -566,11 +619,29 @@ httpServer.listen(PORT, '127.0.0.1', () => {
     const rc = resolveRunnerConfig();
     minLeakAgeMs = rc.timeoutMs + rc.killGraceMs;
   } catch { /* keep the absolute ceiling (safest, highest floor) */ }
+  // #1d temp-store capacity guard: the runner refuses a new verify (temp_store_full) past the high
+  // watermark rather than risk filling the disk. Resolved at startup (temp root is restart-only,
+  // 09:182); bad env falls back to defaults (consistent with temp policy above). Registered BEFORE the
+  // first defaultRunnerPort() use (no request is served until after this listen callback returns). The
+  // on-pressure sweep reuses the same age-bounded reap as the periodic sweep (never kills a live verify).
+  let tempCapacity;
+  try { tempCapacity = resolveTempCapacity(); }
+  catch (err) {
+    log.warn(`[daemon] temp capacity config invalid, using defaults: ${err instanceof Error ? err.message : String(err)}`);
+    tempCapacity = resolveTempCapacity({}); // empty env → validated defaults
+  }
+  setDefaultRunnerTempGuard(tempCapacity, () => {
+    reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.tempTtlMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+  });
   // Startup reap (08:37): clean up verify temp dirs orphaned by a previously-crashed daemon
   // (ownerPid-dead), plus any dir older than the startup age backstop (M7b leak sweep). A live
   // sibling's in-flight verify (young + owner alive, or within the hard-deadline floor) is never touched.
   try {
-    reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.startupReapMaxAgeMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+    const r = reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.startupReapMaxAgeMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+    // #1c · 09 startup reap count (orphan runners killed, temp dirs swept)
+    if (r.orphans) metrics.inc('startup_reap_orphans_total', undefined, r.orphans);
+    if (r.killed) metrics.inc('startup_reap_killed_total', undefined, r.killed);
+    if (r.deleted) metrics.inc('startup_reap_deleted_total', undefined, r.deleted);
   } catch (err) {
     log.warn(`[daemon] verify startup reap failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -579,9 +650,12 @@ httpServer.listen(PORT, '127.0.0.1', () => {
   // Unref'd so it never keeps the process alive on its own.
   const sweep = setInterval(() => {
     try {
-      reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.tempTtlMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+      const r = reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.tempTtlMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+      if (r.killed) metrics.inc('temp_sweep_killed_total', undefined, r.killed);
+      if (r.deleted) metrics.inc('temp_sweep_deleted_total', undefined, r.deleted);
       // Drop salts for abandoned sessions (M7a TTL backstop; daemon restart already rotates all).
-      defaultSessionKeyRegistry().sweepExpired();
+      const dropped = defaultSessionKeyRegistry().sweepExpired();
+      if (dropped) metrics.inc('session_keys_dropped_total', undefined, dropped);
     } catch (err) {
       log.warn(`[daemon] verify temp sweep failed: ${err instanceof Error ? err.message : String(err)}`);
     }

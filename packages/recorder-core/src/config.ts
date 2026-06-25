@@ -36,11 +36,19 @@ export function resolveScoringProfile(
 // ── Feature flags (09 · local config flags, schema-validated, default fail-closed) ──────────────
 
 export interface FeatureFlags {
-  /** restart-only — exposes a new capture surface */
+  /**
+   * restart-only — RESERVED. Would expose a direct-CDP capture surface, but that capability does
+   * not exist yet (capture is hardwired through the daemon network-capture path + interceptor
+   * fallback), so there is NO consumer reading this flag. It is schema-validated, restart-only
+   * pinned and fail-closed (default false → exposes nothing). Wire a consumer only when the
+   * direct-CDP capture surface is actually designed (a feature, not flag wiring; out of M10 scope).
+   */
   FEATURE_DIRECT_CDP_CAPTURE: boolean;
-  /** restart-only — changes the endpoint surface (localhost HTTP UI) */
+  /** restart-only — master switch for the localhost HTTP UI form. Gates dashboard-be same-origin
+   *  UI hosting (server.ts createApp staticServer); UI_DIST alone no longer enables it (#5a). */
   FEATURE_LOCALHOST_HTTP_UI: boolean;
-  /** restart-only — exposes a new local admin endpoint */
+  /** restart-only — gates the loopback admin log-level endpoint POST /recorder/admin/log-level
+   *  (dashboard-be server.ts; off → endpoint absent / request_not_found) (#5b). */
   FEATURE_ADMIN_LOG_LEVEL_TOGGLE: boolean;
   /** hot — gates whether a candidate/preview ScoringProfile may be applied (default profile is always externalized) */
   FEATURE_PREVIEW_SCORING_PROFILE: boolean;
@@ -95,4 +103,56 @@ export function resolveFeatureFlags(
     flags.LOCAL_EXPERIMENT_PROFILE = ep as FeatureFlags['LOCAL_EXPERIMENT_PROFILE'];
   }
   return { ok: true, flags };
+}
+
+// ── Temp-store capacity (#1d · 09:33-36 RecorderConfig) ───────────────────────────────────────────
+// The verify runner writes per-request temp dirs; without a ceiling a runaway / leak could fill the
+// disk. These three keys define the cap + watermarks; the runner refuses a new run (temp_store_full)
+// rather than write past the high watermark. Pure validation only — the runner does the fs measuring.
+
+export interface TempCapacity {
+  /** Hard ceiling for the sum of verify temp dirs (bytes). */
+  maxBytes: number;
+  /** Refuse / shed above this fraction of maxBytes (the runner gate). */
+  highWatermarkRatio: number;
+  /** Target to sweep back down to (fraction of maxBytes); must be < high. */
+  lowWatermarkRatio: number;
+}
+
+export const DEFAULT_TEMP_CAPACITY: TempCapacity = {
+  maxBytes: 1_073_741_824, // 1 GiB — verify temp dirs are tiny, so this is a runaway safety net
+  highWatermarkRatio: 0.9,
+  lowWatermarkRatio: 0.7,
+};
+
+interface TempCapacityField { def: number; min: number; max: number; integer: boolean }
+const TEMP_CAPACITY_FIELDS: Record<keyof TempCapacity, TempCapacityField> = {
+  maxBytes:           { def: DEFAULT_TEMP_CAPACITY.maxBytes,           min: 10_485_760, max: 10_737_418_240, integer: true },  // 10 MiB – 10 GiB
+  highWatermarkRatio: { def: DEFAULT_TEMP_CAPACITY.highWatermarkRatio, min: 0.5,        max: 0.95,           integer: false },
+  lowWatermarkRatio:  { def: DEFAULT_TEMP_CAPACITY.lowWatermarkRatio,  min: 0.1,        max: 0.9,            integer: false },
+};
+
+/**
+ * Resolve a TempCapacity from raw env strings (field-name-keyed; the process layer maps env keys →
+ * field names, mirroring resolveRunnerConfig). Missing/empty → default; out-of-range/NaN → config_invalid;
+ * `low >= high` is a band-order error (mirrors validateScoringProfile's ordering invariant).
+ */
+export function validateTempCapacity(
+  raw: Partial<Record<keyof TempCapacity, string | undefined>>,
+): { ok: true; capacity: TempCapacity } | ConfigResolveError {
+  const out = { ...DEFAULT_TEMP_CAPACITY };
+  for (const k of Object.keys(TEMP_CAPACITY_FIELDS) as (keyof TempCapacity)[]) {
+    const f = TEMP_CAPACITY_FIELDS[k];
+    const v = raw[k];
+    if (v === undefined || v === '') { out[k] = f.def; continue; }
+    const n = Number(v);
+    if (Number.isNaN(n) || n < f.min || n > f.max || (f.integer && !Number.isInteger(n))) {
+      return { ok: false, errorCode: 'config_invalid', reason: `${k}=${JSON.stringify(v)} is out of range [${f.min}, ${f.max}]` };
+    }
+    out[k] = n;
+  }
+  if (out.lowWatermarkRatio >= out.highWatermarkRatio) {
+    return { ok: false, errorCode: 'config_invalid', reason: `lowWatermarkRatio (${out.lowWatermarkRatio}) must be < highWatermarkRatio (${out.highWatermarkRatio})` };
+  }
+  return { ok: true, capacity: out };
 }

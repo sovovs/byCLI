@@ -17,6 +17,7 @@ export {
   detectAntiBot,
   classifyPattern,
   findNearestAdapter,
+  type AdapterRef,
   type PageSignals,
   type AnalyzeReport,
   type AntiBotVerdict,

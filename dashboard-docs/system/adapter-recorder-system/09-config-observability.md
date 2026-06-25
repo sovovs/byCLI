@@ -146,6 +146,8 @@ Minimum counters/histograms:
 
 Metrics must not contain sensitive values.
 
+**Wiring status (M10, 2026-06-25).** The counter/histogram registry is a single IO-free implementation in `recorder-core` (`createMetrics`/`createLogger`), re-exported by every transport so there is no copy drift. All three surfaces are wired at a single request-completion choke point (operation/status/errorCode + duration only — never headers/token/body): **dashboard-be** (`recorder_requests_total` + `recorder_request_duration_ms`), the optional **High-Level wrapper** (`highlevel_requests_total` + `highlevel_request_duration_ms`, gated `GET /metrics`), and the **daemon + verify runner** (`daemon_requests_total` + `daemon_verify_duration_ms`, `runner_verify_total`/`runner_timeout_total`/`runner_protocol_error_total`/`runner_queue_depth`/`runner_queue_rejected_total` + startup-reap/temp-sweep/session-key counters, exposed at the daemon's loopback `GET /metrics`). The daemon shares its `metrics`/`logger` singletons into the runner via `setDefaultRunnerObservability` so runner counters surface on the same scrape. Daemon `LOG_LEVEL` is read once at startup (no daemon-side `ConfigPort` hot reload yet — a separate follow-up).
+
 ## Log Level Control
 
 Log level is runtime-adjustable without restart (TDD 9.1). The level comes from the `LOG_LEVEL` config key (default `info`, see RecorderConfig); an operator can change it at runtime via a signal (e.g. SIGUSR2) or a loopback-only admin toggle. The admin toggle, if exposed, is subject to the same Origin/header/token gates as other local endpoints (see `04`). Level changes are logged and never alter the redaction allowlist — sensitive fields stay filtered at every level.
@@ -166,6 +168,11 @@ Local config flags (no remote flag service); schema-validated; default fail-clos
 | `LOCAL_EXPERIMENT_PROFILE` | enum `off\|control\|candidate` | off | `config_invalid` | hot (new sessions/rank jobs only) |
 
 Flags that expose a new local endpoint or capability surface (`FEATURE_DIRECT_CDP_CAPTURE`, `FEATURE_LOCALHOST_HTTP_UI`, `FEATURE_ADMIN_LOG_LEVEL_TOGGLE`) are restart-only and can never be widened by hot reload — this is a security boundary, not a convenience choice.
+
+**Wiring status (留尾 #5).** The restart-only pin above holds for all three regardless of consumer state:
+- `FEATURE_LOCALHOST_HTTP_UI` — **wired**: master switch for dashboard-be same-origin UI hosting (`server.ts` `createApp` `staticServer`). `UI_DIST` alone no longer enables hosting; the flag gates it (off → no listener-served UI, falls to `request_not_found`).
+- `FEATURE_ADMIN_LOG_LEVEL_TOGGLE` — **wired**: gates the loopback admin endpoint `POST /recorder/admin/log-level` (full Origin/header/token/CSRF gate chain; off → endpoint absent / `request_not_found`). Complements the SIGUSR2/SIGHUP runtime level paths.
+- `FEATURE_DIRECT_CDP_CAPTURE` — **reserved, no consumer**: the direct-CDP capture surface it would gate does not exist (capture is hardwired through the daemon network-capture path + interceptor fallback). The flag stays schema-validated, restart-only pinned and fail-closed (default false → exposes nothing). Wire a consumer only when that capture surface is actually designed — that is a feature, not flag wiring.
 
 `FEATURE_PREVIEW_SCORING_PROFILE` gates only whether a *candidate/preview* `ScoringProfile` may be applied; it does not control the always-on externalization of the default `ScoringProfile`. With the flag `false`, the ranker still reads every score from the default profile (never inline constants) — it simply cannot load a preview profile.
 

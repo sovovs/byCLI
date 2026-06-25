@@ -9,7 +9,7 @@
  */
 
 import * as os from 'node:os';
-import { validateRunnerConfig, type RunnerConfig } from '@sovovs/bycli-recorder-core';
+import { validateRunnerConfig, validateTempCapacity, type RunnerConfig, type TempCapacity } from '@sovovs/bycli-recorder-core';
 import { ConfigError } from '../../errors.js';
 
 const ENV_KEYS: Record<keyof RunnerConfig, string> = {
@@ -58,6 +58,28 @@ const TEMP_POLICY_FIELDS: Record<keyof TempPolicy, TempPolicyField> = {
   startupReapMaxAgeMs: { key: 'RECORDER_STARTUP_REAP_MAX_AGE_MS', def: 86_400_000, min: 60_000, max: 86_400_000 },
   orphanKillGraceMs:   { key: 'RECORDER_ORPHAN_KILL_GRACE_MS',    def: 1_500,      min: 100,    max: 30_000 },
 };
+
+/**
+ * Temp-store capacity env keys (#1d · 09:33-36). The pure range/band-order validation is
+ * `validateTempCapacity` in recorder-core; this maps env key names → field names (mirroring
+ * resolveRunnerConfig) and fail-closes via ConfigError. The temp ROOT is restart-only (09:182):
+ * these are read at daemon startup, not hot-reloaded.
+ */
+const TEMP_CAPACITY_ENV_KEYS: Record<keyof TempCapacity, string> = {
+  maxBytes: 'RECORDER_TEMP_MAX_BYTES',
+  highWatermarkRatio: 'RECORDER_TEMP_HIGH_WATERMARK_RATIO',
+  lowWatermarkRatio: 'RECORDER_TEMP_LOW_WATERMARK_RATIO',
+};
+
+export function resolveTempCapacity(env: NodeJS.ProcessEnv = process.env): TempCapacity {
+  const raw = {} as Record<keyof TempCapacity, string | undefined>;
+  for (const k of Object.keys(TEMP_CAPACITY_ENV_KEYS) as (keyof TempCapacity)[]) {
+    raw[k] = env[TEMP_CAPACITY_ENV_KEYS[k]];
+  }
+  const r = validateTempCapacity(raw);
+  if (!r.ok) throw new ConfigError(r.reason, 'Fix the RECORDER_TEMP_* environment variable and retry.');
+  return r.capacity;
+}
 
 /**
  * Resolve the temp-store reap policy from `env` (defaults to process.env). Missing/empty → default;

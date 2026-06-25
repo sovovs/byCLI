@@ -11,8 +11,7 @@
  */
 
 import type { IPage } from '../../types.js';
-import type { CliCommand } from '../../registry.js';
-import { analyzeSite, type PageSignals, type AnalyzeReport } from '../../browser/analyze.js';
+import { analyzeSite, type AdapterRef, type PageSignals, type AnalyzeReport } from '../../browser/analyze.js';
 import { generateInterceptorJs } from '../../interceptor.js';
 
 export interface AnalyzeInput {
@@ -54,7 +53,7 @@ interface RawNetItem { url?: string; status?: number; ct?: string; body?: unknow
  */
 export async function analyzeBrowser(
   page: IPage,
-  registry: Map<string, CliCommand>,
+  registry: Map<string, AdapterRef>,
   input: AnalyzeInput,
 ): Promise<AnalyzeReport> {
   const settleMs = input.settleMs ?? DEFAULT_SETTLE_MS;
@@ -104,7 +103,7 @@ export async function analyzeBrowser(
 /** Wrap analyzeBrowser with a deadline → AnalyzeTimeoutError (07:52 analyze_timeout). */
 export async function analyzeBrowserWithTimeout(
   page: IPage,
-  registry: Map<string, CliCommand>,
+  registry: Map<string, AdapterRef>,
   input: AnalyzeInput,
   timeoutMs: number,
 ): Promise<AnalyzeReport> {

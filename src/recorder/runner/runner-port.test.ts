@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRunnerPort } from './runner-port.js';
-import type { RunnerConfig } from '@sovovs/bycli-recorder-core';
+import { createMetrics, type RunnerConfig } from '@sovovs/bycli-recorder-core';
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/fake-runner.mjs', import.meta.url));
 
@@ -343,5 +343,126 @@ describe('RunnerPort · M6c concurrency queue + strict duplicate-result', () => 
     const b = await port.startVerify(seed());
     expect(a.requestId).not.toBe(b.requestId);
     expect(children).toHaveLength(2);
+  });
+});
+
+describe('RunnerPort · observability (#1c · 09 metrics)', () => {
+  const lch = { command: 'node', prefixArgs: [] };
+  const realLauncher = { command: process.execPath, prefixArgs: [FIXTURE] };
+
+  it('happy path → runner_verify_total{succeeded} + duration histogram', async () => {
+    const metrics = createMetrics();
+    const port = createRunnerPort({ config: mkConfig(), launcher: realLauncher, metrics });
+    const { requestId } = await port.startVerify(seed({ rawSeedArgs: { __mode: 'happy' } }));
+    await port.whenSettled(requestId);
+    const s = metrics.snapshot();
+    expect(s.counters['runner_verify_total{status=succeeded}']).toBe(1);
+    expect(s.histograms['runner_verify_duration_ms']?.count).toBe(1);
+  });
+
+  it('timeout → runner_timeout_total + runner_verify_total{timeout}', async () => {
+    const metrics = createMetrics();
+    const port = createRunnerPort({ config: mkConfig({ timeoutMs: 100, killGraceMs: 30 }), launcher: realLauncher, metrics });
+    const { requestId } = await port.startVerify(seed({ rawSeedArgs: { __mode: 'slow' } }));
+    await port.whenSettled(requestId);
+    const s = metrics.snapshot();
+    expect(s.counters['runner_timeout_total']).toBe(1);
+    expect(s.counters['runner_verify_total{status=timeout}']).toBe(1);
+  });
+
+  it('malformed protocol → runner_protocol_error_total', async () => {
+    const metrics = createMetrics();
+    const port = createRunnerPort({ config: mkConfig(), launcher: realLauncher, metrics });
+    const { requestId } = await port.startVerify(seed({ rawSeedArgs: { __mode: 'malformed' } }));
+    await port.whenSettled(requestId);
+    expect(metrics.snapshot().counters['runner_protocol_error_total']).toBe(1);
+  });
+
+  it('queue_full reject → runner_queue_rejected_total; enqueue → runner_queue_depth', async () => {
+    const metrics = createMetrics();
+    const { spawnImpl } = fakeChildFactory(); // controlled children never settle → stay running/queued
+    // maxConcurrency 1, queueLimit 1: 1st runs, 2nd queues (depth 1), 3rd rejected queue_full.
+    const port = createRunnerPort({ config: mkConfig({ maxConcurrency: 1, queueLimit: 1 }), spawnImpl, launcher: lch, metrics });
+    await port.startVerify(seed());                                                   // running
+    await port.startVerify(seed());                                                   // queued → observe depth 1
+    await expect(port.startVerify(seed())).rejects.toMatchObject({ code: 'queue_full' });
+    const s = metrics.snapshot();
+    expect(s.counters['runner_queue_rejected_total']).toBe(1);
+    expect(s.histograms['runner_queue_depth']?.max).toBe(1);
+  });
+});
+
+describe('RunnerPort · temp-store capacity guard (#1d)', () => {
+  const lch = { command: 'node', prefixArgs: [] };
+  const CAP = { maxBytes: 1000, highWatermarkRatio: 0.9, lowWatermarkRatio: 0.7 }; // highBytes = 900
+
+  it('over high watermark + sweep does not help → temp_store_full, child never spawned', async () => {
+    const metrics = createMetrics();
+    const { child, captured, spawnImpl } = fakeChild();
+    void child;
+    const port = createRunnerPort({
+      config: mkConfig(), spawnImpl, launcher: lch, metrics,
+      tempCapacity: CAP, measureTempBytes: () => 950, // > 900, stays over after sweep
+    });
+    const { requestId } = await port.startVerify(seed());
+    const summary = await port.whenSettled(requestId)!;
+    expect(summary.ok).toBe(false);
+    expect(summary.error?.code).toBe('temp_store_full');
+    expect(captured.command).toBeUndefined(); // never spawned — refused before any work
+    const s = metrics.snapshot();
+    expect(s.counters['temp_store_pressure_total']).toBe(1);
+    expect(s.counters['temp_store_full_total']).toBe(1);
+  });
+
+  it('under high watermark → proceeds normally', async () => {
+    const metrics = createMetrics();
+    const { child, captured, spawnImpl } = fakeChild();
+    const port = createRunnerPort({
+      config: mkConfig(), spawnImpl, launcher: lch, metrics,
+      tempCapacity: CAP, measureTempBytes: () => 500, // < 900
+    });
+    const { requestId } = await port.startVerify(seed());
+    expect(captured.command).toBe('node'); // spawned
+    child.protocol.emit('data', Buffer.from(JSON.stringify({ type: 'result', requestId, ok: true, data: { rows: 1 } }) + '\n'));
+    child.emit('close', 0, null);
+    const summary = await port.whenSettled(requestId)!;
+    expect(summary.ok).toBe(true);
+    expect(metrics.snapshot().counters['temp_store_full_total']).toBeUndefined();
+  });
+
+  it('measurement throws → fail-closed → temp_store_full', async () => {
+    const metrics = createMetrics();
+    const { spawnImpl } = fakeChild();
+    const port = createRunnerPort({
+      config: mkConfig(), spawnImpl, launcher: lch, metrics,
+      tempCapacity: CAP, measureTempBytes: () => { throw new Error('tmpdir unreadable'); },
+    });
+    const { requestId } = await port.startVerify(seed());
+    const summary = await port.whenSettled(requestId)!;
+    expect(summary.error?.code).toBe('temp_store_full');
+    expect(metrics.snapshot().counters['temp_store_full_total']).toBe(1);
+  });
+
+  it('sweep frees space → pressure recorded but run proceeds', async () => {
+    const metrics = createMetrics();
+    const { child, captured, spawnImpl } = fakeChild();
+    let calls = 0;
+    let swept = false;
+    const port = createRunnerPort({
+      config: mkConfig(), spawnImpl, launcher: lch, metrics,
+      tempCapacity: CAP,
+      measureTempBytes: () => (++calls === 1 ? 950 : 500), // over first, under after sweep
+      sweepTemp: () => { swept = true; },
+    });
+    const { requestId } = await port.startVerify(seed());
+    expect(swept).toBe(true);
+    expect(captured.command).toBe('node'); // proceeded
+    child.protocol.emit('data', Buffer.from(JSON.stringify({ type: 'result', requestId, ok: true, data: { rows: 1 } }) + '\n'));
+    child.emit('close', 0, null);
+    const summary = await port.whenSettled(requestId)!;
+    expect(summary.ok).toBe(true);
+    const s = metrics.snapshot();
+    expect(s.counters['temp_store_pressure_total']).toBe(1);
+    expect(s.counters['temp_store_full_total']).toBeUndefined();
   });
 });

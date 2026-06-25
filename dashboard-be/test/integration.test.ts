@@ -71,6 +71,7 @@ describe('同源 UI 托管(①)', () => {
     LOG_LEVEL: 'error', // quiet structured-request logs in test output
     RECORDER_PORT: String(UI_PORT),
     RECORDER_UI_DIST: new URL('../../dashboard/dist', import.meta.url).pathname,
+    FEATURE_LOCALHOST_HTTP_UI: 'true', // #5a: 同源托管现由 restart-only flag 主控,UI_DIST 单独不再够
   });
   const uiApp = createApp(uiCfg);
   const uiBase = `http://127.0.0.1:${UI_PORT}`;
@@ -124,6 +125,29 @@ describe('同源 UI 托管(①)', () => {
     });
     expect(res.status).toBe(200);
     expect((await res.json()).ok).toBe(true);
+  });
+});
+
+describe('#5a · FEATURE_LOCALHOST_HTTP_UI off → 即使设了 UI_DIST 也不托管 UI', () => {
+  // flag 默认 false:staticServer 不构建,GET 非 API 请求落 request_not_found(与默认 Electron-IPC
+  // /API-only 形态一致)。证明 flag 是「localhost HTTP UI 形态」总开关,UI_DIST 单独不足以开启托管。
+  const offCfg = loadConfig({
+    RECORDER_TOKEN: 'off-token-1234567890abcdef',
+    LOG_LEVEL: 'error',
+    RECORDER_UI_DIST: new URL('../../dashboard/dist', import.meta.url).pathname,
+    // FEATURE_LOCALHOST_HTTP_UI 不设 → 默认 false
+  });
+  const offApp = createApp(offCfg);
+
+  beforeAll(async () => { await new Promise<void>((r) => offApp.server.listen(0, '127.0.0.1', r)); });
+  afterAll(() => new Promise<void>((r) => offApp.server.close(() => r())));
+
+  it('staticServer 为 null,GET /workbench → 404 request_not_found', async () => {
+    expect(offApp.ctx.staticServer).toBeNull();
+    const { port } = offApp.server.address() as AddressInfo;
+    const res = await fetch(`http://127.0.0.1:${port}/workbench`);
+    expect(res.status).toBe(404);
+    expect((await res.json()).error?.code).toBe('request_not_found');
   });
 });
 

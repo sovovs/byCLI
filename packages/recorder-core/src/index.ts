@@ -33,10 +33,16 @@ export {
 } from './verify.js';
 export {
   resolveScoringProfile, resolveFeatureFlags, DEFAULT_FEATURE_FLAGS,
-  type FeatureFlags, type ConfigResolveError,
+  validateTempCapacity, DEFAULT_TEMP_CAPACITY,
+  type FeatureFlags, type ConfigResolveError, type TempCapacity,
 } from './config.js';
 export { randomToken, safeEqual } from './transport-crypto.js';
 export { type ErrorCode, type RecorderError } from './errors.js';
+export { createMetrics, type Metrics, type MetricsSnapshot, type HistogramStat } from './metrics.js';
+export {
+  createLogger,
+  type Logger, type LogLevel, type LogFields, type LoggerOptions,
+} from './logging.js';
 export {
   DEFAULT_SCORING_PROFILE,
   validateScoringProfile,

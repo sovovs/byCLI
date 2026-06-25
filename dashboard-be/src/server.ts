@@ -7,7 +7,7 @@ import { BootstrapVault } from './security/bootstrap.js';
 import { checkGates } from './security/gates.js';
 import { createDaemonBridge, type DaemonBridge } from './transport/daemonBridge.js';
 import { createStaticServer, type StaticServer } from './static.js';
-import { createLogger, type Logger } from './logger.js';
+import { createLogger, type Logger, type LogLevel } from './logger.js';
 import { createMetrics, type Metrics } from './metrics.js';
 import { createConfigPort, type ConfigPort } from './config-port.js';
 import { Registry } from './session/registry.js';
@@ -169,6 +169,22 @@ function handleCancel(ctx: Ctx, body: Record<string, unknown>, res: ServerRespon
   if (sessionId) ctx.registry.cancelSession(sessionId);
   // 幂等:无论是否存在都回成功(05 章 cancel idempotent)
   json(res, 200, ok({ cancelled: true }));
+}
+
+// ── #5b admin log-level toggle(09 Log Level Control)────────────────────────────
+// loopback-only 运行时调级。仅在 restart-only flag FEATURE_ADMIN_LOG_LEVEL_TOGGLE 开启时由 route
+// 注册(flag off → 端点真的不存在,落 request_not_found,忠实 09:168「off flag 不暴露新面」)。走全套
+// side-effect 门禁(Origin/header/token/CSRF,同其他 POST /recorder/*);与 SIGUSR2/SIGHUP 调级语义一致,
+// 永不放宽 redaction(LogFields 类型保证)。
+const ADMIN_LOG_LEVELS: readonly LogLevel[] = ['error', 'warn', 'info', 'debug'];
+function handleAdminLogLevel(ctx: Ctx, body: Record<string, unknown>, res: ServerResponse): void {
+  const level = body.level;
+  if (typeof level !== 'string' || !(ADMIN_LOG_LEVELS as readonly string[]).includes(level)) {
+    return sendFail(res, 'validation_failed', `level must be one of ${ADMIN_LOG_LEVELS.join('|')}`);
+  }
+  ctx.logger.setLevel(level as LogLevel);
+  ctx.logger.info('recorder.log_level_changed', { status: level });
+  json(res, 200, ok({ level }));
 }
 
 // ── M3:navigate / capture 经 daemon /command(page lease + stale fail-fast)──────
@@ -536,6 +552,10 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
       case '/recorder/analyze': return await handleAnalyze(ctx, body, res);
       case '/recorder/init': return await handleInit(ctx, body, res);
       case '/recorder/verify': return await handleVerify(ctx, body, res);
+      case '/recorder/admin/log-level':
+        // restart-only flag off → endpoint genuinely absent(与 default 同效,09:168)
+        if (!ctx.cfg.featureFlags.FEATURE_ADMIN_LOG_LEVEL_TOGGLE) return sendFail(res, 'request_not_found', 'unknown endpoint');
+        return handleAdminLogLevel(ctx, body, res);
       default: return sendFail(res, 'request_not_found', 'unknown endpoint');
     }
   }
@@ -561,7 +581,11 @@ export function createApp(cfg: RecorderConfig, loggerOverride?: Logger, metricsO
     vault,
     daemon: createDaemonBridge(cfg.DAEMON_PORT),
     registry: new Registry(cfg.RECORDER_MAX_ACTIVE_SESSIONS, cfg.REQUEST_TERMINAL_STATUS_TTL_MS),
-    staticServer: cfg.UI_DIST ? createStaticServer(cfg.UI_DIST) : null,
+    // #5a 同源 UI 托管由 restart-only flag FEATURE_LOCALHOST_HTTP_UI 主控(09:162/ADR-0001:
+    // 是否进入「纯网页 localhost HTTP UI 形态」);UI_DIST 降级为「服哪个 build」。flag off → 即使设了
+    // UI_DIST 也不托管(GET fallthrough 落 request_not_found),与默认 Electron-IPC/API-only 形态一致。
+    // 从 pinned 启动 config 读(restart-only,绝不读热快照)。
+    staticServer: (cfg.featureFlags.FEATURE_LOCALHOST_HTTP_UI && cfg.UI_DIST) ? createStaticServer(cfg.UI_DIST) : null,
     logger,
     metrics: metricsOverride ?? createMetrics(),
     config: createConfigPort(cfg, (lvl) => logger.setLevel(lvl)),

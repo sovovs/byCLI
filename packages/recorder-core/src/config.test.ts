@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  resolveScoringProfile, resolveFeatureFlags,
-  DEFAULT_SCORING_PROFILE, DEFAULT_FEATURE_FLAGS,
+  resolveScoringProfile, resolveFeatureFlags, validateTempCapacity,
+  DEFAULT_SCORING_PROFILE, DEFAULT_FEATURE_FLAGS, DEFAULT_TEMP_CAPACITY,
 } from './index.js';
 
 describe('resolveScoringProfile (M8a · RANK_SCORE_* env → validated profile)', () => {
@@ -62,5 +62,34 @@ describe('resolveFeatureFlags (M8a · FEATURE_* env → validated flags, default
     expect(ok.ok && ok.flags.LOCAL_EXPERIMENT_PROFILE).toBe('candidate');
     expect(resolveFeatureFlags({ RELEASE_CHANNEL: 'beta' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });
     expect(resolveFeatureFlags({ LOCAL_EXPERIMENT_PROFILE: 'treatment' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });
+  });
+});
+
+describe('validateTempCapacity (#1d · RECORDER_TEMP_* → validated capacity, default fail-open)', () => {
+  it('missing → defaults', () => {
+    const r = validateTempCapacity({});
+    expect(r.ok && r.capacity).toEqual(DEFAULT_TEMP_CAPACITY);
+  });
+
+  it('applies valid overrides (int maxBytes + float ratios)', () => {
+    const r = validateTempCapacity({ maxBytes: '52428800', highWatermarkRatio: '0.8', lowWatermarkRatio: '0.5' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.capacity).toEqual({ maxBytes: 52428800, highWatermarkRatio: 0.8, lowWatermarkRatio: 0.5 });
+  });
+
+  it('maxBytes out of range or non-integer → config_invalid', () => {
+    expect(validateTempCapacity({ maxBytes: '100' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });        // below 10 MiB
+    expect(validateTempCapacity({ maxBytes: '20000000000' })).toMatchObject({ ok: false, errorCode: 'config_invalid' }); // above 10 GiB
+    expect(validateTempCapacity({ maxBytes: '10485760.5' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });  // non-integer
+  });
+
+  it('ratio out of range → config_invalid', () => {
+    expect(validateTempCapacity({ highWatermarkRatio: '0.99' })).toMatchObject({ ok: false, errorCode: 'config_invalid' }); // > 0.95
+    expect(validateTempCapacity({ lowWatermarkRatio: '0.05' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });  // < 0.1
+  });
+
+  it('band-order: low >= high → config_invalid', () => {
+    expect(validateTempCapacity({ highWatermarkRatio: '0.6', lowWatermarkRatio: '0.7' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });
+    expect(validateTempCapacity({ highWatermarkRatio: '0.6', lowWatermarkRatio: '0.6' })).toMatchObject({ ok: false, errorCode: 'config_invalid' });
   });
 });

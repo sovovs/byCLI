@@ -25,10 +25,11 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
-  parseRunnerEvent, normalizeRunnerResult, buildRunnerArgs,
-  type VerifySummary, type SeedArgEvidence, type RunnerConfig,
+  parseRunnerEvent, normalizeRunnerResult, buildRunnerArgs, createMetrics,
+  type VerifySummary, type SeedArgEvidence, type RunnerConfig, type Metrics, type TempCapacity,
 } from '@sovovs/bycli-recorder-core';
 import type { RunnerPort } from '../highlevel/verify.js';
+import { createRecorderLogger, type Logger } from '../observability/logger.js';
 import { resolveRunnerConfig } from './config.js';
 
 type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timeout' | 'cancelled';
@@ -86,6 +87,20 @@ export interface RunnerPortOptions {
   daemonPort?: number;
   /** How long a terminal run lingers in `runs` for status reads before GC (default 5min). */
   terminalRetentionMs?: number;
+  /** Observability (#1c · 09). The daemon injects its process singletons (shared with GET /metrics)
+   *  via setDefaultRunnerObservability; standalone/tests get a throwaway registry + silent logger. */
+  metrics?: Metrics;
+  logger?: Logger;
+  /** Temp-store capacity guard (#1d · 09). When set, the runner measures verify temp usage before
+   *  writing a new run and refuses (temp_store_full) past the high watermark. Undefined → no guard
+   *  (one-shot CLI verify; only the long-running daemon enforces). */
+  tempCapacity?: TempCapacity;
+  /** Injectable temp-usage measurement (bytes). Default scans os.tmpdir() bycli-verify-* dirs.
+   *  A throw is treated as over-capacity (fail-closed). Tests inject to force pressure without IO. */
+  measureTempBytes?: () => number;
+  /** Best-effort on-pressure sweep (shed orphan/aged temp dirs before re-measuring). The daemon
+   *  passes its reap; default no-op (the periodic daemon sweep is the backstop). */
+  sweepTemp?: () => void;
 }
 
 /** The default runner port also exposes test/lifecycle helpers beyond the RunnerPort seam. */
@@ -147,6 +162,33 @@ function safeCleanup(tempRoot: string): void {
   try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch { /* best-effort; startup reap (M6b) is the backstop */ }
 }
 
+/** Best-effort byte size of one verify temp dir; per-entry races (a vanished file mid-scan) are skipped. */
+function dirSizeBestEffort(dir: string): number {
+  let total = 0;
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    try {
+      if (e.isDirectory()) total += dirSizeBestEffort(p);
+      else if (e.isFile()) total += fs.statSync(p).size;
+    } catch { /* entry vanished (race) — skip */ }
+  }
+  return total;
+}
+
+/** Default temp-usage measurement (#1d): sum of all `bycli-verify-*` dirs under os.tmpdir(). The
+ * top-level readdir is NOT guarded — an unreadable tmpdir throws, which the caller treats as
+ * over-capacity (fail-closed). Per-dir scanning is best-effort (races are normal). */
+function defaultMeasureTempBytes(): number {
+  const root = os.tmpdir();
+  let total = 0;
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    if (e.isDirectory() && e.name.startsWith('bycli-verify-')) total += dirSizeBestEffort(path.join(root, e.name));
+  }
+  return total;
+}
+
 /** Backfill the spawned child pid into marker.json (08 startup reap needs the live pid). */
 function updateMarkerPid(tempRoot: string, pid: number): void {
   const markerPath = path.join(tempRoot, 'marker.json');
@@ -178,6 +220,14 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
   const resolveAdapterPath = opts.resolveAdapterPath ?? defaultResolveAdapterPath;
   const spawnImpl: SpawnFn = opts.spawnImpl ?? (nodeSpawn as SpawnFn);
   const terminalRetentionMs = opts.terminalRetentionMs ?? TERMINAL_RUN_RETENTION_MS;
+  // #1c observability: default to a throwaway registry + silent logger so standalone/test construction
+  // stays zero-config and the existing runner tests don't change. The daemon injects shared instances.
+  const metrics = opts.metrics ?? createMetrics();
+  const logger = opts.logger ?? createRecorderLogger('error', () => { /* silent */ });
+  // #1d temp guard (off unless tempCapacity injected — only the daemon enforces).
+  const tempCapacity = opts.tempCapacity;
+  const measureTempBytes = opts.measureTempBytes ?? defaultMeasureTempBytes;
+  const sweepTemp = opts.sweepTemp ?? (() => { /* no-op; periodic daemon sweep is the backstop */ });
   const runs = new Map<string, VerifyRun>();
   const queue: string[] = []; // requestIds in 'queued' state, FIFO
 
@@ -190,6 +240,16 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
     if (run.status !== 'running' && run.status !== 'queued') return; // already terminal
     run.status = status;
     run.summary = summary;
+    // #1c observability — single terminal choke point: every settle records duration + outcome, plus
+    // the 09 named counters (runner timeout / protocol error). errorCode is the bounded ErrorCode enum;
+    // never logs raw seed/stdout/stderr/trace (summary is already normalized to summary-only).
+    const durationMs = Date.now() - run.startedAt;
+    const errorCode = summary.ok ? undefined : summary.error?.code;
+    metrics.observe('runner_verify_duration_ms', durationMs);
+    metrics.inc('runner_verify_total', { status });
+    if (status === 'timeout') metrics.inc('runner_timeout_total');
+    if (errorCode === 'runner_protocol_error') metrics.inc('runner_protocol_error_total');
+    logger.info('runner.verify', { requestId: run.requestId, status, errorCode, durationMs, queueDepth: queue.length });
     if (run.killTimer) clearTimeout(run.killTimer);
     if (run.resultGrace) clearTimeout(run.resultGrace);
     if (run.tempRoot) safeCleanup(run.tempRoot);
@@ -202,10 +262,31 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
     scheduleNext();
   }
 
+  /** #1d temp-store capacity gate: is there room for another verify temp dir? Over the high watermark
+   * → shed orphan/aged dirs (sweepTemp) and re-measure once; still over → temp_store_full. A
+   * measurement throw counts as over-capacity (fail-closed — never fill the disk on a bad read). */
+  function checkTempCapacity(): { ok: true } | { ok: false; reason: string } {
+    if (!tempCapacity) return { ok: true };
+    const highBytes = tempCapacity.maxBytes * tempCapacity.highWatermarkRatio;
+    let used: number;
+    try { used = measureTempBytes(); } catch { metrics.inc('temp_store_full_total'); return { ok: false, reason: 'verify temp usage unmeasurable (fail-closed)' }; }
+    if (used <= highBytes) return { ok: true };
+    metrics.inc('temp_store_pressure_total');
+    try { sweepTemp(); } catch { /* best-effort shed */ }
+    let after: number;
+    try { after = measureTempBytes(); } catch { metrics.inc('temp_store_full_total'); return { ok: false, reason: 'verify temp usage unmeasurable after sweep (fail-closed)' }; }
+    if (after <= highBytes) return { ok: true };
+    metrics.inc('temp_store_full_total');
+    return { ok: false, reason: `verify temp store over capacity (${after} > ${Math.floor(highBytes)} bytes, high watermark)` };
+  }
+
   /** Launch a queued run: write input.json, spawn the child, wire timers + JSONL handling.
    * A synchronous launch failure (temp/spawn) settles the run rather than throwing — the
    * requestId is already minted, so callers always observe a terminal status. */
   function launch(run: VerifyRun): void {
+    // #1d: refuse to write a new temp dir past the high watermark (fail-closed) before doing any work.
+    const cap = checkTempCapacity();
+    if (!cap.ok) { settle(run, 'failed', { ok: false, error: { code: 'temp_store_full', message: cap.reason } }); return; }
     run.status = 'running';
     run.startedAt = Date.now();
     const { requestId, input } = run;
@@ -355,6 +436,7 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
     // never jumps the queue.
     const canLaunch = runningCount() < config.maxConcurrency;
     if (!canLaunch && queue.length >= config.queueLimit) {
+      metrics.inc('runner_queue_rejected_total'); // #1c · 09 queue rejected count
       return Promise.reject(Object.assign(new Error(`verify queue is full (limit ${config.queueLimit})`), { code: 'queue_full' }));
     }
 
@@ -364,7 +446,7 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
     runs.set(requestId, run);
 
     if (canLaunch) launch(run);
-    else queue.push(requestId);
+    else { queue.push(requestId); metrics.observe('runner_queue_depth', queue.length); } // #1c · 09 queue depth
 
     return Promise.resolve({ requestId });
   }
@@ -411,6 +493,10 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
 /** Lazily-constructed process-wide default (used by verifyAdapter when no runner is injected). */
 let _default: RunnerPortWithLifecycle | null = null;
 let _defaultDaemonPort: number | undefined;
+let _defaultMetrics: Metrics | undefined;
+let _defaultLogger: Logger | undefined;
+let _defaultTempCapacity: TempCapacity | undefined;
+let _defaultSweepTemp: (() => void) | undefined;
 
 /**
  * Configure the daemon port the default runner hands to child processes via
@@ -422,6 +508,33 @@ export function setDefaultRunnerDaemonPort(port: number): void {
   _defaultDaemonPort = port;
 }
 
+/**
+ * Share the daemon's metrics + structured logger with the default runner (#1c), so runner counters
+ * (timeout / queue depth / protocol error / verify duration) surface on the daemon's GET /metrics and
+ * runner verify logs share the daemon's level. Same injection contract as setDefaultRunnerDaemonPort:
+ * the daemon calls this at startup BEFORE the first defaultRunnerPort() use; later calls are no-ops.
+ */
+export function setDefaultRunnerObservability(metrics: Metrics, logger: Logger): void {
+  _defaultMetrics = metrics;
+  _defaultLogger = logger;
+}
+
+/**
+ * Enable the temp-store capacity guard on the default runner (#1d). Only the daemon (the long-running
+ * owner of verify temp dirs) calls this; one-shot CLI verify leaves it off. `sweepTemp` is the daemon's
+ * on-pressure shed (its reap). Same injection contract: call BEFORE the first defaultRunnerPort() use.
+ */
+export function setDefaultRunnerTempGuard(capacity: TempCapacity, sweepTemp?: () => void): void {
+  _defaultTempCapacity = capacity;
+  _defaultSweepTemp = sweepTemp;
+}
+
 export function defaultRunnerPort(): RunnerPortWithLifecycle {
-  return (_default ??= createRunnerPort({ daemonPort: _defaultDaemonPort }));
+  return (_default ??= createRunnerPort({
+    daemonPort: _defaultDaemonPort,
+    metrics: _defaultMetrics,
+    logger: _defaultLogger,
+    tempCapacity: _defaultTempCapacity,
+    sweepTemp: _defaultSweepTemp,
+  }));
 }
