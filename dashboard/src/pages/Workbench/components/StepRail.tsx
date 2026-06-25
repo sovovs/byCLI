@@ -12,6 +12,8 @@ interface Props {
   failed?: boolean;
 }
 
+const STATUS_LABEL = { done: '已完成', active: '当前步骤', pending: '未开始', failed: '失败' } as const;
+
 export default function StepRail({ steps, current, failed }: Props) {
   return (
     <ol className="wb-rail" aria-label="录制流程进度">
@@ -22,6 +24,7 @@ export default function StepRail({ steps, current, failed }: Props) {
           <li
             key={s.key}
             className={`wb-step wb-step--${status}`}
+            aria-label={`${s.title},${STATUS_LABEL[status]}`}
             aria-current={status === 'active' ? 'step' : undefined}
           >
             <span className="wb-step__dot" aria-hidden>

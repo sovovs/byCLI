@@ -170,7 +170,7 @@ pre {
   background: @bg-soft;
   border: 1.5px solid @line;
   color: @text-faint;
-  transition: all 0.25s ease;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 .wb-step__label {
   font-size: 12px;
@@ -241,15 +241,16 @@ pre {
 }
 
 // ── antd 组件青色化 ─────────────────────────────
-.ant-btn-primary {
+// 主按钮青色化 —— 限定工作台内,且排除 danger 按钮(保留终止/重置的危险红语义)
+.wb .ant-btn-primary:not(.ant-btn-dangerous) {
   background: linear-gradient(180deg, @cyan-bright, @cyan);
   border: none;
   color: #062b27;
   font-weight: 600;
   box-shadow: 0 6px 18px -8px @glow;
   &:hover {
-    background: @cyan-bright !important;
-    color: #052320 !important;
+    background: @cyan-bright;
+    color: #052320;
   }
 }
 .ant-progress-circle .ant-progress-text {
