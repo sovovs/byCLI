@@ -1,0 +1,216 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 4,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/bilibili.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 70,
+      "nonEmptyLines": 55,
+      "sections": [
+        {
+          "heading": "bilibili（B 站）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "域名",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "默认鉴权",
+          "level": 2,
+          "line": 13
+        },
+        {
+          "heading": "关键：wbi 签名",
+          "level": 2,
+          "line": 19
+        },
+        {
+          "heading": "已知 endpoint",
+          "level": 2,
+          "line": 26
+        },
+        {
+          "heading": "字段",
+          "level": 2,
+          "line": 40
+        },
+        {
+          "heading": "坑 / 陷阱",
+          "level": 2,
+          "line": 44
+        },
+        {
+          "heading": "可参考的 adapter",
+          "level": 2,
+          "line": 56
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 8
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/eastmoney.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 70,
+      "nonEmptyLines": 56,
+      "sections": [
+        {
+          "heading": "eastmoney（东方财富）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "域名",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "默认鉴权",
+          "level": 2,
+          "line": 14
+        },
+        {
+          "heading": "已知 endpoint",
+          "level": 2,
+          "line": 20
+        },
+        {
+          "heading": "字段",
+          "level": 2,
+          "line": 42
+        },
+        {
+          "heading": "坑 / 陷阱",
+          "level": 2,
+          "line": 48
+        },
+        {
+          "heading": "可参考的 adapter",
+          "level": 2,
+          "line": 57
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/tonghuashun.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 51,
+      "nonEmptyLines": 37,
+      "sections": [
+        {
+          "heading": "tonghuashun（同花顺 / ths）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "域名",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "默认鉴权",
+          "level": 2,
+          "line": 13
+        },
+        {
+          "heading": "已知 endpoint",
+          "level": 2,
+          "line": 20
+        },
+        {
+          "heading": "字段",
+          "level": 2,
+          "line": 29
+        },
+        {
+          "heading": "坑 / 陷阱",
+          "level": 2,
+          "line": 35
+        },
+        {
+          "heading": "可参考的 adapter",
+          "level": 2,
+          "line": 45
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/xueqiu.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 58,
+      "nonEmptyLines": 45,
+      "sections": [
+        {
+          "heading": "xueqiu（雪球）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "域名",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "默认鉴权",
+          "level": 2,
+          "line": 11
+        },
+        {
+          "heading": "已知 endpoint",
+          "level": 2,
+          "line": 18
+        },
+        {
+          "heading": "字段",
+          "level": 2,
+          "line": 31
+        },
+        {
+          "heading": "坑 / 陷阱",
+          "level": 2,
+          "line": 35
+        },
+        {
+          "heading": "可参考的 adapter",
+          "level": 2,
+          "line": 45
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    }
+  ]
+}

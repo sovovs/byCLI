@@ -75,6 +75,44 @@ jobs:
           BYCLI_AX_E2E: '1'
         run: npx vitest run --project e2e tests/e2e/browser-ax-chrome.test.ts --reporter=verbose
 
+      # Tier B-2: real daemon subprocess + real Chrome+extension → verify-runner connect-back → rows:1.
+      # Separate vitest invocation (own process) so it never contends with the AX smoke for port 19825.
+      - name: Run recorder real-Chrome verify smoke (Linux, via xvfb)
+        if: runner.os == 'Linux'
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          BYCLI_AX_E2E: '1'
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            npx vitest run --project e2e tests/e2e/recorder-real-chrome.test.ts --reporter=verbose
+
+      - name: Run recorder real-Chrome verify smoke (macOS / Windows)
+        if: runner.os != 'Linux'
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          BYCLI_AX_E2E: '1'
+        run: npx vitest run --project e2e tests/e2e/recorder-real-chrome.test.ts --reporter=verbose
+
+      # C1: be→真浏览器 navigate/capture(真 client→真 be→本仓 daemon→真扩展→真 Chrome→rank→derive→init)。
+      # 跑在 dashboard-be(那里跨包 import be+前端 client 现成可用);自起 daemon(19825),与上面步骤串行不抢口。
+      - name: Run be→browser capture smoke (Linux, via xvfb)
+        if: runner.os == 'Linux'
+        working-directory: dashboard-be
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          BYCLI_AX_E2E: '1'
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            npx vitest run test/recorder-real-browser-capture.test.ts --reporter=verbose
+
+      - name: Run be→browser capture smoke (macOS / Windows)
+        if: runner.os != 'Linux'
+        working-directory: dashboard-be
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          BYCLI_AX_E2E: '1'
+        run: npx vitest run test/recorder-real-browser-capture.test.ts --reporter=verbose
+
       - name: Run E2E tests (Linux, via xvfb)
         if: runner.os == 'Linux'
         env:

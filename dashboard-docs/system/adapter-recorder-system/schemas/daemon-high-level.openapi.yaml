@@ -1,0 +1,174 @@
+openapi: 3.1.0
+info:
+  title: Daemon High-Level Endpoints (M5 · ADR-0007)
+  version: daemon-high-level.v1
+  description: >-
+    Daemon-hosted high-level endpoints (ADR-0007 · daemon-high-level-hosting).
+    dashboard-be forwards FS/subprocess-class capabilities (init, verify) to these
+    routes; the daemon imports the main-repo high-level modules. These are DISTINCT
+    from the optional standalone wrapper in high-level.openapi.yaml
+    (/v1/adapters/*, /v1/browser/*). analyze is NOT here: it is browser-IO and is
+    orchestrated by dashboard-be over the existing daemon POST /command chain.
+    All routes are gated by the X-byCLI header (same as POST /command).
+security:
+  - ByCliHeader: []
+paths:
+  /v1/init:
+    post:
+      summary: createAdapterDraft (FS write transaction, main-repo side)
+      description: >-
+        Payload mirrors the LANDED createAdapterDraft signature
+        (src/recorder/highlevel/init.ts InitInput): name/domain/strategy/browser/
+        writePolicy/responsibleUseAcknowledgedAt. The richer args/endpoint/columns/report
+        fields in high-level.openapi.yaml InitInput are the optional standalone wrapper's
+        future full-draft intent and are NOT yet consumed by createAdapterDraft (the M5
+        renderer derives only domain/strategy/browser). When the renderer grows to consume
+        endpoint/columns, the impl signature + high-level InitInput + this payload must
+        move together (H-001 deferral).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              allOf:
+                - if:
+                    properties:
+                      writePolicy:
+                        const: write
+                    required: [writePolicy]
+                  then:
+                    required: [responsibleUseAcknowledgedAt]
+              properties:
+                name: { type: string, description: "site/command" }
+                domain: { type: string }
+                strategy: { type: string, enum: [PUBLIC, COOKIE, UI] }
+                browser: { type: boolean }
+                writePolicy: { type: string, enum: [dry-run, write] }
+                responsibleUseAcknowledgedAt: { type: integer, description: "required when writePolicy=write (ADR-0005)" }
+      responses:
+        '200':
+          description: draft created (or dry-run diff)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { const: true }
+                  data:
+                    type: object
+                    properties:
+                      report: { $ref: "adapter-recorder.bundle.json#/$defs/RecorderReport" }
+                      dryRun:
+                        type: object
+                        properties:
+                          exists: { type: boolean }
+                          changedLines: { type: [integer, "null"] }
+        '400':
+          description: "validation_failed, or responsible_use_required (responsibleUseAcknowledgedAt missing when writePolicy=write — M-005)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonError" }
+  /v1/verify:
+    post:
+      summary: verifyAdapter (delegates to RunnerPort child process; runner is M6)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, description: "site/command" }
+                requestId: { type: string, description: "canonical recorder requestId minted by be; daemon + RunnerPort key on it (be ↔ daemon ↔ runner share one id)" }
+                executionSeedArgs: { type: object, additionalProperties: true, description: "raw — memory/input.json only, never echoed (07:123)" }
+                fixture: { type: string, enum: [ignore, match, update] }
+                trace: { type: string, enum: [off, retain-on-failure, always] }
+      responses:
+        '200':
+          description: verify started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { const: true }
+                  data:
+                    type: object
+                    required: [requestId]
+                    properties:
+                      requestId: { type: string }
+        '400':
+          description: validation_failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonError" }
+        '500':
+          description: runner_protocol_error (until M6 runner lands, this is the stub path)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonError" }
+  /v1/requests/{requestId}:
+    get:
+      summary: verify request status (M6 · runner registry keyed by canonical requestId)
+      description: >-
+        be polls verify status here (it does NOT walk POST /command). The runner registry is
+        keyed by the canonical requestId; result is a summary-only VerifySummary once terminal
+        (null while running). dashboard-be maps this into the recorder.v1 RequestStatus at the
+        UI boundary and caches the terminal value with a TTL.
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: request status (running → result null; terminal → VerifySummary)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, data]
+                properties:
+                  ok: { const: true }
+                  data:
+                    type: object
+                    required: [requestId, status]
+                    properties:
+                      requestId: { type: string }
+                      status: { type: string, enum: [running, succeeded, failed, timeout, cancelled] }
+                      result:
+                        oneOf:
+                          - $ref: "adapter-recorder.bundle.json#/$defs/VerifySummary"
+                          - type: "null"
+        '404':
+          description: request_not_found (unknown id, or the run was evicted)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonError" }
+components:
+  schemas:
+    DaemonError:
+      type: object
+      required: [ok, errorCode, error]
+      additionalProperties: false
+      description: >-
+        Daemon fail-fast error body — faithfully describes the CURRENT daemon shape
+        (src/daemon.ts), NOT the shared adapter-recorder.bundle.json#/$defs/Error object.
+        daemon is an internal hop; dashboard-be (daemonBridge) reads errorCode and re-wraps
+        into the recorder.v1 envelope at the UI boundary. errorCode references the shared
+        ErrorCode enum so the daemon surface cannot drift from it (M-003).
+      properties:
+        ok: { const: false }
+        errorCode: { $ref: "adapter-recorder.bundle.json#/$defs/ErrorCode" }
+        error: { type: string, description: "human-readable reason string" }
+  securitySchemes:
+    ByCliHeader:
+      type: apiKey
+      in: header
+      name: X-byCLI
+      description: "Custom header gate — src/daemon.ts requires X-byCLI on all non-health routes (same as POST /command)."

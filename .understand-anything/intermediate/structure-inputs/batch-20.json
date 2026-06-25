@@ -1,0 +1,182 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "outputs/code-review-adapter-recorder-system-20260623.md",
+      "language": "markdown",
+      "sizeLines": 166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "outputs/code-review-adapter-recorder-system-20260623.zh.md",
+      "language": "markdown",
+      "sizeLines": 166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "packages/recorder-core/package.json",
+      "language": "json",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/recorder-core/src/analyze.ts",
+      "language": "typescript",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/canonical.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/core.test.ts",
+      "language": "typescript",
+      "sizeLines": 194,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/init.test.ts",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/init.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/normalize.ts",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/pairing.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/rank.ts",
+      "language": "typescript",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/score.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/types.ts",
+      "language": "typescript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/verify.test.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/verify.ts",
+      "language": "typescript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/tsconfig.json",
+      "language": "json",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/check-listing-id-pairing.mjs",
+      "language": "javascript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check-silent-column-drop.mjs",
+      "language": "javascript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check-typed-error-lint.mjs",
+      "language": "javascript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/clean-dist.cjs",
+      "language": "javascript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/copy-yaml.cjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/fetch-adapters.js",
+      "language": "javascript",
+      "sizeLines": 293,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/m1-daemon-navigate-drive.mjs",
+      "language": "javascript",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/m1-extension-spike.mjs",
+      "language": "javascript",
+      "sizeLines": 237,
+      "fileCategory": "code"
+    }
+  ],
+  "batchImportData": {
+    "outputs/code-review-adapter-recorder-system-20260623.md": [],
+    "outputs/code-review-adapter-recorder-system-20260623.zh.md": [],
+    "packages/recorder-core/package.json": [],
+    "packages/recorder-core/src/analyze.ts": [],
+    "packages/recorder-core/src/canonical.ts": [],
+    "packages/recorder-core/src/core.test.ts": [],
+    "packages/recorder-core/src/index.ts": [],
+    "packages/recorder-core/src/init.test.ts": [],
+    "packages/recorder-core/src/init.ts": [],
+    "packages/recorder-core/src/normalize.ts": [],
+    "packages/recorder-core/src/pairing.ts": [],
+    "packages/recorder-core/src/rank.ts": [],
+    "packages/recorder-core/src/score.ts": [],
+    "packages/recorder-core/src/types.ts": [],
+    "packages/recorder-core/src/verify.test.ts": [],
+    "packages/recorder-core/src/verify.ts": [],
+    "packages/recorder-core/tsconfig.json": [],
+    "scripts/check-listing-id-pairing.mjs": [],
+    "scripts/check-silent-column-drop.mjs": [],
+    "scripts/check-typed-error-lint.mjs": [],
+    "scripts/clean-dist.cjs": [],
+    "scripts/copy-yaml.cjs": [],
+    "scripts/fetch-adapters.js": [],
+    "scripts/m1-daemon-navigate-drive.mjs": [],
+    "scripts/m1-extension-spike.mjs": []
+  }
+}

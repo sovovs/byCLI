@@ -1,0 +1,28 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "src/browser/__fixtures__/article-extract/deno-v2.html",
+      "language": "html",
+      "sizeLines": 500,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/browser/__fixtures__/article-extract/openai-cookbook-readme.txt",
+      "language": "txt",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "src/browser/__fixtures__/article-extract/wikipedia-markdown.html",
+      "language": "html",
+      "sizeLines": 1248,
+      "fileCategory": "markup"
+    }
+  ],
+  "batchImportData": {
+    "src/browser/__fixtures__/article-extract/deno-v2.html": [],
+    "src/browser/__fixtures__/article-extract/openai-cookbook-readme.txt": [],
+    "src/browser/__fixtures__/article-extract/wikipedia-markdown.html": []
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "extension/README.md",
+      "language": "markdown",
+      "sizeLines": 26,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "extension/manifest.json",
+      "language": "json",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": "extension/package.json",
+      "language": "json",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "extension/popup.html",
+      "language": "html",
+      "sizeLines": 146,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "extension/tsconfig.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    }
+  ],
+  "batchImportData": {
+    "extension/README.md": [],
+    "extension/manifest.json": [],
+    "extension/package.json": [],
+    "extension/popup.html": [],
+    "extension/tsconfig.json": []
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "dashboard-docs/README.md",
+      "language": "markdown",
+      "sizeLines": 95,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/TDD.md",
+      "language": "markdown",
+      "sizeLines": 113,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/architecture-relationship.md",
+      "language": "markdown",
+      "sizeLines": 170,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "dashboard-docs/README.md": [],
+    "dashboard-docs/TDD.md": [],
+    "dashboard-docs/architecture-relationship.md": []
+  }
+}

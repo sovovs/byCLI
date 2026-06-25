@@ -1,0 +1,166 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 4,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "cases/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 9,
+      "nonEmptyLines": 5,
+      "sections": [
+        {
+          "heading": "Use Cases",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "Contributing",
+          "level": 2,
+          "line": 5
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 2
+      }
+    },
+    {
+      "path": "cases/daily-rl-research-monitor.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 56,
+      "nonEmptyLines": 39,
+      "sections": [
+        {
+          "heading": "Daily RL research monitor",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "What I wanted",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "Commands",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "What I do with the output",
+          "level": 2,
+          "line": 33
+        },
+        {
+          "heading": "Why CLI beats the browser version",
+          "level": 2,
+          "line": 49
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "cases/find-paper-implementation.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 57,
+      "nonEmptyLines": 38,
+      "sections": [
+        {
+          "heading": "Find a paper's implementation and follow-up work",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "What I wanted",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "Commands",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "What I do with the output",
+          "level": 2,
+          "line": 39
+        },
+        {
+          "heading": "Why this is worth a CLI chain",
+          "level": 2,
+          "line": 50
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "cases/track-conference-papers.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 75,
+      "nonEmptyLines": 51,
+      "sections": [
+        {
+          "heading": "Track a conference's accepted papers and reviews from the terminal",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "What I wanted",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "Commands",
+          "level": 2,
+          "line": 15
+        },
+        {
+          "heading": "What I do with the output",
+          "level": 2,
+          "line": 35
+        },
+        {
+          "heading": "Phase A: filtering the acceptance list",
+          "level": 3,
+          "line": 39
+        },
+        {
+          "heading": "Phase B: depth-reading the shortlist",
+          "level": 3,
+          "line": 54
+        },
+        {
+          "heading": "Why this beats opening OpenReview",
+          "level": 2,
+          "line": 68
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 7
+      }
+    }
+  ]
+}

@@ -1,0 +1,5366 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 5,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "extension/src/background.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 1944,
+      "nonEmptyLines": 1781,
+      "functions": [
+        {
+          "name": "getCurrentContextId",
+          "startLine": 24,
+          "endLine": 45,
+          "params": []
+        },
+        {
+          "name": "generateContextId",
+          "startLine": 47,
+          "endLine": 65,
+          "params": []
+        },
+        {
+          "name": "forwardLog",
+          "startLine": 74,
+          "endLine": 79,
+          "params": [
+            "level",
+            "args"
+          ]
+        },
+        {
+          "name": "safeSend",
+          "startLine": 81,
+          "endLine": 89,
+          "params": [
+            "socket",
+            "payload"
+          ]
+        },
+        {
+          "name": "isDaemonSocketActive",
+          "startLine": 97,
+          "endLine": 99,
+          "params": [
+            "socket"
+          ]
+        },
+        {
+          "name": "connect",
+          "startLine": 108,
+          "endLine": 115,
+          "params": []
+        },
+        {
+          "name": "connectAttempt",
+          "startLine": 117,
+          "endLine": 179,
+          "params": []
+        },
+        {
+          "name": "scheduleReconnect",
+          "startLine": 188,
+          "endLine": 197,
+          "params": []
+        },
+        {
+          "name": "getLeaseKey",
+          "startLine": 277,
+          "endLine": 279,
+          "params": [
+            "session",
+            "surface"
+          ]
+        },
+        {
+          "name": "getSessionName",
+          "startLine": 281,
+          "endLine": 289,
+          "params": [
+            "session"
+          ]
+        },
+        {
+          "name": "getCommandSurface",
+          "startLine": 291,
+          "endLine": 293,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "getSurfaceFromKey",
+          "startLine": 295,
+          "endLine": 297,
+          "params": [
+            "key"
+          ]
+        },
+        {
+          "name": "getSessionFromKey",
+          "startLine": 299,
+          "endLine": 307,
+          "params": [
+            "key"
+          ]
+        },
+        {
+          "name": "getIdleTimeout",
+          "startLine": 309,
+          "endLine": 318,
+          "params": [
+            "key"
+          ]
+        },
+        {
+          "name": "getLeaseLifecycle",
+          "startLine": 320,
+          "endLine": 325,
+          "params": [
+            "key",
+            "kind"
+          ]
+        },
+        {
+          "name": "getOwnedWindowRole",
+          "startLine": 327,
+          "endLine": 329,
+          "params": [
+            "key"
+          ]
+        },
+        {
+          "name": "getWindowRole",
+          "startLine": 331,
+          "endLine": 333,
+          "params": [
+            "key",
+            "ownership"
+          ]
+        },
+        {
+          "name": "getWindowMode",
+          "startLine": 335,
+          "endLine": 338,
+          "params": [
+            "key"
+          ]
+        },
+        {
+          "name": "makeAlarmName",
+          "startLine": 340,
+          "endLine": 342,
+          "params": [
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "leaseKeyFromAlarmName",
+          "startLine": 344,
+          "endLine": 351,
+          "params": [
+            "name"
+          ]
+        },
+        {
+          "name": "withLeaseMutation",
+          "startLine": 353,
+          "endLine": 357,
+          "params": [
+            "fn"
+          ]
+        },
+        {
+          "name": "makeSession",
+          "startLine": 359,
+          "endLine": 371,
+          "params": [
+            "key",
+            "session"
+          ]
+        },
+        {
+          "name": "emptyRegistry",
+          "startLine": 373,
+          "endLine": 389,
+          "params": []
+        },
+        {
+          "name": "readRegistry",
+          "startLine": 391,
+          "endLine": 419,
+          "params": []
+        },
+        {
+          "name": "writeRegistry",
+          "startLine": 421,
+          "endLine": 427,
+          "params": [
+            "registry"
+          ]
+        },
+        {
+          "name": "persistRuntimeState",
+          "startLine": 429,
+          "endLine": 462,
+          "params": []
+        },
+        {
+          "name": "scheduleIdleAlarm",
+          "startLine": 464,
+          "endLine": 475,
+          "params": [
+            "leaseKey",
+            "timeout"
+          ]
+        },
+        {
+          "name": "safeDetach",
+          "startLine": 477,
+          "endLine": 484,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "removeLeaseSession",
+          "startLine": 486,
+          "endLine": 495,
+          "params": [
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "resetWindowIdleTimer",
+          "startLine": 497,
+          "endLine": 514,
+          "params": [
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "getOwnedContainerGroupId",
+          "startLine": 516,
+          "endLine": 537,
+          "params": [
+            "role",
+            "windowId"
+          ]
+        },
+        {
+          "name": "getOwnedContainerGroupTitles",
+          "startLine": 539,
+          "endLine": 543,
+          "params": [
+            "role"
+          ]
+        },
+        {
+          "name": "focusOwnedWindowIfRequested",
+          "startLine": 552,
+          "endLine": 556,
+          "params": [
+            "windowId",
+            "mode"
+          ]
+        },
+        {
+          "name": "toOwnedContainerDiscoveryCandidate",
+          "startLine": 558,
+          "endLine": 572,
+          "params": [
+            "group"
+          ]
+        },
+        {
+          "name": "selectOwnedContainerDiscoveryCandidate",
+          "startLine": 574,
+          "endLine": 581,
+          "params": [
+            "candidates"
+          ]
+        },
+        {
+          "name": "discoverOwnedContainerFromTabGroup",
+          "startLine": 583,
+          "endLine": 609,
+          "params": [
+            "role"
+          ]
+        },
+        {
+          "name": "ensureOwnedContainerTabGroup",
+          "startLine": 611,
+          "endLine": 625,
+          "params": [
+            "role",
+            "windowId",
+            "tabIds"
+          ]
+        },
+        {
+          "name": "ensureOwnedContainerTabGroupUnlocked",
+          "startLine": 627,
+          "endLine": 652,
+          "params": [
+            "role",
+            "windowId",
+            "ids"
+          ]
+        },
+        {
+          "name": "ensureOwnedContainerWindow",
+          "startLine": 663,
+          "endLine": 675,
+          "params": [
+            "role",
+            "initialUrl",
+            "mode"
+          ]
+        },
+        {
+          "name": "ensureOwnedContainerWindowUnlocked",
+          "startLine": 677,
+          "endLine": 750,
+          "params": [
+            "role",
+            "initialUrl",
+            "mode"
+          ]
+        },
+        {
+          "name": "findReusableOwnedContainerTab",
+          "startLine": 752,
+          "endLine": 764,
+          "params": [
+            "windowId"
+          ]
+        },
+        {
+          "name": "initialTabIsAvailable",
+          "startLine": 766,
+          "endLine": 772,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "createOwnedTabLease",
+          "startLine": 774,
+          "endLine": 776,
+          "params": [
+            "leaseKey",
+            "initialUrl",
+            "blankFirst"
+          ]
+        },
+        {
+          "name": "createOwnedTabLeaseUnlocked",
+          "startLine": 778,
+          "endLine": 813,
+          "params": [
+            "leaseKey",
+            "initialUrl",
+            "blankFirst"
+          ]
+        },
+        {
+          "name": "getAutomationWindow",
+          "startLine": 819,
+          "endLine": 846,
+          "params": [
+            "leaseKey",
+            "initialUrl"
+          ]
+        },
+        {
+          "name": "initialize",
+          "startLine": 891,
+          "endLine": 908,
+          "params": []
+        },
+        {
+          "name": "fetchDaemonVersion",
+          "startLine": 956,
+          "endLine": 969,
+          "params": []
+        },
+        {
+          "name": "handleCommand",
+          "startLine": 973,
+          "endLine": 1031,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "isDebuggableUrl",
+          "startLine": 1039,
+          "endLine": 1042,
+          "params": [
+            "url"
+          ]
+        },
+        {
+          "name": "isSafeNavigationUrl",
+          "startLine": 1045,
+          "endLine": 1047,
+          "params": [
+            "url"
+          ]
+        },
+        {
+          "name": "normalizeUrlForComparison",
+          "startLine": 1050,
+          "endLine": 1062,
+          "params": [
+            "url"
+          ]
+        },
+        {
+          "name": "isTargetUrl",
+          "startLine": 1064,
+          "endLine": 1066,
+          "params": [
+            "currentUrl",
+            "targetUrl"
+          ]
+        },
+        {
+          "name": "getUrlOrigin",
+          "startLine": 1068,
+          "endLine": 1075,
+          "params": [
+            "url"
+          ]
+        },
+        {
+          "name": "enumerateCrossOriginFrames",
+          "startLine": 1077,
+          "endLine": 1107,
+          "params": [
+            "tree"
+          ]
+        },
+        {
+          "name": "setLeaseSession",
+          "startLine": 1109,
+          "endLine": 1122,
+          "params": [
+            "leaseKey",
+            "session"
+          ]
+        },
+        {
+          "name": "resolveCommandTabId",
+          "startLine": 1128,
+          "endLine": 1131,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "resolveTab",
+          "startLine": 1139,
+          "endLine": 1246,
+          "params": [
+            "tabId",
+            "leaseKey",
+            "initialUrl",
+            "blankFirst"
+          ]
+        },
+        {
+          "name": "pageScopedResult",
+          "startLine": 1249,
+          "endLine": 1252,
+          "params": [
+            "id",
+            "tabId",
+            "data"
+          ]
+        },
+        {
+          "name": "resolveTabId",
+          "startLine": 1255,
+          "endLine": 1258,
+          "params": [
+            "tabId",
+            "leaseKey",
+            "initialUrl"
+          ]
+        },
+        {
+          "name": "listAutomationTabs",
+          "startLine": 1260,
+          "endLine": 1277,
+          "params": [
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "listAutomationWebTabs",
+          "startLine": 1279,
+          "endLine": 1282,
+          "params": [
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleExec",
+          "startLine": 1284,
+          "endLine": 1304,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleFrames",
+          "startLine": 1306,
+          "endLine": 1315,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleNavigate",
+          "startLine": 1317,
+          "endLine": 1478,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleTabs",
+          "startLine": 1480,
+          "endLine": 1578,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleCookies",
+          "startLine": 1580,
+          "endLine": 1598,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "handleScreenshot",
+          "startLine": 1600,
+          "endLine": 1615,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleCdp",
+          "startLine": 1647,
+          "endLine": 1673,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "stripbyCliFrameRoutingParams",
+          "startLine": 1675,
+          "endLine": 1679,
+          "params": [
+            "params",
+            "stripFrameId"
+          ]
+        },
+        {
+          "name": "handleCloseWindow",
+          "startLine": 1681,
+          "endLine": 1685,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleSetFileInput",
+          "startLine": 1687,
+          "endLine": 1699,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleInsertText",
+          "startLine": 1701,
+          "endLine": 1713,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleNetworkCaptureStart",
+          "startLine": 1715,
+          "endLine": 1724,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleNetworkCaptureRead",
+          "startLine": 1726,
+          "endLine": 1735,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        },
+        {
+          "name": "handleWaitDownload",
+          "startLine": 1737,
+          "endLine": 1744,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "releaseLease",
+          "startLine": 1746,
+          "endLine": 1798,
+          "params": [
+            "leaseKey",
+            "reason"
+          ]
+        },
+        {
+          "name": "reconcileTargetLeaseRegistry",
+          "startLine": 1800,
+          "endLine": 1860,
+          "params": []
+        },
+        {
+          "name": "handleBind",
+          "startLine": 1862,
+          "endLine": 1901,
+          "params": [
+            "cmd",
+            "leaseKey"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CommandFailure",
+          "startLine": 264,
+          "endLine": 269,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "__test__",
+          "line": 1903,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getCurrentContextId",
+          "callee": "(async () => {\n    try {\n      const local = chrome.storage?.local;\n      if (!local) return currentContextId;\n      const raw = await local.get(CONTEXT_ID_KEY) as Record<string, unknown>;\n      const existing = raw[CONTEXT_ID_KEY];\n      if (typeof existing === 'string' && existing.trim()) {\n        currentContextId = existing.trim();\n        return currentContextId;\n      }\n      const generated = generateContextId();\n      await local.set({ [CONTEXT_ID_KEY]: generated });\n      currentContextId = generated;\n      return currentContextId;\n    } catch {\n      return currentContextId;\n    }\n  })",
+          "lineNumber": 26
+        },
+        {
+          "caller": "getCurrentContextId",
+          "callee": "local.get",
+          "lineNumber": 30
+        },
+        {
+          "caller": "getCurrentContextId",
+          "callee": "existing.trim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "getCurrentContextId",
+          "callee": "existing.trim",
+          "lineNumber": 33
+        },
+        {
+          "caller": "getCurrentContextId",
+          "callee": "generateContextId",
+          "lineNumber": 36
+        },
+        {
+          "caller": "getCurrentContextId",
+          "callee": "local.set",
+          "lineNumber": 37
+        },
+        {
+          "caller": "generateContextId",
+          "callee": "Math.floor",
+          "lineNumber": 49
+        },
+        {
+          "caller": "generateContextId",
+          "callee": "crypto.getRandomValues",
+          "lineNumber": 54
+        },
+        {
+          "caller": "generateContextId",
+          "callee": "Math.floor",
+          "lineNumber": 56
+        },
+        {
+          "caller": "generateContextId",
+          "callee": "Math.random",
+          "lineNumber": 56
+        },
+        {
+          "caller": "forwardLog",
+          "callee": "args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join",
+          "lineNumber": 76
+        },
+        {
+          "caller": "forwardLog",
+          "callee": "args.map",
+          "lineNumber": 76
+        },
+        {
+          "caller": "forwardLog",
+          "callee": "JSON.stringify",
+          "lineNumber": 76
+        },
+        {
+          "caller": "forwardLog",
+          "callee": "safeSend",
+          "lineNumber": 77
+        },
+        {
+          "caller": "forwardLog",
+          "callee": "Date.now",
+          "lineNumber": 77
+        },
+        {
+          "caller": "safeSend",
+          "callee": "socket.send",
+          "lineNumber": 84
+        },
+        {
+          "caller": "safeSend",
+          "callee": "JSON.stringify",
+          "lineNumber": 84
+        },
+        {
+          "caller": "connect",
+          "callee": "isDaemonSocketActive",
+          "lineNumber": 109
+        },
+        {
+          "caller": "connect",
+          "callee": "Promise.resolve",
+          "lineNumber": 109
+        },
+        {
+          "caller": "connect",
+          "callee": "connectAttempt().finally",
+          "lineNumber": 111
+        },
+        {
+          "caller": "connect",
+          "callee": "connectAttempt",
+          "lineNumber": 111
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "isDaemonSocketActive",
+          "lineNumber": 118
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "fetch",
+          "lineNumber": 121
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "AbortSignal.timeout",
+          "lineNumber": 121
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "isDaemonSocketActive",
+          "lineNumber": 126
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "getCurrentContextId",
+          "lineNumber": 130
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "isDaemonSocketActive",
+          "lineNumber": 131
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "scheduleReconnect",
+          "lineNumber": 136
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "console.log",
+          "lineNumber": 142
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "clearTimeout",
+          "lineNumber": 145
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "safeSend",
+          "lineNumber": 149
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "chrome.runtime.getManifest",
+          "lineNumber": 152
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "JSON.parse",
+          "lineNumber": 160
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "handleCommand",
+          "lineNumber": 161
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "safeSend",
+          "lineNumber": 163
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "console.error",
+          "lineNumber": 165
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "console.log",
+          "lineNumber": 171
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "scheduleReconnect",
+          "lineNumber": 173
+        },
+        {
+          "caller": "connectAttempt",
+          "callee": "thisWs.close",
+          "lineNumber": 177
+        },
+        {
+          "caller": "scheduleReconnect",
+          "callee": "Math.min",
+          "lineNumber": 192
+        },
+        {
+          "caller": "scheduleReconnect",
+          "callee": "Math.pow",
+          "lineNumber": 192
+        },
+        {
+          "caller": "scheduleReconnect",
+          "callee": "setTimeout",
+          "lineNumber": 193
+        },
+        {
+          "caller": "scheduleReconnect",
+          "callee": "connect",
+          "lineNumber": 195
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 266
+        },
+        {
+          "caller": "getLeaseKey",
+          "callee": "encodeURIComponent",
+          "lineNumber": 278
+        },
+        {
+          "caller": "getSessionName",
+          "callee": "session?.trim",
+          "lineNumber": 282
+        },
+        {
+          "caller": "getSurfaceFromKey",
+          "callee": "key.split",
+          "lineNumber": 296
+        },
+        {
+          "caller": "getSessionFromKey",
+          "callee": "key.indexOf",
+          "lineNumber": 300
+        },
+        {
+          "caller": "getSessionFromKey",
+          "callee": "decodeURIComponent",
+          "lineNumber": 303
+        },
+        {
+          "caller": "getSessionFromKey",
+          "callee": "key.slice",
+          "lineNumber": 303
+        },
+        {
+          "caller": "getSessionFromKey",
+          "callee": "key.slice",
+          "lineNumber": 305
+        },
+        {
+          "caller": "getIdleTimeout",
+          "callee": "automationSessions.get",
+          "lineNumber": 310
+        },
+        {
+          "caller": "getIdleTimeout",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 312
+        },
+        {
+          "caller": "getIdleTimeout",
+          "callee": "sessionLifecycleOverrides.get",
+          "lineNumber": 313
+        },
+        {
+          "caller": "getIdleTimeout",
+          "callee": "sessionTimeoutOverrides.get",
+          "lineNumber": 315
+        },
+        {
+          "caller": "getIdleTimeout",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 317
+        },
+        {
+          "caller": "getLeaseLifecycle",
+          "callee": "sessionLifecycleOverrides.get",
+          "lineNumber": 322
+        },
+        {
+          "caller": "getLeaseLifecycle",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 324
+        },
+        {
+          "caller": "getOwnedWindowRole",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 328
+        },
+        {
+          "caller": "getWindowRole",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 332
+        },
+        {
+          "caller": "getWindowMode",
+          "callee": "sessionWindowModeOverrides.get",
+          "lineNumber": 336
+        },
+        {
+          "caller": "getWindowMode",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 337
+        },
+        {
+          "caller": "makeAlarmName",
+          "callee": "encodeURIComponent",
+          "lineNumber": 341
+        },
+        {
+          "caller": "leaseKeyFromAlarmName",
+          "callee": "name.startsWith",
+          "lineNumber": 345
+        },
+        {
+          "caller": "leaseKeyFromAlarmName",
+          "callee": "decodeURIComponent",
+          "lineNumber": 347
+        },
+        {
+          "caller": "leaseKeyFromAlarmName",
+          "callee": "name.slice",
+          "lineNumber": 347
+        },
+        {
+          "caller": "withLeaseMutation",
+          "callee": "leaseMutationQueue.then",
+          "lineNumber": 354
+        },
+        {
+          "caller": "withLeaseMutation",
+          "callee": "run.then",
+          "lineNumber": 355
+        },
+        {
+          "caller": "makeSession",
+          "callee": "getLeaseLifecycle",
+          "lineNumber": 368
+        },
+        {
+          "caller": "makeSession",
+          "callee": "getWindowRole",
+          "lineNumber": 369
+        },
+        {
+          "caller": "readRegistry",
+          "callee": "emptyRegistry",
+          "lineNumber": 394
+        },
+        {
+          "caller": "readRegistry",
+          "callee": "local.get",
+          "lineNumber": 395
+        },
+        {
+          "caller": "readRegistry",
+          "callee": "emptyRegistry",
+          "lineNumber": 397
+        },
+        {
+          "caller": "readRegistry",
+          "callee": "emptyRegistry",
+          "lineNumber": 400
+        },
+        {
+          "caller": "readRegistry",
+          "callee": "emptyRegistry",
+          "lineNumber": 417
+        },
+        {
+          "caller": "writeRegistry",
+          "callee": "chrome.storage?.local?.set",
+          "lineNumber": 423
+        },
+        {
+          "caller": "persistRuntimeState",
+          "callee": "automationSessions.entries",
+          "lineNumber": 431
+        },
+        {
+          "caller": "persistRuntimeState",
+          "callee": "Date.now",
+          "lineNumber": 444
+        },
+        {
+          "caller": "persistRuntimeState",
+          "callee": "writeRegistry",
+          "lineNumber": 447
+        },
+        {
+          "caller": "scheduleIdleAlarm",
+          "callee": "makeAlarmName",
+          "lineNumber": 465
+        },
+        {
+          "caller": "scheduleIdleAlarm",
+          "callee": "chrome.alarms?.create",
+          "lineNumber": 468
+        },
+        {
+          "caller": "scheduleIdleAlarm",
+          "callee": "Date.now",
+          "lineNumber": 468
+        },
+        {
+          "caller": "scheduleIdleAlarm",
+          "callee": "chrome.alarms?.clear",
+          "lineNumber": 470
+        },
+        {
+          "caller": "safeDetach",
+          "callee": "detach",
+          "lineNumber": 480
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "automationSessions.get",
+          "lineNumber": 487
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "clearTimeout",
+          "lineNumber": 488
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "automationSessions.delete",
+          "lineNumber": 489
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "sessionTimeoutOverrides.delete",
+          "lineNumber": 490
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "sessionWindowModeOverrides.delete",
+          "lineNumber": 491
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "sessionLifecycleOverrides.delete",
+          "lineNumber": 492
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "scheduleIdleAlarm",
+          "lineNumber": 493
+        },
+        {
+          "caller": "removeLeaseSession",
+          "callee": "persistRuntimeState",
+          "lineNumber": 494
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "automationSessions.get",
+          "lineNumber": 498
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "clearTimeout",
+          "lineNumber": 500
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "getIdleTimeout",
+          "lineNumber": 501
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "scheduleIdleAlarm",
+          "lineNumber": 502
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "persistRuntimeState",
+          "lineNumber": 506
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "Date.now",
+          "lineNumber": 509
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "persistRuntimeState",
+          "lineNumber": 510
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "setTimeout",
+          "lineNumber": 511
+        },
+        {
+          "caller": "resetWindowIdleTimer",
+          "callee": "releaseLease",
+          "lineNumber": 512
+        },
+        {
+          "caller": "getOwnedContainerGroupId",
+          "callee": "chrome.tabGroups.get",
+          "lineNumber": 520
+        },
+        {
+          "caller": "getOwnedContainerGroupId",
+          "callee": "getOwnedContainerGroupTitles",
+          "lineNumber": 528
+        },
+        {
+          "caller": "getOwnedContainerGroupId",
+          "callee": "chrome.tabGroups.query",
+          "lineNumber": 529
+        },
+        {
+          "caller": "focusOwnedWindowIfRequested",
+          "callee": "updateWindow(windowId, { focused: true }).catch",
+          "lineNumber": 555
+        },
+        {
+          "caller": "focusOwnedWindowIfRequested",
+          "callee": "updateWindow",
+          "lineNumber": 555
+        },
+        {
+          "caller": "toOwnedContainerDiscoveryCandidate",
+          "callee": "chrome.windows.get",
+          "lineNumber": 560
+        },
+        {
+          "caller": "toOwnedContainerDiscoveryCandidate",
+          "callee": "findReusableOwnedContainerTab",
+          "lineNumber": 561
+        },
+        {
+          "caller": "selectOwnedContainerDiscoveryCandidate",
+          "callee": "[...candidates].sort",
+          "lineNumber": 576
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "chrome.tabGroups.get",
+          "lineNumber": 587
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "chrome.windows.get",
+          "lineNumber": 588
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "getOwnedContainerGroupTitles",
+          "lineNumber": 597
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "chrome.tabGroups.query",
+          "lineNumber": 598
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "(await Promise.all(groups.map(toOwnedContainerDiscoveryCandidate)))\n      .filter",
+          "lineNumber": 599
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "Promise.all",
+          "lineNumber": 599
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "groups.map",
+          "lineNumber": 599
+        },
+        {
+          "caller": "discoverOwnedContainerFromTabGroup",
+          "callee": "selectOwnedContainerDiscoveryCandidate",
+          "lineNumber": 601
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "tabIds.filter",
+          "lineNumber": 612
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "Promise.resolve",
+          "lineNumber": 616
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "previousGroupPromise\n    .catch(() => undefined)\n    .then",
+          "lineNumber": 617
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "previousGroupPromise\n    .catch",
+          "lineNumber": 617
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "ensureOwnedContainerTabGroupUnlocked",
+          "lineNumber": 619
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroup",
+          "callee": "nextGroupPromise.finally",
+          "lineNumber": 620
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "getOwnedContainerGroupId",
+          "lineNumber": 629
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 631
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "tabs\n          .filter((tab) => tab.id !== undefined && ids.includes(tab.id) && tab.groupId === existingGroupId)\n          .map",
+          "lineNumber": 633
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "tabs\n          .filter",
+          "lineNumber": 633
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "ids.includes",
+          "lineNumber": 634
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "ids.filter",
+          "lineNumber": 637
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "alreadyGrouped.has",
+          "lineNumber": 637
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "chrome.tabs.group",
+          "lineNumber": 638
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "chrome.tabs.group",
+          "lineNumber": 642
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "chrome.tabGroups.update",
+          "lineNumber": 644
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "console.warn",
+          "lineNumber": 650
+        },
+        {
+          "caller": "ensureOwnedContainerTabGroupUnlocked",
+          "callee": "String",
+          "lineNumber": 650
+        },
+        {
+          "caller": "ensureOwnedContainerWindow",
+          "callee": "ensureOwnedContainerWindowUnlocked(role, initialUrl, mode)\n    .finally",
+          "lineNumber": 670
+        },
+        {
+          "caller": "ensureOwnedContainerWindow",
+          "callee": "ensureOwnedContainerWindowUnlocked",
+          "lineNumber": 670
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "chrome.windows.get",
+          "lineNumber": 685
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "focusOwnedWindowIfRequested",
+          "lineNumber": 686
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "findReusableOwnedContainerTab",
+          "lineNumber": 687
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 688
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "discoverOwnedContainerFromTabGroup",
+          "lineNumber": 699
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "focusOwnedWindowIfRequested",
+          "lineNumber": 701
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "findReusableOwnedContainerTab",
+          "lineNumber": 702
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 703
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "persistRuntimeState",
+          "lineNumber": 704
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "isSafeNavigationUrl",
+          "lineNumber": 711
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "chrome.windows.create",
+          "lineNumber": 715
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "console.log",
+          "lineNumber": 723
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 726
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "setTimeout",
+          "lineNumber": 730
+        },
+        {
+          "caller": "listener",
+          "callee": "chrome.tabs.onUpdated.removeListener",
+          "lineNumber": 733
+        },
+        {
+          "caller": "listener",
+          "callee": "clearTimeout",
+          "lineNumber": 734
+        },
+        {
+          "caller": "listener",
+          "callee": "resolve",
+          "lineNumber": 735
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "clearTimeout",
+          "lineNumber": 740
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "resolve",
+          "lineNumber": 741
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "chrome.tabs.onUpdated.addListener",
+          "lineNumber": 743
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 747
+        },
+        {
+          "caller": "ensureOwnedContainerWindowUnlocked",
+          "callee": "persistRuntimeState",
+          "lineNumber": 748
+        },
+        {
+          "caller": "findReusableOwnedContainerTab",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 754
+        },
+        {
+          "caller": "findReusableOwnedContainerTab",
+          "callee": "tabs.find",
+          "lineNumber": 755
+        },
+        {
+          "caller": "findReusableOwnedContainerTab",
+          "callee": "initialTabIsAvailable",
+          "lineNumber": 757
+        },
+        {
+          "caller": "findReusableOwnedContainerTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 758
+        },
+        {
+          "caller": "initialTabIsAvailable",
+          "callee": "automationSessions.values",
+          "lineNumber": 768
+        },
+        {
+          "caller": "createOwnedTabLease",
+          "callee": "withLeaseMutation",
+          "lineNumber": 775
+        },
+        {
+          "caller": "createOwnedTabLease",
+          "callee": "createOwnedTabLeaseUnlocked",
+          "lineNumber": 775
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "isSafeNavigationUrl",
+          "lineNumber": 784
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 785
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "ensureOwnedContainerWindow",
+          "lineNumber": 786
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "getWindowMode",
+          "lineNumber": 786
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "initialTabIsAvailable",
+          "lineNumber": 789
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 790
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "isTargetUrl",
+          "lineNumber": 792
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 793
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "setTimeout",
+          "lineNumber": 794
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 795
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "chrome.tabs.create",
+          "lineNumber": 798
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 801
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "setLeaseSession",
+          "lineNumber": 803
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "getSessionFromKey",
+          "lineNumber": 804
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 805
+        },
+        {
+          "caller": "createOwnedTabLeaseUnlocked",
+          "callee": "resetWindowIdleTimer",
+          "lineNumber": 811
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "automationSessions.get",
+          "lineNumber": 821
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 833
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 834
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "chrome.windows.get",
+          "lineNumber": 836
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "removeLeaseSession",
+          "lineNumber": 840
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 844
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "ensureOwnedContainerWindow",
+          "lineNumber": 845
+        },
+        {
+          "caller": "getAutomationWindow",
+          "callee": "getWindowMode",
+          "lineNumber": 845
+        },
+        {
+          "caller": "initialize",
+          "callee": "chrome.alarms.create",
+          "lineNumber": 894
+        },
+        {
+          "caller": "initialize",
+          "callee": "executor.registerListeners",
+          "lineNumber": 895
+        },
+        {
+          "caller": "initialize",
+          "callee": "registerFrameTracking",
+          "lineNumber": 898
+        },
+        {
+          "caller": "initialize",
+          "callee": "(async () => {\n    await getCurrentContextId();\n    await reconcileTargetLeaseRegistry();\n    await connect();\n  })",
+          "lineNumber": 902
+        },
+        {
+          "caller": "initialize",
+          "callee": "getCurrentContextId",
+          "lineNumber": 903
+        },
+        {
+          "caller": "initialize",
+          "callee": "reconcileTargetLeaseRegistry",
+          "lineNumber": 904
+        },
+        {
+          "caller": "initialize",
+          "callee": "connect",
+          "lineNumber": 905
+        },
+        {
+          "caller": "initialize",
+          "callee": "console.log",
+          "lineNumber": 907
+        },
+        {
+          "caller": "fetchDaemonVersion",
+          "callee": "fetch",
+          "lineNumber": 958
+        },
+        {
+          "caller": "fetchDaemonVersion",
+          "callee": "AbortSignal.timeout",
+          "lineNumber": 961
+        },
+        {
+          "caller": "fetchDaemonVersion",
+          "callee": "res.json",
+          "lineNumber": 964
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "getSessionName",
+          "lineNumber": 974
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "getCommandSurface",
+          "lineNumber": 975
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "getLeaseKey",
+          "lineNumber": 976
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "sessionWindowModeOverrides.set",
+          "lineNumber": 978
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "sessionLifecycleOverrides.set",
+          "lineNumber": 981
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "sessionTimeoutOverrides.set",
+          "lineNumber": 985
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "resetWindowIdleTimer",
+          "lineNumber": 988
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleExec",
+          "lineNumber": 992
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleNavigate",
+          "lineNumber": 994
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleTabs",
+          "lineNumber": 996
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleCookies",
+          "lineNumber": 998
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleScreenshot",
+          "lineNumber": 1000
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleCloseWindow",
+          "lineNumber": 1002
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleCdp",
+          "lineNumber": 1004
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleSetFileInput",
+          "lineNumber": 1006
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleInsertText",
+          "lineNumber": 1008
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleBind",
+          "lineNumber": 1010
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleNetworkCaptureStart",
+          "lineNumber": 1012
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleNetworkCaptureRead",
+          "lineNumber": 1014
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleWaitDownload",
+          "lineNumber": 1016
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "handleFrames",
+          "lineNumber": 1018
+        },
+        {
+          "caller": "handleCommand",
+          "callee": "String",
+          "lineNumber": 1026
+        },
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 1041
+        },
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 1041
+        },
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 1041
+        },
+        {
+          "caller": "isSafeNavigationUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 1046
+        },
+        {
+          "caller": "isSafeNavigationUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 1046
+        },
+        {
+          "caller": "isTargetUrl",
+          "callee": "normalizeUrlForComparison",
+          "lineNumber": 1065
+        },
+        {
+          "caller": "isTargetUrl",
+          "callee": "normalizeUrlForComparison",
+          "lineNumber": 1065
+        },
+        {
+          "caller": "collect",
+          "callee": "getUrlOrigin",
+          "lineNumber": 1084
+        },
+        {
+          "caller": "collect",
+          "callee": "collect",
+          "lineNumber": 1090
+        },
+        {
+          "caller": "collect",
+          "callee": "frames.push",
+          "lineNumber": 1094
+        },
+        {
+          "caller": "enumerateCrossOriginFrames",
+          "callee": "collect",
+          "lineNumber": 1105
+        },
+        {
+          "caller": "enumerateCrossOriginFrames",
+          "callee": "getUrlOrigin",
+          "lineNumber": 1105
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "automationSessions.get",
+          "lineNumber": 1113
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "clearTimeout",
+          "lineNumber": 1114
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "getIdleTimeout",
+          "lineNumber": 1115
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "automationSessions.set",
+          "lineNumber": 1116
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "makeSession",
+          "lineNumber": 1117
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "Date.now",
+          "lineNumber": 1119
+        },
+        {
+          "caller": "setLeaseSession",
+          "callee": "persistRuntimeState",
+          "lineNumber": 1121
+        },
+        {
+          "caller": "resolveCommandTabId",
+          "callee": "identity.resolveTabId",
+          "lineNumber": 1129
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "automationSessions.get",
+          "lineNumber": 1140
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1144
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1149
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1159
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "console.warn",
+          "lineNumber": 1162
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.move",
+          "lineNumber": 1164
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1165
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1166
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "console.warn",
+          "lineNumber": 1170
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1172
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "console.warn",
+          "lineNumber": 1173
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "automationSessions.delete",
+          "lineNumber": 1178
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "console.warn",
+          "lineNumber": 1185
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1193
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1194
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "removeLeaseSession",
+          "lineNumber": 1204
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "createOwnedTabLease",
+          "lineNumber": 1212
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "createOwnedTabLease",
+          "lineNumber": 1217
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "getAutomationWindow",
+          "lineNumber": 1221
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 1224
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "tabs.find",
+          "lineNumber": 1225
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1225
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "tabs.find",
+          "lineNumber": 1229
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 1231
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "setTimeout",
+          "lineNumber": 1232
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1234
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1235
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "console.warn",
+          "lineNumber": 1236
+        },
+        {
+          "caller": "resolveTab",
+          "callee": "chrome.tabs.create",
+          "lineNumber": 1243
+        },
+        {
+          "caller": "pageScopedResult",
+          "callee": "identity.resolveTargetId",
+          "lineNumber": 1250
+        },
+        {
+          "caller": "resolveTabId",
+          "callee": "resolveTab",
+          "lineNumber": 1256
+        },
+        {
+          "caller": "listAutomationTabs",
+          "callee": "automationSessions.get",
+          "lineNumber": 1261
+        },
+        {
+          "caller": "listAutomationTabs",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1265
+        },
+        {
+          "caller": "listAutomationTabs",
+          "callee": "automationSessions.delete",
+          "lineNumber": 1267
+        },
+        {
+          "caller": "listAutomationTabs",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 1272
+        },
+        {
+          "caller": "listAutomationTabs",
+          "callee": "automationSessions.delete",
+          "lineNumber": 1274
+        },
+        {
+          "caller": "listAutomationWebTabs",
+          "callee": "listAutomationTabs",
+          "lineNumber": 1280
+        },
+        {
+          "caller": "listAutomationWebTabs",
+          "callee": "tabs.filter",
+          "lineNumber": 1281
+        },
+        {
+          "caller": "listAutomationWebTabs",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1281
+        },
+        {
+          "caller": "handleExec",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1286
+        },
+        {
+          "caller": "handleExec",
+          "callee": "resolveTabId",
+          "lineNumber": 1287
+        },
+        {
+          "caller": "handleExec",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1289
+        },
+        {
+          "caller": "handleExec",
+          "callee": "executor.getFrameTree",
+          "lineNumber": 1291
+        },
+        {
+          "caller": "handleExec",
+          "callee": "enumerateCrossOriginFrames",
+          "lineNumber": 1292
+        },
+        {
+          "caller": "handleExec",
+          "callee": "executor.evaluateInFrame",
+          "lineNumber": 1296
+        },
+        {
+          "caller": "handleExec",
+          "callee": "pageScopedResult",
+          "lineNumber": 1297
+        },
+        {
+          "caller": "handleExec",
+          "callee": "executor.evaluateAsync",
+          "lineNumber": 1299
+        },
+        {
+          "caller": "handleExec",
+          "callee": "pageScopedResult",
+          "lineNumber": 1300
+        },
+        {
+          "caller": "handleExec",
+          "callee": "String",
+          "lineNumber": 1302
+        },
+        {
+          "caller": "handleFrames",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1307
+        },
+        {
+          "caller": "handleFrames",
+          "callee": "resolveTabId",
+          "lineNumber": 1308
+        },
+        {
+          "caller": "handleFrames",
+          "callee": "executor.getFrameTree",
+          "lineNumber": 1310
+        },
+        {
+          "caller": "handleFrames",
+          "callee": "enumerateCrossOriginFrames",
+          "lineNumber": 1311
+        },
+        {
+          "caller": "handleFrames",
+          "callee": "String",
+          "lineNumber": 1313
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "isSafeNavigationUrl",
+          "lineNumber": 1319
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "checkUrlSyntax",
+          "lineNumber": 1323
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1334
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "resolveTab",
+          "lineNumber": 1335
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1338
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "normalizeUrlForComparison",
+          "lineNumber": 1339
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "isTargetUrl",
+          "lineNumber": 1343
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "pageScopedResult",
+          "lineNumber": 1344
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "executor.hasActiveNetworkCapture",
+          "lineNumber": 1355
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "executor.detach",
+          "lineNumber": 1356
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1363
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "executor.armFetchGuard",
+          "lineNumber": 1366
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "checkUrlSyntax",
+          "lineNumber": 1366
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "String",
+          "lineNumber": 1371
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 1376
+        },
+        {
+          "caller": "finish",
+          "callee": "chrome.tabs.onUpdated.removeListener",
+          "lineNumber": 1391
+        },
+        {
+          "caller": "finish",
+          "callee": "clearTimeout",
+          "lineNumber": 1392
+        },
+        {
+          "caller": "finish",
+          "callee": "clearInterval",
+          "lineNumber": 1393
+        },
+        {
+          "caller": "finish",
+          "callee": "clearTimeout",
+          "lineNumber": 1394
+        },
+        {
+          "caller": "finish",
+          "callee": "resolve",
+          "lineNumber": 1395
+        },
+        {
+          "caller": "isNavigationDone",
+          "callee": "isTargetUrl",
+          "lineNumber": 1399
+        },
+        {
+          "caller": "isNavigationDone",
+          "callee": "normalizeUrlForComparison",
+          "lineNumber": 1399
+        },
+        {
+          "caller": "listener",
+          "callee": "isNavigationDone",
+          "lineNumber": 1404
+        },
+        {
+          "caller": "listener",
+          "callee": "finish",
+          "lineNumber": 1405
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.onUpdated.addListener",
+          "lineNumber": 1408
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "setTimeout",
+          "lineNumber": 1411
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1413
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "isNavigationDone",
+          "lineNumber": 1414
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "finish",
+          "lineNumber": 1415
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "setInterval",
+          "lineNumber": 1423
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "finish",
+          "lineNumber": 1425
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "setTimeout",
+          "lineNumber": 1430
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "console.warn",
+          "lineNumber": 1432
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "finish",
+          "lineNumber": 1433
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "guard?.blocked.join",
+          "lineNumber": 1444
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1449
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "automationSessions.get",
+          "lineNumber": 1454
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "console.warn",
+          "lineNumber": 1456
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.move",
+          "lineNumber": 1458
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1459
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "console.warn",
+          "lineNumber": 1461
+        },
+        {
+          "caller": "handleNavigate",
+          "callee": "pageScopedResult",
+          "lineNumber": 1465
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "automationSessions.get",
+          "lineNumber": 1481
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "listAutomationWebTabs",
+          "lineNumber": 1493
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "Promise.all",
+          "lineNumber": 1494
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "tabs.map",
+          "lineNumber": 1494
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "identity.resolveTargetId",
+          "lineNumber": 1496
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "isSafeNavigationUrl",
+          "lineNumber": 1502
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "automationSessions.has",
+          "lineNumber": 1505
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "createOwnedTabLease",
+          "lineNumber": 1506
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "pageScopedResult",
+          "lineNumber": 1507
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "getAutomationWindow",
+          "lineNumber": 1509
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.create",
+          "lineNumber": 1510
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 1512
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 1512
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "setLeaseSession",
+          "lineNumber": 1513
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1514
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1515
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "resetWindowIdleTimer",
+          "lineNumber": 1521
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "pageScopedResult",
+          "lineNumber": 1522
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "listAutomationWebTabs",
+          "lineNumber": 1526
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "identity.resolveTargetId(target.id).catch",
+          "lineNumber": 1529
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "identity.resolveTargetId",
+          "lineNumber": 1529
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "automationSessions.get",
+          "lineNumber": 1530
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "releaseLease",
+          "lineNumber": 1532
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "safeDetach",
+          "lineNumber": 1534
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.remove",
+          "lineNumber": 1535
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1539
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "resolveTabId",
+          "lineNumber": 1540
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "identity.resolveTargetId(tabId).catch",
+          "lineNumber": 1541
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "identity.resolveTargetId",
+          "lineNumber": 1541
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "automationSessions.get",
+          "lineNumber": 1542
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "releaseLease",
+          "lineNumber": 1544
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "safeDetach",
+          "lineNumber": 1546
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.remove",
+          "lineNumber": 1547
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1554
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "automationSessions.get",
+          "lineNumber": 1556
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1559
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 1566
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "pageScopedResult",
+          "lineNumber": 1567
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "listAutomationWebTabs",
+          "lineNumber": 1569
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 1572
+        },
+        {
+          "caller": "handleTabs",
+          "callee": "pageScopedResult",
+          "lineNumber": 1573
+        },
+        {
+          "caller": "handleCookies",
+          "callee": "chrome.cookies.getAll",
+          "lineNumber": 1587
+        },
+        {
+          "caller": "handleCookies",
+          "callee": "cookies.map",
+          "lineNumber": 1588
+        },
+        {
+          "caller": "handleScreenshot",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1601
+        },
+        {
+          "caller": "handleScreenshot",
+          "callee": "resolveTabId",
+          "lineNumber": 1602
+        },
+        {
+          "caller": "handleScreenshot",
+          "callee": "executor.screenshot",
+          "lineNumber": 1604
+        },
+        {
+          "caller": "handleScreenshot",
+          "callee": "pageScopedResult",
+          "lineNumber": 1611
+        },
+        {
+          "caller": "handleScreenshot",
+          "callee": "String",
+          "lineNumber": 1613
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "CDP_ALLOWLIST.has",
+          "lineNumber": 1649
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1652
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "resolveTabId",
+          "lineNumber": 1653
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1655
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "executor.ensureAttached",
+          "lineNumber": 1656
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "executor.sendCommandInFrameTarget",
+          "lineNumber": 1663
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "stripbyCliFrameRoutingParams",
+          "lineNumber": 1663
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 1664
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "stripbyCliFrameRoutingParams",
+          "lineNumber": 1667
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "pageScopedResult",
+          "lineNumber": 1669
+        },
+        {
+          "caller": "handleCdp",
+          "callee": "String",
+          "lineNumber": 1671
+        },
+        {
+          "caller": "handleCloseWindow",
+          "callee": "automationSessions.get",
+          "lineNumber": 1682
+        },
+        {
+          "caller": "handleCloseWindow",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1682
+        },
+        {
+          "caller": "handleCloseWindow",
+          "callee": "releaseLease",
+          "lineNumber": 1683
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "Array.isArray",
+          "lineNumber": 1688
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1691
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "resolveTabId",
+          "lineNumber": 1692
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "executor.setFileInputFiles",
+          "lineNumber": 1694
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "pageScopedResult",
+          "lineNumber": 1695
+        },
+        {
+          "caller": "handleSetFileInput",
+          "callee": "String",
+          "lineNumber": 1697
+        },
+        {
+          "caller": "handleInsertText",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1705
+        },
+        {
+          "caller": "handleInsertText",
+          "callee": "resolveTabId",
+          "lineNumber": 1706
+        },
+        {
+          "caller": "handleInsertText",
+          "callee": "executor.insertText",
+          "lineNumber": 1708
+        },
+        {
+          "caller": "handleInsertText",
+          "callee": "pageScopedResult",
+          "lineNumber": 1709
+        },
+        {
+          "caller": "handleInsertText",
+          "callee": "String",
+          "lineNumber": 1711
+        },
+        {
+          "caller": "handleNetworkCaptureStart",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1716
+        },
+        {
+          "caller": "handleNetworkCaptureStart",
+          "callee": "resolveTabId",
+          "lineNumber": 1717
+        },
+        {
+          "caller": "handleNetworkCaptureStart",
+          "callee": "executor.startNetworkCapture",
+          "lineNumber": 1719
+        },
+        {
+          "caller": "handleNetworkCaptureStart",
+          "callee": "pageScopedResult",
+          "lineNumber": 1720
+        },
+        {
+          "caller": "handleNetworkCaptureStart",
+          "callee": "String",
+          "lineNumber": 1722
+        },
+        {
+          "caller": "handleNetworkCaptureRead",
+          "callee": "resolveCommandTabId",
+          "lineNumber": 1727
+        },
+        {
+          "caller": "handleNetworkCaptureRead",
+          "callee": "resolveTabId",
+          "lineNumber": 1728
+        },
+        {
+          "caller": "handleNetworkCaptureRead",
+          "callee": "executor.readNetworkCapture",
+          "lineNumber": 1730
+        },
+        {
+          "caller": "handleNetworkCaptureRead",
+          "callee": "pageScopedResult",
+          "lineNumber": 1731
+        },
+        {
+          "caller": "handleNetworkCaptureRead",
+          "callee": "String",
+          "lineNumber": 1733
+        },
+        {
+          "caller": "handleWaitDownload",
+          "callee": "executor.waitForDownload",
+          "lineNumber": 1739
+        },
+        {
+          "caller": "handleWaitDownload",
+          "callee": "String",
+          "lineNumber": 1742
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "automationSessions.get",
+          "lineNumber": 1747
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionTimeoutOverrides.delete",
+          "lineNumber": 1749
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionWindowModeOverrides.delete",
+          "lineNumber": 1750
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionLifecycleOverrides.delete",
+          "lineNumber": 1751
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "scheduleIdleAlarm",
+          "lineNumber": 1752
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "persistRuntimeState",
+          "lineNumber": 1753
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "clearTimeout",
+          "lineNumber": 1757
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "scheduleIdleAlarm",
+          "lineNumber": 1758
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "[...automationSessions.entries()].some",
+          "lineNumber": 1763
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "automationSessions.entries",
+          "lineNumber": 1763
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "safeDetach",
+          "lineNumber": 1769
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "identity.evictTab",
+          "lineNumber": 1770
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "chrome.tabs.remove(tabId).catch",
+          "lineNumber": 1772
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "chrome.tabs.remove",
+          "lineNumber": 1772
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "console.log",
+          "lineNumber": 1773
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "chrome.tabs.update",
+          "lineNumber": 1776
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 1777
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 1777
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "console.log",
+          "lineNumber": 1778
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "chrome.tabs.remove(tabId).catch",
+          "lineNumber": 1780
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "chrome.tabs.remove",
+          "lineNumber": 1780
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "console.log",
+          "lineNumber": 1781
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "console.log",
+          "lineNumber": 1785
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "safeDetach",
+          "lineNumber": 1788
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "console.log",
+          "lineNumber": 1789
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "automationSessions.delete",
+          "lineNumber": 1792
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionTimeoutOverrides.delete",
+          "lineNumber": 1793
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionWindowModeOverrides.delete",
+          "lineNumber": 1794
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "sessionLifecycleOverrides.delete",
+          "lineNumber": 1795
+        },
+        {
+          "caller": "releaseLease",
+          "callee": "persistRuntimeState",
+          "lineNumber": 1797
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "readRegistry",
+          "lineNumber": 1801
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "Object.keys",
+          "lineNumber": 1802
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "chrome.windows.get",
+          "lineNumber": 1808
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "automationSessions.clear",
+          "lineNumber": 1816
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "Object.entries",
+          "lineNumber": 1817
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 1821
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1822
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "sessionLifecycleOverrides.set",
+          "lineNumber": 1824
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "makeSession",
+          "lineNumber": 1826
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1827
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1828
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "getIdleTimeout",
+          "lineNumber": 1834
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "automationSessions.set",
+          "lineNumber": 1835
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "getOwnedWindowRole",
+          "lineNumber": 1841
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "ensureOwnedContainerTabGroup",
+          "lineNumber": 1843
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "Date.now",
+          "lineNumber": 1845
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "releaseLease",
+          "lineNumber": 1848
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "resetWindowIdleTimer",
+          "lineNumber": 1850
+        },
+        {
+          "caller": "reconcileTargetLeaseRegistry",
+          "callee": "persistRuntimeState",
+          "lineNumber": 1859
+        },
+        {
+          "caller": "handleBind",
+          "callee": "automationSessions.get",
+          "lineNumber": 1863
+        },
+        {
+          "caller": "handleBind",
+          "callee": "releaseLease",
+          "lineNumber": 1865
+        },
+        {
+          "caller": "handleBind",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 1867
+        },
+        {
+          "caller": "handleBind",
+          "callee": "chrome.tabs.query",
+          "lineNumber": 1868
+        },
+        {
+          "caller": "handleBind",
+          "callee": "activeTabs.find",
+          "lineNumber": 1869
+        },
+        {
+          "caller": "handleBind",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1869
+        },
+        {
+          "caller": "handleBind",
+          "callee": "fallbackTabs.find",
+          "lineNumber": 1870
+        },
+        {
+          "caller": "handleBind",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 1870
+        },
+        {
+          "caller": "handleBind",
+          "callee": "automationSessions.get",
+          "lineNumber": 1881
+        },
+        {
+          "caller": "handleBind",
+          "callee": "executor.detach(current.preferredTabId).catch",
+          "lineNumber": 1883
+        },
+        {
+          "caller": "handleBind",
+          "callee": "executor.detach",
+          "lineNumber": 1883
+        },
+        {
+          "caller": "handleBind",
+          "callee": "setLeaseSession",
+          "lineNumber": 1886
+        },
+        {
+          "caller": "handleBind",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1887
+        },
+        {
+          "caller": "handleBind",
+          "callee": "getSurfaceFromKey",
+          "lineNumber": 1888
+        },
+        {
+          "caller": "handleBind",
+          "callee": "resetWindowIdleTimer",
+          "lineNumber": 1894
+        },
+        {
+          "caller": "handleBind",
+          "callee": "console.log",
+          "lineNumber": 1895
+        },
+        {
+          "caller": "handleBind",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1895
+        },
+        {
+          "caller": "handleBind",
+          "callee": "pageScopedResult",
+          "lineNumber": 1896
+        },
+        {
+          "caller": "handleBind",
+          "callee": "getSessionFromKey",
+          "lineNumber": 1899
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 1,
+        "functionCount": 78,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "extension/src/cdp.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 909,
+      "nonEmptyLines": 825,
+      "functions": [
+        {
+          "name": "isDebuggableUrl",
+          "startLine": 62,
+          "endLine": 65,
+          "params": [
+            "url"
+          ]
+        },
+        {
+          "name": "ensureAttached",
+          "startLine": 67,
+          "endLine": 156,
+          "params": [
+            "tabId",
+            "aggressiveRetry"
+          ]
+        },
+        {
+          "name": "evaluate",
+          "startLine": 158,
+          "endLine": 200,
+          "params": [
+            "tabId",
+            "expression",
+            "aggressiveRetry"
+          ]
+        },
+        {
+          "name": "screenshot",
+          "startLine": 208,
+          "endLine": 268,
+          "params": [
+            "tabId",
+            "options"
+          ]
+        },
+        {
+          "name": "setFileInputFiles",
+          "startLine": 279,
+          "endLine": 310,
+          "params": [
+            "tabId",
+            "files",
+            "selector"
+          ]
+        },
+        {
+          "name": "matchesDownloadPattern",
+          "startLine": 312,
+          "endLine": 321,
+          "params": [
+            "item",
+            "pattern"
+          ]
+        },
+        {
+          "name": "downloadResult",
+          "startLine": 323,
+          "endLine": 337,
+          "params": [
+            "item",
+            "startedAt"
+          ]
+        },
+        {
+          "name": "waitForDownload",
+          "startLine": 339,
+          "endLine": 414,
+          "params": [
+            "pattern",
+            "timeoutMs"
+          ]
+        },
+        {
+          "name": "frameTargetKey",
+          "startLine": 416,
+          "endLine": 418,
+          "params": [
+            "tabId",
+            "frameId"
+          ]
+        },
+        {
+          "name": "registerFrameTargetCleanup",
+          "startLine": 420,
+          "endLine": 429,
+          "params": []
+        },
+        {
+          "name": "clearFrameTarget",
+          "startLine": 431,
+          "endLine": 436,
+          "params": [
+            "targetId"
+          ]
+        },
+        {
+          "name": "ensureFrameTarget",
+          "startLine": 438,
+          "endLine": 467,
+          "params": [
+            "tabId",
+            "frameId",
+            "aggressiveRetry",
+            "targetUrl"
+          ]
+        },
+        {
+          "name": "resolveFrameTargetId",
+          "startLine": 469,
+          "endLine": 489,
+          "params": [
+            "tabId",
+            "frameId",
+            "targetUrl"
+          ]
+        },
+        {
+          "name": "sendCommandInFrameTarget",
+          "startLine": 491,
+          "endLine": 503,
+          "params": [
+            "tabId",
+            "frameId",
+            "method",
+            "params",
+            "aggressiveRetry",
+            "_timeoutMs",
+            "targetUrl"
+          ]
+        },
+        {
+          "name": "insertText",
+          "startLine": 505,
+          "endLine": 511,
+          "params": [
+            "tabId",
+            "text"
+          ]
+        },
+        {
+          "name": "registerFrameTracking",
+          "startLine": 513,
+          "endLine": 547,
+          "params": []
+        },
+        {
+          "name": "getFrameTree",
+          "startLine": 549,
+          "endLine": 552,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "evaluateInFrame",
+          "startLine": 554,
+          "endLine": 606,
+          "params": [
+            "tabId",
+            "expression",
+            "frameId",
+            "aggressiveRetry"
+          ]
+        },
+        {
+          "name": "normalizeCapturePatterns",
+          "startLine": 608,
+          "endLine": 613,
+          "params": [
+            "pattern"
+          ]
+        },
+        {
+          "name": "shouldCaptureUrl",
+          "startLine": 615,
+          "endLine": 619,
+          "params": [
+            "url",
+            "patterns"
+          ]
+        },
+        {
+          "name": "normalizeHeaders",
+          "startLine": 621,
+          "endLine": 628,
+          "params": [
+            "headers"
+          ]
+        },
+        {
+          "name": "getOrCreateNetworkCaptureEntry",
+          "startLine": 630,
+          "endLine": 653,
+          "params": [
+            "tabId",
+            "requestId",
+            "fallback"
+          ]
+        },
+        {
+          "name": "startNetworkCapture",
+          "startLine": 655,
+          "endLine": 666,
+          "params": [
+            "tabId",
+            "pattern"
+          ]
+        },
+        {
+          "name": "readNetworkCapture",
+          "startLine": 668,
+          "endLine": 675,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "hasActiveNetworkCapture",
+          "startLine": 677,
+          "endLine": 679,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "ensureFetchListener",
+          "startLine": 702,
+          "endLine": 735,
+          "params": []
+        },
+        {
+          "name": "armFetchGuard",
+          "startLine": 742,
+          "endLine": 762,
+          "params": [
+            "tabId",
+            "allow",
+            "aggressiveRetry"
+          ]
+        },
+        {
+          "name": "getFetchGuard",
+          "startLine": 764,
+          "endLine": 766,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "disposeFetchGuard",
+          "startLine": 769,
+          "endLine": 773,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "clearFrameTargetsForTab",
+          "startLine": 775,
+          "endLine": 782,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "detach",
+          "startLine": 784,
+          "endLine": 792,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "registerListeners",
+          "startLine": 794,
+          "endLine": 909,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ensureAttached",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "evaluate",
+          "line": 158,
+          "isDefault": false
+        },
+        {
+          "name": "evaluateAsync",
+          "line": 202,
+          "isDefault": false
+        },
+        {
+          "name": "screenshot",
+          "line": 208,
+          "isDefault": false
+        },
+        {
+          "name": "setFileInputFiles",
+          "line": 279,
+          "isDefault": false
+        },
+        {
+          "name": "waitForDownload",
+          "line": 339,
+          "isDefault": false
+        },
+        {
+          "name": "sendCommandInFrameTarget",
+          "line": 491,
+          "isDefault": false
+        },
+        {
+          "name": "insertText",
+          "line": 505,
+          "isDefault": false
+        },
+        {
+          "name": "registerFrameTracking",
+          "line": 513,
+          "isDefault": false
+        },
+        {
+          "name": "getFrameTree",
+          "line": 549,
+          "isDefault": false
+        },
+        {
+          "name": "evaluateInFrame",
+          "line": 554,
+          "isDefault": false
+        },
+        {
+          "name": "startNetworkCapture",
+          "line": 655,
+          "isDefault": false
+        },
+        {
+          "name": "readNetworkCapture",
+          "line": 668,
+          "isDefault": false
+        },
+        {
+          "name": "hasActiveNetworkCapture",
+          "line": 677,
+          "isDefault": false
+        },
+        {
+          "name": "armFetchGuard",
+          "line": 742,
+          "isDefault": false
+        },
+        {
+          "name": "getFetchGuard",
+          "line": 764,
+          "isDefault": false
+        },
+        {
+          "name": "disposeFetchGuard",
+          "line": 769,
+          "isDefault": false
+        },
+        {
+          "name": "detach",
+          "line": 784,
+          "isDefault": false
+        },
+        {
+          "name": "registerListeners",
+          "line": 794,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 64
+        },
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 64
+        },
+        {
+          "caller": "isDebuggableUrl",
+          "callee": "url.startsWith",
+          "lineNumber": 64
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 70
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 71
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "attached.delete",
+          "lineNumber": 73
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "e.message.startsWith",
+          "lineNumber": 78
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "attached.delete",
+          "lineNumber": 79
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "attached.has",
+          "lineNumber": 83
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 86
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "attached.delete",
+          "lineNumber": 92
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.debugger.detach",
+          "lineNumber": 107
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.debugger.attach",
+          "lineNumber": 108
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "String",
+          "lineNumber": 112
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "console.warn",
+          "lineNumber": 114
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "setTimeout",
+          "lineNumber": 115
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 118
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 119
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.tabs.get",
+          "lineNumber": 138
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "String",
+          "lineNumber": 140
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "console.warn",
+          "lineNumber": 142
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "lastError.includes",
+          "lineNumber": 144
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "attached.add",
+          "lineNumber": 149
+        },
+        {
+          "caller": "ensureAttached",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 152
+        },
+        {
+          "caller": "evaluate",
+          "callee": "ensureAttached",
+          "lineNumber": 164
+        },
+        {
+          "caller": "evaluate",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 166
+        },
+        {
+          "caller": "evaluate",
+          "callee": "String",
+          "lineNumber": 184
+        },
+        {
+          "caller": "evaluate",
+          "callee": "msg.includes",
+          "lineNumber": 186
+        },
+        {
+          "caller": "evaluate",
+          "callee": "msg.includes",
+          "lineNumber": 186
+        },
+        {
+          "caller": "evaluate",
+          "callee": "msg.includes",
+          "lineNumber": 187
+        },
+        {
+          "caller": "evaluate",
+          "callee": "msg.includes",
+          "lineNumber": 187
+        },
+        {
+          "caller": "evaluate",
+          "callee": "msg.includes",
+          "lineNumber": 188
+        },
+        {
+          "caller": "evaluate",
+          "callee": "attached.delete",
+          "lineNumber": 190
+        },
+        {
+          "caller": "evaluate",
+          "callee": "setTimeout",
+          "lineNumber": 193
+        },
+        {
+          "caller": "screenshot",
+          "callee": "ensureAttached",
+          "lineNumber": 212
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.ceil",
+          "lineNumber": 216
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.ceil",
+          "lineNumber": 218
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 224
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 234
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.ceil",
+          "lineNumber": 240
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.ceil",
+          "lineNumber": 241
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 244
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.max",
+          "lineNumber": 255
+        },
+        {
+          "caller": "screenshot",
+          "callee": "Math.min",
+          "lineNumber": 255
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 258
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Emulation.clearDeviceMetricsOverride').catch",
+          "lineNumber": 265
+        },
+        {
+          "caller": "screenshot",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 265
+        },
+        {
+          "caller": "setFileInputFiles",
+          "callee": "ensureAttached",
+          "lineNumber": 284
+        },
+        {
+          "caller": "setFileInputFiles",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 287
+        },
+        {
+          "caller": "setFileInputFiles",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 290
+        },
+        {
+          "caller": "setFileInputFiles",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 296
+        },
+        {
+          "caller": "setFileInputFiles",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 306
+        },
+        {
+          "caller": "matchesDownloadPattern",
+          "callee": "[\n    item.filename,\n    item.url,\n    item.finalUrl,\n    item.mime,\n  ].filter(Boolean).join('\\n').toLowerCase",
+          "lineNumber": 314
+        },
+        {
+          "caller": "matchesDownloadPattern",
+          "callee": "[\n    item.filename,\n    item.url,\n    item.finalUrl,\n    item.mime,\n  ].filter(Boolean).join",
+          "lineNumber": 314
+        },
+        {
+          "caller": "matchesDownloadPattern",
+          "callee": "[\n    item.filename,\n    item.url,\n    item.finalUrl,\n    item.mime,\n  ].filter",
+          "lineNumber": 314
+        },
+        {
+          "caller": "matchesDownloadPattern",
+          "callee": "haystack.includes",
+          "lineNumber": 320
+        },
+        {
+          "caller": "matchesDownloadPattern",
+          "callee": "pattern.toLowerCase",
+          "lineNumber": 320
+        },
+        {
+          "caller": "downloadResult",
+          "callee": "Date.now",
+          "lineNumber": 335
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "Date.now",
+          "lineNumber": 340
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "Math.max",
+          "lineNumber": 341
+        },
+        {
+          "caller": "finish",
+          "callee": "clearTimeout",
+          "lineNumber": 349
+        },
+        {
+          "caller": "finish",
+          "callee": "chrome.downloads.onCreated.removeListener",
+          "lineNumber": 350
+        },
+        {
+          "caller": "finish",
+          "callee": "chrome.downloads.onChanged.removeListener",
+          "lineNumber": 351
+        },
+        {
+          "caller": "finish",
+          "callee": "resolve",
+          "lineNumber": 352
+        },
+        {
+          "caller": "inspectById",
+          "callee": "chrome.downloads.search",
+          "lineNumber": 356
+        },
+        {
+          "caller": "inspectById",
+          "callee": "matchesDownloadPattern",
+          "lineNumber": 358
+        },
+        {
+          "caller": "inspectById",
+          "callee": "inProgressIds.add",
+          "lineNumber": 359
+        },
+        {
+          "caller": "inspectById",
+          "callee": "finish",
+          "lineNumber": 360
+        },
+        {
+          "caller": "inspectById",
+          "callee": "downloadResult",
+          "lineNumber": 360
+        },
+        {
+          "caller": "onCreated",
+          "callee": "matchesDownloadPattern",
+          "lineNumber": 364
+        },
+        {
+          "caller": "onCreated",
+          "callee": "inProgressIds.add",
+          "lineNumber": 365
+        },
+        {
+          "caller": "onCreated",
+          "callee": "finish",
+          "lineNumber": 366
+        },
+        {
+          "caller": "onCreated",
+          "callee": "downloadResult",
+          "lineNumber": 366
+        },
+        {
+          "caller": "onChanged",
+          "callee": "inProgressIds.has",
+          "lineNumber": 370
+        },
+        {
+          "caller": "onChanged",
+          "callee": "inspectById",
+          "lineNumber": 372
+        },
+        {
+          "caller": "onChanged",
+          "callee": "inspectById",
+          "lineNumber": 376
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "setTimeout",
+          "lineNumber": 379
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "finish",
+          "lineNumber": 380
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "Date.now",
+          "lineNumber": 384
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "chrome.downloads.onCreated.addListener",
+          "lineNumber": 388
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "chrome.downloads.onChanged.addListener",
+          "lineNumber": 389
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "chrome.downloads.search({\n      limit: 50,\n      orderBy: ['-startTime'],\n      startedAfter: new Date(startedAt - Math.max(timeout, 1000)).toISOString(),\n    }).then((recent) => {\n      if (done) return;\n      const completed = recent.find((item) => item.state === 'complete' && matchesDownloadPattern(item, pattern));\n      if (completed) {\n        finish(downloadResult(completed, startedAt));\n        return;\n      }\n      for (const item of recent) {\n        if (item.state === 'in_progress' && matchesDownloadPattern(item, pattern)) inProgressIds.add(item.id);\n      }\n    }).catch",
+          "lineNumber": 391
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "chrome.downloads.search({\n      limit: 50,\n      orderBy: ['-startTime'],\n      startedAfter: new Date(startedAt - Math.max(timeout, 1000)).toISOString(),\n    }).then",
+          "lineNumber": 391
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "chrome.downloads.search",
+          "lineNumber": 391
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "new Date(startedAt - Math.max(timeout, 1000)).toISOString",
+          "lineNumber": 394
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "Math.max",
+          "lineNumber": 394
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "recent.find",
+          "lineNumber": 397
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "matchesDownloadPattern",
+          "lineNumber": 397
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "finish",
+          "lineNumber": 399
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "downloadResult",
+          "lineNumber": 399
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "matchesDownloadPattern",
+          "lineNumber": 403
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "inProgressIds.add",
+          "lineNumber": 403
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "finish",
+          "lineNumber": 406
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "String",
+          "lineNumber": 409
+        },
+        {
+          "caller": "waitForDownload",
+          "callee": "Date.now",
+          "lineNumber": 410
+        },
+        {
+          "caller": "registerFrameTargetCleanup",
+          "callee": "chrome.debugger.onEvent.addListener",
+          "lineNumber": 423
+        },
+        {
+          "caller": "registerFrameTargetCleanup",
+          "callee": "String",
+          "lineNumber": 425
+        },
+        {
+          "caller": "registerFrameTargetCleanup",
+          "callee": "clearFrameTarget",
+          "lineNumber": 426
+        },
+        {
+          "caller": "clearFrameTarget",
+          "callee": "frameTargetKeys.get",
+          "lineNumber": 433
+        },
+        {
+          "caller": "clearFrameTarget",
+          "callee": "frameTargets.delete",
+          "lineNumber": 434
+        },
+        {
+          "caller": "clearFrameTarget",
+          "callee": "frameTargetKeys.delete",
+          "lineNumber": 435
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "registerFrameTargetCleanup",
+          "lineNumber": 444
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "ensureAttached",
+          "lineNumber": 445
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "frameTargetKey",
+          "lineNumber": 446
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "frameTargets.get",
+          "lineNumber": 447
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Target.setDiscoverTargets', { discover: true }).catch",
+          "lineNumber": 450
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 450
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Target.setAutoAttach', {\n    autoAttach: true,\n    waitForDebuggerOnStart: false,\n    flatten: true,\n    filter: [{ type: 'iframe', exclude: false }],\n  }).catch",
+          "lineNumber": 451
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 451
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "resolveFrameTargetId",
+          "lineNumber": 457
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "chrome.debugger.attach",
+          "lineNumber": 459
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "String",
+          "lineNumber": 461
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "message.includes",
+          "lineNumber": 462
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "frameTargets.set",
+          "lineNumber": 464
+        },
+        {
+          "caller": "ensureFrameTarget",
+          "callee": "frameTargetKeys.set",
+          "lineNumber": 465
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Target.getTargets').catch",
+          "lineNumber": 470
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 470
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "targets.find",
+          "lineNumber": 474
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "targets\n    .filter((target) => target.type === 'iframe')\n    .map((target) => `${target.targetId || target.id || '?'} ${target.url || ''}`)\n    .join",
+          "lineNumber": 484
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "targets\n    .filter((target) => target.type === 'iframe')\n    .map",
+          "lineNumber": 484
+        },
+        {
+          "caller": "resolveFrameTargetId",
+          "callee": "targets\n    .filter",
+          "lineNumber": 484
+        },
+        {
+          "caller": "sendCommandInFrameTarget",
+          "callee": "ensureFrameTarget",
+          "lineNumber": 500
+        },
+        {
+          "caller": "sendCommandInFrameTarget",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 502
+        },
+        {
+          "caller": "insertText",
+          "callee": "ensureAttached",
+          "lineNumber": 509
+        },
+        {
+          "caller": "insertText",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 510
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "registerFrameTargetCleanup",
+          "lineNumber": 514
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "chrome.debugger.onEvent.addListener",
+          "lineNumber": 515
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.has",
+          "lineNumber": 523
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.set",
+          "lineNumber": 524
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.get(tabId)!.set",
+          "lineNumber": 526
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.get",
+          "lineNumber": 526
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.get",
+          "lineNumber": 531
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "contexts.delete",
+          "lineNumber": 534
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.delete",
+          "lineNumber": 540
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "chrome.tabs.onRemoved.addListener",
+          "lineNumber": 544
+        },
+        {
+          "caller": "registerFrameTracking",
+          "callee": "tabFrameContexts.delete",
+          "lineNumber": 545
+        },
+        {
+          "caller": "getFrameTree",
+          "callee": "ensureAttached",
+          "lineNumber": 550
+        },
+        {
+          "caller": "getFrameTree",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 551
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "ensureAttached",
+          "lineNumber": 560
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Runtime.enable').catch",
+          "lineNumber": 562
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 562
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "tabFrameContexts.get",
+          "lineNumber": 564
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "contexts?.get",
+          "lineNumber": 565
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "sendCommandInFrameTarget(tabId, frameId, 'Runtime.enable', {}, aggressiveRetry).catch",
+          "lineNumber": 568
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "sendCommandInFrameTarget",
+          "lineNumber": 568
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "sendCommandInFrameTarget",
+          "lineNumber": 569
+        },
+        {
+          "caller": "evaluateInFrame",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 588
+        },
+        {
+          "caller": "normalizeCapturePatterns",
+          "callee": "String(pattern || '')\n    .split('|')\n    .map((part) => part.trim())\n    .filter",
+          "lineNumber": 609
+        },
+        {
+          "caller": "normalizeCapturePatterns",
+          "callee": "String(pattern || '')\n    .split('|')\n    .map",
+          "lineNumber": 609
+        },
+        {
+          "caller": "normalizeCapturePatterns",
+          "callee": "String(pattern || '')\n    .split",
+          "lineNumber": 609
+        },
+        {
+          "caller": "normalizeCapturePatterns",
+          "callee": "String",
+          "lineNumber": 609
+        },
+        {
+          "caller": "normalizeCapturePatterns",
+          "callee": "part.trim",
+          "lineNumber": 611
+        },
+        {
+          "caller": "shouldCaptureUrl",
+          "callee": "patterns.some",
+          "lineNumber": 618
+        },
+        {
+          "caller": "shouldCaptureUrl",
+          "callee": "url.includes",
+          "lineNumber": 618
+        },
+        {
+          "caller": "normalizeHeaders",
+          "callee": "Object.entries",
+          "lineNumber": 624
+        },
+        {
+          "caller": "normalizeHeaders",
+          "callee": "String",
+          "lineNumber": 625
+        },
+        {
+          "caller": "normalizeHeaders",
+          "callee": "String",
+          "lineNumber": 625
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "networkCaptures.get",
+          "lineNumber": 635
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "state.requestToIndex.get",
+          "lineNumber": 637
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "shouldCaptureUrl",
+          "lineNumber": 642
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "Date.now",
+          "lineNumber": 648
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "state.entries.push",
+          "lineNumber": 650
+        },
+        {
+          "caller": "getOrCreateNetworkCaptureEntry",
+          "callee": "state.requestToIndex.set",
+          "lineNumber": 651
+        },
+        {
+          "caller": "startNetworkCapture",
+          "callee": "ensureAttached",
+          "lineNumber": 659
+        },
+        {
+          "caller": "startNetworkCapture",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 660
+        },
+        {
+          "caller": "startNetworkCapture",
+          "callee": "networkCaptures.set",
+          "lineNumber": 661
+        },
+        {
+          "caller": "startNetworkCapture",
+          "callee": "normalizeCapturePatterns",
+          "lineNumber": 662
+        },
+        {
+          "caller": "readNetworkCapture",
+          "callee": "networkCaptures.get",
+          "lineNumber": 669
+        },
+        {
+          "caller": "readNetworkCapture",
+          "callee": "state.entries.slice",
+          "lineNumber": 671
+        },
+        {
+          "caller": "readNetworkCapture",
+          "callee": "state.requestToIndex.clear",
+          "lineNumber": 673
+        },
+        {
+          "caller": "hasActiveNetworkCapture",
+          "callee": "networkCaptures.has",
+          "lineNumber": 678
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.onEvent.addListener",
+          "lineNumber": 705
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "fetchGuards.get",
+          "lineNumber": 708
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId }).catch",
+          "lineNumber": 718
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 718
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "guard.allow",
+          "lineNumber": 721
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId }).catch",
+          "lineNumber": 722
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 722
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "guard.blocked.push",
+          "lineNumber": 724
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch",
+          "lineNumber": 725
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 725
+        },
+        {
+          "caller": "ensureFetchListener",
+          "callee": "guard.observedIps.push",
+          "lineNumber": 732
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "ensureAttached",
+          "lineNumber": 747
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "ensureFetchListener",
+          "lineNumber": 748
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "fetchGuards.set",
+          "lineNumber": 750
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Network.enable').catch",
+          "lineNumber": 753
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 753
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 754
+        },
+        {
+          "caller": "armFetchGuard",
+          "callee": "fetchGuards.delete",
+          "lineNumber": 758
+        },
+        {
+          "caller": "getFetchGuard",
+          "callee": "fetchGuards.get",
+          "lineNumber": 765
+        },
+        {
+          "caller": "disposeFetchGuard",
+          "callee": "fetchGuards.has",
+          "lineNumber": 770
+        },
+        {
+          "caller": "disposeFetchGuard",
+          "callee": "fetchGuards.delete",
+          "lineNumber": 771
+        },
+        {
+          "caller": "disposeFetchGuard",
+          "callee": "chrome.debugger.sendCommand({ tabId }, 'Fetch.disable').catch",
+          "lineNumber": 772
+        },
+        {
+          "caller": "disposeFetchGuard",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 772
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "frameTargets.entries",
+          "lineNumber": 776
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "key.startsWith",
+          "lineNumber": 777
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "frameTargets.delete",
+          "lineNumber": 778
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "frameTargetKeys.delete",
+          "lineNumber": 779
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "chrome.debugger.detach({ targetId } as chrome.debugger.Debuggee).catch",
+          "lineNumber": 780
+        },
+        {
+          "caller": "clearFrameTargetsForTab",
+          "callee": "chrome.debugger.detach",
+          "lineNumber": 780
+        },
+        {
+          "caller": "detach",
+          "callee": "clearFrameTargetsForTab",
+          "lineNumber": 785
+        },
+        {
+          "caller": "detach",
+          "callee": "attached.has",
+          "lineNumber": 786
+        },
+        {
+          "caller": "detach",
+          "callee": "attached.delete",
+          "lineNumber": 787
+        },
+        {
+          "caller": "detach",
+          "callee": "networkCaptures.delete",
+          "lineNumber": 788
+        },
+        {
+          "caller": "detach",
+          "callee": "fetchGuards.delete",
+          "lineNumber": 789
+        },
+        {
+          "caller": "detach",
+          "callee": "tabFrameContexts.delete",
+          "lineNumber": 790
+        },
+        {
+          "caller": "detach",
+          "callee": "chrome.debugger.detach",
+          "lineNumber": 791
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.tabs.onRemoved.addListener",
+          "lineNumber": 795
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "attached.delete",
+          "lineNumber": 796
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "networkCaptures.delete",
+          "lineNumber": 797
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "fetchGuards.delete",
+          "lineNumber": 798
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "tabFrameContexts.delete",
+          "lineNumber": 799
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "clearFrameTargetsForTab",
+          "lineNumber": 800
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.debugger.onDetach.addListener",
+          "lineNumber": 802
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "attached.delete",
+          "lineNumber": 804
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "networkCaptures.delete",
+          "lineNumber": 805
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "fetchGuards.delete",
+          "lineNumber": 806
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "tabFrameContexts.delete",
+          "lineNumber": 807
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "clearFrameTargetsForTab",
+          "lineNumber": 808
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "clearFrameTarget",
+          "lineNumber": 811
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.tabs.onUpdated.addListener",
+          "lineNumber": 814
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "isDebuggableUrl",
+          "lineNumber": 815
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "detach",
+          "lineNumber": 816
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.debugger.onEvent.addListener",
+          "lineNumber": 819
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "networkCaptures.get",
+          "lineNumber": 822
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "String",
+          "lineNumber": 827
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "getOrCreateNetworkCaptureEntry",
+          "lineNumber": 835
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "normalizeHeaders",
+          "lineNumber": 838
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "String",
+          "lineNumber": 843
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "raw.slice",
+          "lineNumber": 846
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 851
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "raw.slice",
+          "lineNumber": 857
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "String",
+          "lineNumber": 868
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "getOrCreateNetworkCaptureEntry",
+          "lineNumber": 875
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "normalizeHeaders",
+          "lineNumber": 881
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "String",
+          "lineNumber": 886
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "state.requestToIndex.get",
+          "lineNumber": 887
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "chrome.debugger.sendCommand",
+          "lineNumber": 892
+        },
+        {
+          "caller": "registerListeners",
+          "callee": "body.body.slice",
+          "lineNumber": 899
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 19,
+        "functionCount": 32,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "extension/src/identity.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 71,
+      "nonEmptyLines": 62,
+      "functions": [
+        {
+          "name": "resolveTargetId",
+          "startLine": 21,
+          "endLine": 30,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "resolveTabId",
+          "startLine": 37,
+          "endLine": 46,
+          "params": [
+            "targetId"
+          ]
+        },
+        {
+          "name": "evictTab",
+          "startLine": 52,
+          "endLine": 56,
+          "params": [
+            "tabId"
+          ]
+        },
+        {
+          "name": "refreshMappings",
+          "startLine": 61,
+          "endLine": 71,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveTargetId",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "resolveTabId",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "evictTab",
+          "line": 52,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveTargetId",
+          "callee": "tabToTarget.get",
+          "lineNumber": 22
+        },
+        {
+          "caller": "resolveTargetId",
+          "callee": "refreshMappings",
+          "lineNumber": 25
+        },
+        {
+          "caller": "resolveTargetId",
+          "callee": "tabToTarget.get",
+          "lineNumber": 27
+        },
+        {
+          "caller": "resolveTabId",
+          "callee": "targetToTab.get",
+          "lineNumber": 38
+        },
+        {
+          "caller": "resolveTabId",
+          "callee": "refreshMappings",
+          "lineNumber": 41
+        },
+        {
+          "caller": "resolveTabId",
+          "callee": "targetToTab.get",
+          "lineNumber": 43
+        },
+        {
+          "caller": "evictTab",
+          "callee": "tabToTarget.get",
+          "lineNumber": 53
+        },
+        {
+          "caller": "evictTab",
+          "callee": "targetToTab.delete",
+          "lineNumber": 54
+        },
+        {
+          "caller": "evictTab",
+          "callee": "tabToTarget.delete",
+          "lineNumber": 55
+        },
+        {
+          "caller": "refreshMappings",
+          "callee": "chrome.debugger.getTargets",
+          "lineNumber": 62
+        },
+        {
+          "caller": "refreshMappings",
+          "callee": "targetToTab.clear",
+          "lineNumber": 63
+        },
+        {
+          "caller": "refreshMappings",
+          "callee": "tabToTarget.clear",
+          "lineNumber": 64
+        },
+        {
+          "caller": "refreshMappings",
+          "callee": "targetToTab.set",
+          "lineNumber": 67
+        },
+        {
+          "caller": "refreshMappings",
+          "callee": "tabToTarget.set",
+          "lineNumber": 68
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 4,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "extension/src/protocol.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 109,
+      "nonEmptyLines": 104,
+      "exports": [
+        {
+          "name": "DAEMON_PORT",
+          "line": 100,
+          "isDefault": false
+        },
+        {
+          "name": "DAEMON_HOST",
+          "line": 101,
+          "isDefault": false
+        },
+        {
+          "name": "DAEMON_WS_URL",
+          "line": 102,
+          "isDefault": false
+        },
+        {
+          "name": "DAEMON_PING_URL",
+          "line": 104,
+          "isDefault": false
+        },
+        {
+          "name": "WS_RECONNECT_BASE_DELAY",
+          "line": 107,
+          "isDefault": false
+        },
+        {
+          "name": "WS_RECONNECT_MAX_DELAY",
+          "line": 109,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 6,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "extension/src/url-policy.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 207,
+      "nonEmptyLines": 190,
+      "functions": [
+        {
+          "name": "classifyIp",
+          "startLine": 41,
+          "endLine": 48,
+          "params": [
+            "s"
+          ]
+        },
+        {
+          "name": "parseIpv4Loose",
+          "startLine": 50,
+          "endLine": 74,
+          "params": [
+            "host"
+          ]
+        },
+        {
+          "name": "parseRadixPart",
+          "startLine": 76,
+          "endLine": 90,
+          "params": [
+            "part"
+          ]
+        },
+        {
+          "name": "asIpLiteral",
+          "startLine": 92,
+          "endLine": 97,
+          "params": [
+            "host"
+          ]
+        },
+        {
+          "name": "ipv4ToInt",
+          "startLine": 106,
+          "endLine": 109,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "ipv4InForbiddenRange",
+          "startLine": 110,
+          "endLine": 117,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "ipv6Groups",
+          "startLine": 119,
+          "endLine": 148,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "ipv6InForbiddenRange",
+          "startLine": 150,
+          "endLine": 164,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "isForbiddenIp",
+          "startLine": 166,
+          "endLine": 172,
+          "params": [
+            "ip"
+          ]
+        },
+        {
+          "name": "checkUrlSyntax",
+          "startLine": 178,
+          "endLine": 207,
+          "params": [
+            "input",
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "parseIpv4Loose",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "asIpLiteral",
+          "line": 92,
+          "isDefault": false
+        },
+        {
+          "name": "isForbiddenIp",
+          "line": 166,
+          "isDefault": false
+        },
+        {
+          "name": "checkUrlSyntax",
+          "line": 178,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "classifyIp",
+          "callee": "/^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$/.test",
+          "lineNumber": 42
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "s.split('.').every",
+          "lineNumber": 43
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "s.split",
+          "lineNumber": 43
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "Number",
+          "lineNumber": 43
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "s.includes",
+          "lineNumber": 46
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "/^[0-9a-fA-F:.]+$/.test",
+          "lineNumber": 46
+        },
+        {
+          "caller": "classifyIp",
+          "callee": "ipv6Groups",
+          "lineNumber": 46
+        },
+        {
+          "caller": "parseIpv4Loose",
+          "callee": "host.split",
+          "lineNumber": 52
+        },
+        {
+          "caller": "parseIpv4Loose",
+          "callee": "parts.some",
+          "lineNumber": 54
+        },
+        {
+          "caller": "parseIpv4Loose",
+          "callee": "parseRadixPart",
+          "lineNumber": 58
+        },
+        {
+          "caller": "parseIpv4Loose",
+          "callee": "numbers.push",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseIpv4Loose",
+          "callee": "[(ipv4 >>> 24) & 0xff, (ipv4 >>> 16) & 0xff, (ipv4 >>> 8) & 0xff, ipv4 & 0xff].join",
+          "lineNumber": 73
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "/^0[xX]/.test",
+          "lineNumber": 79
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "part.slice",
+          "lineNumber": 80
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "/^[0-9a-fA-F]+$/.test",
+          "lineNumber": 81
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "part.slice",
+          "lineNumber": 83
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "/^[0-7]+$/.test",
+          "lineNumber": 84
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "/^[0-9]+$/.test",
+          "lineNumber": 85
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "parseInt",
+          "lineNumber": 88
+        },
+        {
+          "caller": "parseRadixPart",
+          "callee": "Number.isNaN",
+          "lineNumber": 89
+        },
+        {
+          "caller": "asIpLiteral",
+          "callee": "host.startsWith",
+          "lineNumber": 93
+        },
+        {
+          "caller": "asIpLiteral",
+          "callee": "host.endsWith",
+          "lineNumber": 93
+        },
+        {
+          "caller": "asIpLiteral",
+          "callee": "host.slice",
+          "lineNumber": 93
+        },
+        {
+          "caller": "asIpLiteral",
+          "callee": "classifyIp",
+          "lineNumber": 94
+        },
+        {
+          "caller": "asIpLiteral",
+          "callee": "parseIpv4Loose",
+          "lineNumber": 96
+        },
+        {
+          "caller": "ipv4ToInt",
+          "callee": "ip.split('.').map",
+          "lineNumber": 107
+        },
+        {
+          "caller": "ipv4ToInt",
+          "callee": "ip.split",
+          "lineNumber": 107
+        },
+        {
+          "caller": "ipv4ToInt",
+          "callee": "parseInt",
+          "lineNumber": 107
+        },
+        {
+          "caller": "ipv4InForbiddenRange",
+          "callee": "ipv4ToInt",
+          "lineNumber": 111
+        },
+        {
+          "caller": "ipv4InForbiddenRange",
+          "callee": "ipv4ToInt",
+          "lineNumber": 114
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "addr.lastIndexOf",
+          "lineNumber": 121
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "addr.slice",
+          "lineNumber": 122
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "tail.includes",
+          "lineNumber": 123
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "classifyIp",
+          "lineNumber": 124
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "ipv4ToInt",
+          "lineNumber": 125
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "addr.slice",
+          "lineNumber": 126
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "((v4 >>> 16) & 0xffff).toString",
+          "lineNumber": 126
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "(v4 & 0xffff).toString",
+          "lineNumber": 126
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "addr.split",
+          "lineNumber": 128
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "halves[0].split",
+          "lineNumber": 130
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "halves[1].split",
+          "lineNumber": 131
+        },
+        {
+          "caller": "parse",
+          "callee": "/^[0-9a-fA-F]{1,4}$/.test",
+          "lineNumber": 135
+        },
+        {
+          "caller": "parse",
+          "callee": "out.push",
+          "lineNumber": 136
+        },
+        {
+          "caller": "parse",
+          "callee": "parseInt",
+          "lineNumber": 136
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "parse",
+          "lineNumber": 140
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "parse",
+          "lineNumber": 143
+        },
+        {
+          "caller": "ipv6Groups",
+          "callee": "new Array(fill).fill",
+          "lineNumber": 147
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "ipv6Groups",
+          "lineNumber": 151
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "g.every",
+          "lineNumber": 153
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "g.slice(0, 7).every",
+          "lineNumber": 154
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "g.slice",
+          "lineNumber": 154
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "g.slice(0, 5).every",
+          "lineNumber": 155
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "g.slice",
+          "lineNumber": 155
+        },
+        {
+          "caller": "ipv6InForbiddenRange",
+          "callee": "ipv4InForbiddenRange",
+          "lineNumber": 157
+        },
+        {
+          "caller": "isForbiddenIp",
+          "callee": "classifyIp",
+          "lineNumber": 167
+        },
+        {
+          "caller": "isForbiddenIp",
+          "callee": "ipv4InForbiddenRange",
+          "lineNumber": 168
+        },
+        {
+          "caller": "isForbiddenIp",
+          "callee": "ipv6InForbiddenRange",
+          "lineNumber": 169
+        },
+        {
+          "caller": "isForbiddenIp",
+          "callee": "parseIpv4Loose",
+          "lineNumber": 170
+        },
+        {
+          "caller": "isForbiddenIp",
+          "callee": "ipv4InForbiddenRange",
+          "lineNumber": 171
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "ALLOWED_PROTOCOLS.has",
+          "lineNumber": 186
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "hostname.endsWith",
+          "lineNumber": 193
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "hostname.slice",
+          "lineNumber": 193
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "asIpLiteral",
+          "lineNumber": 196
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "isForbiddenIp",
+          "lineNumber": 198
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "parsed.toString",
+          "lineNumber": 204
+        },
+        {
+          "caller": "checkUrlSyntax",
+          "callee": "parsed.toString",
+          "lineNumber": 206
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 10,
+        "classCount": 0
+      }
+    }
+  ]
+}

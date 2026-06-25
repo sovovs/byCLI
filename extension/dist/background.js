@@ -470,6 +470,59 @@ async function readNetworkCapture(tabId) {
 function hasActiveNetworkCapture(tabId) {
   return networkCaptures.has(tabId);
 }
+const fetchGuards = /* @__PURE__ */ new Map();
+let fetchListenerRegistered = false;
+function ensureFetchListener() {
+  if (fetchListenerRegistered) return;
+  fetchListenerRegistered = true;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    const tabId = source.tabId;
+    if (!tabId) return;
+    const guard = fetchGuards.get(tabId);
+    if (!guard) return;
+    const p = params;
+    if (method === "Fetch.requestPaused") {
+      const requestId = p?.requestId;
+      const url = p?.request?.url ?? "";
+      const resourceType = p?.resourceType;
+      if (resourceType !== "Document") {
+        chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", { requestId }).catch(() => {
+        });
+        return;
+      }
+      if (guard.allow(url)) {
+        chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", { requestId }).catch(() => {
+        });
+      } else {
+        guard.blocked.push(url);
+        chrome.debugger.sendCommand({ tabId }, "Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {
+        });
+      }
+      return;
+    }
+    if (method === "Network.responseReceived") {
+      const ip = p?.response?.remoteIPAddress;
+      if (ip) guard.observedIps.push(ip);
+    }
+  });
+}
+async function armFetchGuard(tabId, allow, aggressiveRetry = false) {
+  await ensureAttached(tabId, aggressiveRetry);
+  ensureFetchListener();
+  const state = { allow, blocked: [], observedIps: [] };
+  fetchGuards.set(tabId, state);
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Network.enable").catch(() => {
+    });
+    await chrome.debugger.sendCommand({ tabId }, "Fetch.enable", {
+      patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }]
+    });
+  } catch (e) {
+    fetchGuards.delete(tabId);
+    throw e;
+  }
+  return state;
+}
 function clearFrameTargetsForTab(tabId) {
   for (const [key, targetId] of [...frameTargets.entries()]) {
     if (!key.startsWith(`${tabId}:`)) continue;
@@ -484,6 +537,7 @@ async function detach(tabId) {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
   networkCaptures.delete(tabId);
+  fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
   try {
     await chrome.debugger.detach({ tabId });
@@ -494,6 +548,7 @@ function registerListeners() {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
     clearFrameTargetsForTab(tabId);
   });
@@ -501,6 +556,7 @@ function registerListeners() {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
       clearFrameTargetsForTab(source.tabId);
       return;
@@ -618,6 +674,168 @@ async function refreshMappings() {
       tabToTarget.set(t.tabId, t.id);
     }
   }
+}
+
+const ALLOWED_PROTOCOLS = /* @__PURE__ */ new Set(["http:", "https:"]);
+function classifyIp(s) {
+  if (/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(s)) {
+    if (s.split(".").every((o) => Number(o) <= 255)) return 4;
+  }
+  if (s.includes(":") && /^[0-9a-fA-F:.]+$/.test(s) && ipv6Groups(s) !== null) return 6;
+  return 0;
+}
+function parseIpv4Loose(host) {
+  if (host.length === 0) return null;
+  const parts = host.split(".");
+  if (parts.length > 4) return null;
+  if (parts.some((p) => p.length === 0)) return null;
+  const numbers = [];
+  for (const part of parts) {
+    const n = parseRadixPart(part);
+    if (n === null) return null;
+    numbers.push(n);
+  }
+  for (let i = 0; i < numbers.length - 1; i++) {
+    if (numbers[i] > 255) return null;
+  }
+  const last = numbers[numbers.length - 1];
+  const maxLast = 256 ** (5 - numbers.length);
+  if (last >= maxLast) return null;
+  let ipv4 = last;
+  for (let i = 0; i < numbers.length - 1; i++) ipv4 += numbers[i] * 256 ** (3 - i);
+  if (ipv4 > 4294967295) return null;
+  return [ipv4 >>> 24 & 255, ipv4 >>> 16 & 255, ipv4 >>> 8 & 255, ipv4 & 255].join(".");
+}
+function parseRadixPart(part) {
+  let radix = 10;
+  let digits = part;
+  if (/^0[xX]/.test(part)) {
+    radix = 16;
+    digits = part.slice(2);
+    if (digits.length === 0 || !/^[0-9a-fA-F]+$/.test(digits)) return null;
+  } else if (part.length > 1 && part[0] === "0") {
+    radix = 8;
+    digits = part.slice(1);
+    if (!/^[0-7]+$/.test(digits)) return null;
+  } else if (!/^[0-9]+$/.test(part)) {
+    return null;
+  }
+  const n = parseInt(digits, radix);
+  return Number.isNaN(n) ? null : n;
+}
+function asIpLiteral(host) {
+  const unbracketed = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  const v = classifyIp(unbracketed);
+  if (v === 4 || v === 6) return unbracketed;
+  return parseIpv4Loose(host);
+}
+const FORBIDDEN_IPV4 = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4]
+];
+function ipv4ToInt(ip) {
+  const p = ip.split(".").map((x) => parseInt(x, 10));
+  return (p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]) >>> 0;
+}
+function ipv4InForbiddenRange(ip) {
+  const addr = ipv4ToInt(ip);
+  for (const [net, bits] of FORBIDDEN_IPV4) {
+    const mask = bits === 0 ? 0 : 4294967295 << 32 - bits >>> 0;
+    if ((addr & mask) === (ipv4ToInt(net) & mask)) return true;
+  }
+  return false;
+}
+function ipv6Groups(ip) {
+  let addr = ip;
+  const lastColon = addr.lastIndexOf(":");
+  const tail = addr.slice(lastColon + 1);
+  if (tail.includes(".")) {
+    if (classifyIp(tail) !== 4) return null;
+    const v4 = ipv4ToInt(tail);
+    addr = addr.slice(0, lastColon + 1) + (v4 >>> 16 & 65535).toString(16) + ":" + (v4 & 65535).toString(16);
+  }
+  const halves = addr.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0].length ? halves[0].split(":") : [];
+  const back = halves.length === 2 ? halves[1].length ? halves[1].split(":") : [] : null;
+  const parse = (groups) => {
+    const out = [];
+    for (const g of groups) {
+      if (!/^[0-9a-fA-F]{1,4}$/.test(g)) return null;
+      out.push(parseInt(g, 16));
+    }
+    return out;
+  };
+  const headNums = parse(head);
+  if (headNums === null) return null;
+  if (back === null) return headNums.length === 8 ? headNums : null;
+  const backNums = parse(back);
+  if (backNums === null) return null;
+  const fill = 8 - headNums.length - backNums.length;
+  if (fill < 0) return null;
+  return [...headNums, ...new Array(fill).fill(0), ...backNums];
+}
+function ipv6InForbiddenRange(ip) {
+  const g = ipv6Groups(ip);
+  if (!g) return false;
+  if (g.every((x) => x === 0)) return true;
+  if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true;
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 65535) {
+    const v4 = `${g[6] >> 8 & 255}.${g[6] & 255}.${g[7] >> 8 & 255}.${g[7] & 255}`;
+    return ipv4InForbiddenRange(v4);
+  }
+  const first = g[0];
+  if ((first & 65024) === 64512) return true;
+  if ((first & 65472) === 65152) return true;
+  if ((first & 65280) === 65280) return true;
+  return false;
+}
+function isForbiddenIp(ip) {
+  const v = classifyIp(ip);
+  if (v === 4) return ipv4InForbiddenRange(ip);
+  if (v === 6) return ipv6InForbiddenRange(ip);
+  const canon = parseIpv4Loose(ip);
+  return canon ? ipv4InForbiddenRange(canon) : false;
+}
+function checkUrlSyntax(input, opts = {}) {
+  let parsed;
+  try {
+    parsed = new URL(input);
+  } catch {
+    return { ok: false, reason: "empty_host", detail: "unparseable URL" };
+  }
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+    return { ok: false, reason: "forbidden_protocol", detail: `protocol ${parsed.protocol} not allowed` };
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    return { ok: false, reason: "userinfo_present", detail: "userinfo (user:pass@) not allowed" };
+  }
+  let hostname = parsed.hostname;
+  if (hostname.endsWith(".")) hostname = hostname.slice(0, -1);
+  if (hostname === "") return { ok: false, reason: "empty_host", detail: "empty host" };
+  const ipLiteral = asIpLiteral(hostname);
+  if (ipLiteral !== null) {
+    if (isForbiddenIp(ipLiteral)) {
+      return { ok: false, reason: "forbidden_ip", detail: `literal IP ${ipLiteral} is forbidden` };
+    }
+    if (!opts.allowLiteralIp) {
+      return { ok: false, reason: "literal_ip_host", detail: `literal IP host ${ipLiteral} not allowed for navigation` };
+    }
+    return { ok: true, url: parsed.toString(), hostname: ipLiteral, isIpLiteral: true };
+  }
+  return { ok: true, url: parsed.toString(), hostname, isIpLiteral: false };
 }
 
 let ws = null;
@@ -1211,23 +1429,23 @@ function initialTabIsAvailable(tabId) {
   }
   return true;
 }
-async function createOwnedTabLease(leaseKey, initialUrl) {
-  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl));
+async function createOwnedTabLease(leaseKey, initialUrl, blankFirst = false) {
+  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst));
 }
-async function createOwnedTabLeaseUnlocked(leaseKey, initialUrl) {
-  const targetUrl = initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
+async function createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst = false) {
+  const createUrl = blankFirst ? BLANK_PAGE : initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
   const role = getOwnedWindowRole(leaseKey);
-  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, targetUrl, getWindowMode(leaseKey));
+  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? void 0 : initialUrl, getWindowMode(leaseKey));
   let tab;
   if (initialTabIsAvailable(initialTabId)) {
     tab = await chrome.tabs.get(initialTabId);
-    if (!isTargetUrl(tab.url, targetUrl)) {
-      tab = await chrome.tabs.update(initialTabId, { url: targetUrl });
+    if (!blankFirst && !isTargetUrl(tab.url, createUrl)) {
+      tab = await chrome.tabs.update(initialTabId, { url: createUrl });
       await new Promise((resolve) => setTimeout(resolve, 300));
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    tab = await chrome.tabs.create({ windowId, url: targetUrl, active: true });
+    tab = await chrome.tabs.create({ windowId, url: createUrl, active: true });
   }
   if (!tab.id) throw new Error("Failed to create tab lease in automation container");
   await ensureOwnedContainerTabGroup(role, windowId, [tab.id]);
@@ -1493,7 +1711,7 @@ async function resolveCommandTabId(cmd) {
   if (cmd.page) return resolveTabId$1(cmd.page);
   return void 0;
 }
-async function resolveTab(tabId, leaseKey, initialUrl) {
+async function resolveTab(tabId, leaseKey, initialUrl, blankFirst = false) {
   const existingSession = automationSessions.get(leaseKey);
   if (tabId !== void 0) {
     try {
@@ -1558,11 +1776,11 @@ async function resolveTab(tabId, leaseKey, initialUrl) {
           'Run "bycli browser bind" again, then retry the command.'
         );
       }
-      return createOwnedTabLease(leaseKey, initialUrl);
+      return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
     }
   }
   if (!existingSession || existingSession.owned && existingSession.preferredTabId === null) {
-    return createOwnedTabLease(leaseKey, initialUrl);
+    return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
   }
   const windowId = await getAutomationWindow(leaseKey, initialUrl);
   const tabs = await chrome.tabs.query({ windowId });
@@ -1649,8 +1867,17 @@ async function handleNavigate(cmd, leaseKey) {
   if (!isSafeNavigationUrl(cmd.url)) {
     return { id: cmd.id, ok: false, error: "Blocked URL scheme -- only http:// and https:// are allowed" };
   }
+  const pre = checkUrlSyntax(cmd.url);
+  if (!pre.ok) {
+    return {
+      id: cmd.id,
+      ok: false,
+      errorCode: "navigation_blocked_by_policy",
+      error: `Navigation blocked by URL policy: ${pre.detail}`
+    };
+  }
   const cmdTabId = await resolveCommandTabId(cmd);
-  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url);
+  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url, true);
   const tabId = resolved.tabId;
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
@@ -1661,17 +1888,32 @@ async function handleNavigate(cmd, leaseKey) {
   if (!hasActiveNetworkCapture(tabId)) {
     await detach(tabId);
   }
+  const aggressive = getSurfaceFromKey(leaseKey) === "browser";
+  let guard;
+  try {
+    guard = await armFetchGuard(tabId, (url) => checkUrlSyntax(url).ok, aggressive);
+  } catch (err) {
+    return {
+      id: cmd.id,
+      ok: false,
+      errorCode: "navigation_redirect_requires_interception",
+      error: `Cannot arm navigation request interception: ${err instanceof Error ? err.message : String(err)}`,
+      errorHint: "Navigation is refused because redirects cannot be checked before send."
+    };
+  }
   await chrome.tabs.update(tabId, { url: targetUrl });
   let timedOut = false;
   await new Promise((resolve) => {
     let settled = false;
     let checkTimer = null;
+    let blockTimer = null;
     let timeoutTimer = null;
     const finish = () => {
       if (settled) return;
       settled = true;
       chrome.tabs.onUpdated.removeListener(listener);
       if (checkTimer) clearTimeout(checkTimer);
+      if (blockTimer) clearInterval(blockTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
       resolve();
     };
@@ -1694,12 +1936,26 @@ async function handleNavigate(cmd, leaseKey) {
       } catch {
       }
     }, 100);
+    blockTimer = setInterval(() => {
+      if ((guard?.blocked.length ?? 0) > 0) {
+        finish();
+      }
+    }, 100);
     timeoutTimer = setTimeout(() => {
       timedOut = true;
       console.warn(`[bycli] Navigate to ${targetUrl} timed out after 15s`);
       finish();
     }, 15e3);
   });
+  if ((guard?.blocked.length ?? 0) > 0) {
+    return {
+      id: cmd.id,
+      ok: false,
+      errorCode: "navigation_blocked_by_policy",
+      error: `Navigation blocked by URL policy on redirect: ${guard?.blocked.join(", ")}`,
+      errorHint: "A redirected main-frame request resolved to a forbidden target and was blocked before send."
+    };
+  }
   let tab = await chrome.tabs.get(tabId);
   const postNavigationSession = automationSessions.get(leaseKey);
   if (postNavigationSession && tab.windowId !== postNavigationSession.windowId) {
@@ -1711,7 +1967,19 @@ async function handleNavigate(cmd, leaseKey) {
       console.warn(`[bycli] Failed to recover drifted tab: ${moveErr}`);
     }
   }
-  return pageScopedResult(cmd.id, tabId, { title: tab.title, url: tab.url, timedOut });
+  return pageScopedResult(cmd.id, tabId, {
+    title: tab.title,
+    url: tab.url,
+    timedOut,
+    // M1: interception evidence for acceptance/observability. Extension capture form
+    // is ip-observed-only per ADR-0006 (no DNS in SW; rebinding not closed here).
+    interception: {
+      armed: true,
+      tier: "ip-observed-only",
+      blocked: guard?.blocked ?? [],
+      observedIps: guard?.observedIps ?? []
+    }
+  });
 }
 async function handleTabs(cmd, leaseKey) {
   const session = automationSessions.get(leaseKey);

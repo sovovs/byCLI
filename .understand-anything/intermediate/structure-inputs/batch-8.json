@@ -1,0 +1,28 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "dashboard-be/IMPLEMENTATION_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 68,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-be/package.json",
+      "language": "json",
+      "sizeLines": 23,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-be/tsconfig.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    }
+  ],
+  "batchImportData": {
+    "dashboard-be/IMPLEMENTATION_PLAN.md": [],
+    "dashboard-be/package.json": [],
+    "dashboard-be/tsconfig.json": []
+  }
+}

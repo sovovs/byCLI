@@ -1,0 +1,84 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "skills/bycli-adapter-author/references/adapter-template.md",
+      "language": "markdown",
+      "sizeLines": 471,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/api-discovery.md",
+      "language": "markdown",
+      "sizeLines": 286,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/coverage-matrix.md",
+      "language": "markdown",
+      "sizeLines": 79,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-conventions.md",
+      "language": "markdown",
+      "sizeLines": 172,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-decode-playbook.md",
+      "language": "markdown",
+      "sizeLines": 181,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/jsdom-fixture-pattern.md",
+      "language": "markdown",
+      "sizeLines": 196,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/output-design.md",
+      "language": "markdown",
+      "sizeLines": 149,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory.md",
+      "language": "markdown",
+      "sizeLines": 231,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-recon.md",
+      "language": "markdown",
+      "sizeLines": 129,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/success-rate-pitfalls.md",
+      "language": "markdown",
+      "sizeLines": 162,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/typed-errors.md",
+      "language": "markdown",
+      "sizeLines": 234,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "skills/bycli-adapter-author/references/adapter-template.md": [],
+    "skills/bycli-adapter-author/references/api-discovery.md": [],
+    "skills/bycli-adapter-author/references/coverage-matrix.md": [],
+    "skills/bycli-adapter-author/references/field-conventions.md": [],
+    "skills/bycli-adapter-author/references/field-decode-playbook.md": [],
+    "skills/bycli-adapter-author/references/jsdom-fixture-pattern.md": [],
+    "skills/bycli-adapter-author/references/output-design.md": [],
+    "skills/bycli-adapter-author/references/site-memory.md": [],
+    "skills/bycli-adapter-author/references/site-recon.md": [],
+    "skills/bycli-adapter-author/references/success-rate-pitfalls.md": [],
+    "skills/bycli-adapter-author/references/typed-errors.md": []
+  }
+}

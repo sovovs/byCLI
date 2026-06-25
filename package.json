@@ -9,6 +9,10 @@
     "node": ">=20.0.0"
   },
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "dashboard-be"
+  ],
   "main": "dist/src/main.js",
   "bin": {
     "bycli": "dist/src/main.js"

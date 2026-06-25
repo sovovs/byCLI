@@ -1,0 +1,105 @@
+/**
+ * High-Level verify module (M5c · verifyAdapter, 07-high-level-services.md).
+ *
+ * Hosted main-repo side (Codex A' verdict): verify runs user adapter JS, which MUST
+ * execute in a child-process runner (08), never in this process. M5c lands the
+ * INTERFACE + delegation seam only: validate the adapter name, derive display-only
+ * evidence from the raw seed args (HMAC, raw never echoed), then delegate to a
+ * RunnerPort. The real runner (spawn / JSONL / env isolation / input.json 0600 /
+ * timeout / reap) landed in M6 and is the production default (defaultRunnerPort);
+ * a stub RunnerPort is retained as a test double to exercise the seam without spawning.
+ *
+ * SECURITY (07:123-124, 167): raw executionSeedArgs stay in memory / input.json only;
+ * they never enter the returned summary, report, status, or logs.
+ */
+
+import {
+  validateAdapterName, deriveEvidenceSeedArgs,
+  type SeedArgEvidence, type VerifySummary,
+} from '@sovovs/bycli-recorder-core';
+import { defaultRunnerPort } from '../runner/runner-port.js';
+
+export interface VerifyInput {
+  /** site/command */
+  name: string;
+  /** Recorder session id (non-secret) forwarded by be. Consumed daemon-side to look up the
+   * per-session HMAC salt (M7a · 04:111) — verifyAdapter itself takes the resolved key as a
+   * separate argument, so this field is not read here. */
+  sessionId?: string;
+  /** Canonical recorder requestId minted by be/Local Service; when set the runner uses it
+   * as the run id so be ↔ daemon ↔ runner all key on the same id. */
+  requestId?: string;
+  /** raw seed args — memory/input.json only, never returned. */
+  executionSeedArgs?: Record<string, unknown>;
+  fixture?: 'ignore' | 'match' | 'update';
+  trace?: 'off' | 'retain-on-failure' | 'always';
+}
+
+/** The runner boundary (08). M6 provides the real child-process implementation. */
+export interface RunnerPort {
+  startVerify(input: {
+    name: string;
+    /** Canonical requestId from the caller; runner generates one if absent. */
+    requestId?: string;
+    evidenceSeedArgs: Record<string, SeedArgEvidence>;
+    rawSeedArgs: Record<string, unknown>;
+    fixture: string;
+    trace: string;
+  }): Promise<{ requestId: string }>;
+  getVerifyStatus(requestId: string): Promise<VerifySummary | null>;
+  cancelVerify(requestId: string): Promise<{ cancelled: boolean }>;
+}
+
+export type VerifyResult =
+  | { ok: true; requestId: string }
+  | { ok: false; errorCode: 'validation_failed' | 'queue_full' | 'runner_protocol_error'; reason: string };
+
+/**
+ * Stub runner — the seam without execution. Returns runner_protocol_error with a clear
+ * message so callers see the interface is wired but no child ran. Retained as a test
+ * double (inject it to exercise verifyAdapter without spawning); the production default is
+ * the real spawn-based RunnerPort (M6a).
+ */
+export const stubRunnerPort: RunnerPort = {
+  async startVerify() {
+    throw Object.assign(new Error('verify runner not implemented (stub)'), { code: 'runner_protocol_error' });
+  },
+  async getVerifyStatus() { return null; },
+  async cancelVerify() { return { cancelled: false }; },
+};
+
+/**
+ * verifyAdapter: validate name → derive display-only evidence → delegate to the runner.
+ * `sessionHmacKey` keys the evidence HMAC; `runner` defaults to the real child-process
+ * RunnerPort (M6a) and can be overridden (stub/fake) in tests.
+ */
+export async function verifyAdapter(
+  input: VerifyInput,
+  sessionHmacKey: string,
+  runner?: RunnerPort,
+): Promise<VerifyResult> {
+  const v = validateAdapterName(input.name);
+  if (!v.ok) return { ok: false, errorCode: 'validation_failed', reason: v.reason };
+
+  const port = runner ?? defaultRunnerPort();
+  const rawSeedArgs = input.executionSeedArgs ?? {};
+  const evidenceSeedArgs = deriveEvidenceSeedArgs(rawSeedArgs, sessionHmacKey);
+
+  try {
+    const { requestId } = await port.startVerify({
+      name: input.name,
+      requestId: input.requestId, // canonical id from be (undefined → runner generates)
+      evidenceSeedArgs,
+      rawSeedArgs, // memory→input.json only, runner's responsibility; never returned
+      fixture: input.fixture ?? 'ignore',
+      trace: input.trace ?? 'retain-on-failure',
+    });
+    return { ok: true, requestId };
+  } catch (e) {
+    // queue_full (M6c: runner at maxConcurrency + queue saturated, 03 → 429) is surfaced
+    // distinctly; any other failure normalizes to runner_protocol_error (08:95).
+    const code = (e as { code?: unknown })?.code;
+    const errorCode = code === 'queue_full' ? 'queue_full' as const : 'runner_protocol_error' as const;
+    return { ok: false, errorCode, reason: e instanceof Error ? e.message : String(e) };
+  }
+}

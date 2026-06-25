@@ -678,6 +678,100 @@ export function hasActiveNetworkCapture(tabId: number): boolean {
   return networkCaptures.has(tabId);
 }
 
+// ── Navigation Fetch guard (M1 P0-1) ────────────────────────────────────────
+// Arms chrome.debugger Fetch interception on a tab BEFORE navigation so that the
+// initial main-frame request and every redirect/secondary main-frame request is
+// re-checked against URL policy before it is sent. failRequest keeps a forbidden
+// target at 0 received bytes (ADR-0002 / ADR-0006, ip-observed-only tier — DNS
+// rebinding is NOT closed here, the SW has no resolver).
+//
+// The policy predicate is injected so this module stays decoupled from url-policy.
+// One global Fetch.requestPaused/Network.responseReceived listener is registered
+// lazily and routes by tabId via fetchGuards.
+
+type FetchGuardState = {
+  /** returns true to allow (continueRequest), false to block (failRequest). */
+  allow: (url: string) => boolean;
+  blocked: string[];
+  observedIps: string[];
+};
+
+const fetchGuards = new Map<number, FetchGuardState>();
+let fetchListenerRegistered = false;
+
+function ensureFetchListener(): void {
+  if (fetchListenerRegistered) return;
+  fetchListenerRegistered = true;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    const tabId = source.tabId;
+    if (!tabId) return;
+    const guard = fetchGuards.get(tabId);
+    if (!guard) return;
+    const p = params as Record<string, any> | undefined;
+
+    if (method === 'Fetch.requestPaused') {
+      const requestId = p?.requestId as string;
+      const url = (p?.request?.url as string) ?? '';
+      const resourceType = p?.resourceType as string | undefined;
+      // Only enforce on top-level documents; let sub-resources through unmodified.
+      if (resourceType !== 'Document') {
+        chrome.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId }).catch(() => {});
+        return;
+      }
+      if (guard.allow(url)) {
+        chrome.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId }).catch(() => {});
+      } else {
+        guard.blocked.push(url);
+        chrome.debugger.sendCommand({ tabId }, 'Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {});
+      }
+      return;
+    }
+
+    if (method === 'Network.responseReceived') {
+      const ip = p?.response?.remoteIPAddress as string | undefined;
+      if (ip) guard.observedIps.push(ip); // logged only — not a security boundary
+    }
+  });
+}
+
+/**
+ * Arm Fetch before-send interception on a tab. Throws if attach or Fetch.enable
+ * fails — callers MUST treat a throw as "interception unavailable" and refuse to
+ * navigate (fail-closed). Returns the guard state for later inspection.
+ */
+export async function armFetchGuard(
+  tabId: number,
+  allow: (url: string) => boolean,
+  aggressiveRetry: boolean = false,
+): Promise<FetchGuardState> {
+  await ensureAttached(tabId, aggressiveRetry);
+  ensureFetchListener();
+  const state: FetchGuardState = { allow, blocked: [], observedIps: [] };
+  fetchGuards.set(tabId, state);
+  try {
+    // Network domain enables remoteIPAddress observation (ip-observed-only).
+    await chrome.debugger.sendCommand({ tabId }, 'Network.enable').catch(() => {});
+    await chrome.debugger.sendCommand({ tabId }, 'Fetch.enable', {
+      patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Request' }],
+    });
+  } catch (e) {
+    fetchGuards.delete(tabId);
+    throw e;
+  }
+  return state;
+}
+
+export function getFetchGuard(tabId: number): FetchGuardState | undefined {
+  return fetchGuards.get(tabId);
+}
+
+/** Disable Fetch interception and drop guard state. Idempotent. */
+export async function disposeFetchGuard(tabId: number): Promise<void> {
+  if (!fetchGuards.has(tabId)) return;
+  fetchGuards.delete(tabId);
+  await chrome.debugger.sendCommand({ tabId }, 'Fetch.disable').catch(() => {});
+}
+
 function clearFrameTargetsForTab(tabId: number): void {
   for (const [key, targetId] of [...frameTargets.entries()]) {
     if (!key.startsWith(`${tabId}:`)) continue;
@@ -692,6 +786,7 @@ export async function detach(tabId: number): Promise<void> {
   if (!attached.has(tabId)) return;
   attached.delete(tabId);
   networkCaptures.delete(tabId);
+  fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
   try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
@@ -700,6 +795,7 @@ export function registerListeners(): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
     clearFrameTargetsForTab(tabId);
   });
@@ -707,6 +803,7 @@ export function registerListeners(): void {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
       clearFrameTargetsForTab(source.tabId);
       return;

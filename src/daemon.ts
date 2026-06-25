@@ -27,6 +27,12 @@ import { EXIT_CODES } from './errors.js';
 import { log } from './logger.js';
 import { PKG_VERSION } from './version.js';
 import { DEFAULT_CONTEXT_ID } from './browser/profile.js';
+import { createAdapterDraft, recoverInitTransactions, type InitInput } from './recorder/highlevel/init.js';
+import { verifyAdapter, type VerifyInput } from './recorder/highlevel/verify.js';
+import { defaultRunnerPort, setDefaultRunnerDaemonPort } from './recorder/runner/runner-port.js';
+import { reapOrphanedVerifyRuns } from './recorder/runner/reap.js';
+import { resolveTempPolicy, resolveRunnerConfig } from './recorder/runner/config.js';
+import { defaultSessionKeyRegistry } from './recorder/runner/session-keys.js';
 import { recordExtensionVersion } from './update-check.js';
 import {
   buildCommandDispatchFailure,
@@ -35,6 +41,12 @@ import {
 } from './daemon-utils.js';
 
 const PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
+
+// The verify runner (M6b) spawns child processes that connect back to THIS daemon for a
+// browser Page. Hand them our port (→ BYCLI_DAEMON_PORT in the child env) so the child's
+// Page reaches us, not a freshly-spawned daemon. Must run before the first /v1/verify
+// builds the default runner singleton.
+setDefaultRunnerDaemonPort(PORT);
 
 // ─── State ───────────────────────────────────────────────────────────
 
@@ -230,6 +242,79 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // blocked even if Origin check is somehow bypassed.
   if (!req.headers['x-bycli']) {
     jsonResponse(res, 403, { ok: false, error: 'Forbidden: missing X-byCLI header' });
+    return;
+  }
+
+  // High-level init (M5b · A'): daemon hosts the FS-writing init capability; the
+  // logic lives in the main-repo init module (createAdapterDraft). dashboard-be
+  // forwards here rather than writing main-repo adapter paths itself. Synchronous
+  // (init is a short FS op, not a long-running runner); requestId/async is deferred.
+  if (req.method === 'POST' && pathname === '/v1/init') {
+    try {
+      const body = JSON.parse(await readBody(req)) as Partial<InitInput>;
+      if (typeof body.name !== 'string' || !body.name) {
+        jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: 'name required' });
+        return;
+      }
+      const result = createAdapterDraft(body as InitInput);
+      if (!result.ok) {
+        // init failures are all client-fixable 400s (validation_failed / responsible_use_required).
+        jsonResponse(res, 400, { ok: false, errorCode: result.errorCode, error: result.reason });
+        return;
+      }
+      jsonResponse(res, 200, { ok: true, data: { report: result.report, dryRun: result.dryRun } });
+    } catch (err) {
+      jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // High-level verify (A'): interface + delegation seam. The adapter JS runs in the
+  // M6 child-process runner (08) — verifyAdapter delegates to the real spawn-based
+  // RunnerPort (defaultRunnerPort), so runner_protocol_error now signals an actual
+  // runner fault, not "not implemented". The evidence HMAC is keyed by a per-session salt
+  // held only in daemon memory (M7a · 04:111): be forwards the non-secret sessionId, the
+  // daemon mints + holds the salt, and it never crosses the wire.
+  if (req.method === 'POST' && pathname === '/v1/verify') {
+    try {
+      const body = JSON.parse(await readBody(req)) as Partial<VerifyInput>;
+      if (typeof body.name !== 'string' || !body.name) {
+        jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: 'name required' });
+        return;
+      }
+      const sessionHmacKey = defaultSessionKeyRegistry().keyFor(body.sessionId);
+      const result = await verifyAdapter(body as VerifyInput, sessionHmacKey);
+      if (!result.ok) {
+        const status = result.errorCode === 'validation_failed' ? 400
+          : result.errorCode === 'queue_full' ? 429 // 03: queue/concurrency exceeded
+          : 500;
+        jsonResponse(res, status, { ok: false, errorCode: result.errorCode, error: result.reason });
+        return;
+      }
+      jsonResponse(res, 200, { ok: true, data: { requestId: result.requestId } });
+    } catch (err) {
+      jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // High-level request status (M6 · ADR-0007): be polls verify status here. The runner
+  // registry is keyed by the canonical requestId (be ↔ daemon ↔ runner share one id);
+  // returns summary-only VerifySummary (raw seed/stdout/stderr/trace path never included).
+  if (req.method === 'GET' && pathname.startsWith('/v1/requests/')) {
+    const requestId = decodeURIComponent(pathname.slice('/v1/requests/'.length));
+    if (!requestId) {
+      jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: 'requestId required' });
+      return;
+    }
+    const runStatus = defaultRunnerPort().getRunStatus(requestId);
+    if (!runStatus) {
+      jsonResponse(res, 404, { ok: false, errorCode: 'request_not_found', error: 'unknown requestId' });
+      return;
+    }
+    // RunStatus (queued|running|succeeded|failed|timeout|cancelled) maps 1:1 to request status;
+    // summary is null while queued/running, a VerifySummary once terminal (M6c adds queued).
+    jsonResponse(res, 200, { ok: true, data: { requestId, status: runStatus.status, result: runStatus.summary } });
     return;
   }
 
@@ -463,6 +548,52 @@ wss.on('connection', (ws: WebSocket) => {
 
 httpServer.listen(PORT, '127.0.0.1', () => {
   log.info(`[daemon] Listening on http://127.0.0.1:${PORT}`);
+  // Temp-store reap policy (M7b · 09:27-29). Resolved once at startup; out-of-range env → throws,
+  // but we keep the daemon alive by falling back to the (validated-elsewhere) defaults on error.
+  let tempPolicy;
+  try {
+    tempPolicy = resolveTempPolicy();
+  } catch (err) {
+    log.warn(`[daemon] temp policy config invalid, using defaults: ${err instanceof Error ? err.message : String(err)}`);
+    tempPolicy = { tempTtlMs: 3_600_000, startupReapMaxAgeMs: 86_400_000, orphanKillGraceMs: 1_500 };
+  }
+  // Age-reap safety floor (08 / M7b): a verify cannot legitimately outlive timeoutMs + killGraceMs,
+  // so the age threshold must never drop below it — otherwise a short RECORDER_TEMP_TTL_MS (min 60s)
+  // would let the sweep kill a still-running verify (timeoutMs reaches 600s). Fall back to the
+  // absolute config ceiling (max timeoutMs + max killGraceMs) if runner config is unreadable.
+  let minLeakAgeMs = 600_000 + 30_000;
+  try {
+    const rc = resolveRunnerConfig();
+    minLeakAgeMs = rc.timeoutMs + rc.killGraceMs;
+  } catch { /* keep the absolute ceiling (safest, highest floor) */ }
+  // Startup reap (08:37): clean up verify temp dirs orphaned by a previously-crashed daemon
+  // (ownerPid-dead), plus any dir older than the startup age backstop (M7b leak sweep). A live
+  // sibling's in-flight verify (young + owner alive, or within the hard-deadline floor) is never touched.
+  try {
+    reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.startupReapMaxAgeMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+  } catch (err) {
+    log.warn(`[daemon] verify startup reap failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Periodic TTL sweep (M7b): while the daemon runs, reap dirs older than the temp TTL — but never
+  // below the run hard-deadline floor (minLeakAgeMs), so an aggressive TTL can't kill a live verify.
+  // Unref'd so it never keeps the process alive on its own.
+  const sweep = setInterval(() => {
+    try {
+      reapOrphanedVerifyRuns({ log: (m) => log.info(m), maxAgeMs: tempPolicy.tempTtlMs, minLeakAgeMs, graceMs: tempPolicy.orphanKillGraceMs });
+      // Drop salts for abandoned sessions (M7a TTL backstop; daemon restart already rotates all).
+      defaultSessionKeyRegistry().sweepExpired();
+    } catch (err) {
+      log.warn(`[daemon] verify temp sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, tempPolicy.tempTtlMs);
+  sweep.unref?.();
+  // Init write-transaction crash recovery (07:106-117): resolve any adapter draft interrupted
+  // mid-write by a previous crash (roll-forward marker / quarantine unprovenanced / roll back).
+  try {
+    recoverInitTransactions({ log: (m) => log.info(m) });
+  } catch (err) {
+    log.warn(`[daemon] init startup recovery failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 });
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {

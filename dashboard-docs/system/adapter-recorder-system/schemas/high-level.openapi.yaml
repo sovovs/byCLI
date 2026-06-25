@@ -1,0 +1,267 @@
+openapi: 3.1.0
+info:
+  title: High-Level Service API (OPTIONAL standalone HTTP wrapper)
+  version: high-level.v1
+  description: >-
+    This is the OPTIONAL standalone High-Level HTTP wrapper (07 · "Optional HTTP
+    Wrapper", ADR-0004), for multi-client reuse. Routes here (/v1/browser/analyze,
+    /v1/adapters/init, /v1/adapters/verify) are NOT the daemon-hosted high-level
+    endpoints. The daemon high-level surface that dashboard-be forwards to is a
+    SEPARATE contract — see daemon-high-level.openapi.yaml (POST /v1/init,
+    POST /v1/verify) and ADR-0007. The two /v1/* families are distinct APIs with
+    distinct owners; do not conflate them.
+security:
+  - ByCliHeader: []
+    ByCliToken: []
+paths:
+  /v1/browser/analyze:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeInput"
+      responses:
+        "202":
+          description: analyze request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+  /v1/adapters/init:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitInput"
+      responses:
+        "202":
+          description: init request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+  /v1/adapters/verify:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyInput"
+      responses:
+        "202":
+          description: verify request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+  /v1/requests/{requestId}:
+    get:
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: waitMs
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: request status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestStatus"
+        "404":
+          description: request not found
+  /health:
+    get:
+      description: "Liveness probe (gated like every endpoint; no daemon/upstream probe in MVP)."
+      responses:
+        "200":
+          description: wrapper is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, schemaVersion]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  schemaVersion:
+                    type: string
+                    enum: [high-level.v1]
+  /metrics:
+    get:
+      description: >-
+        Operational metrics snapshot (counters + histograms; labels are non-sensitive enums only —
+        operation/status/errorCode — never token/body/seed). Gated like every endpoint. This is an
+        operational endpoint (M8 follow-up), not part of the core high-level contract surface.
+      responses:
+        "200":
+          description: metrics snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counters, histograms]
+                properties:
+                  counters:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  histograms:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [count, sum, min, max]
+                      properties:
+                        count: { type: integer }
+                        sum: { type: number }
+                        min: { type: number }
+                        max: { type: number }
+components:
+  securitySchemes:
+    ByCliHeader:
+      type: apiKey
+      in: header
+      name: X-byCLI
+      description: "Custom header gate (07 · X-byCLI:1, optional standalone wrapper)."
+    ByCliToken:
+      type: apiKey
+      in: header
+      name: X-byCLI-Token
+      description: "Startup random token (07 · optional HTTP wrapper). AND-combined with X-byCLI."
+  schemas:
+    AcceptedResponse:
+      type: object
+      required: [requestId, schemaVersion]
+      properties:
+        requestId:
+          type: string
+        schemaVersion:
+          type: string
+          enum: [high-level.v1]
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Error"
+            - type: "null"
+    Error:
+      $ref: "adapter-recorder.bundle.json#/$defs/Error"
+    VerifyInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          pattern: "^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$"
+        executionSeedArgs:
+          type: object
+          additionalProperties: true
+        fixture:
+          type: string
+          enum: [ignore, match, update]
+        trace:
+          type: string
+          enum: [off, retain-on-failure, always]
+    AnalyzeInput:
+      type: object
+      required: [url, session, contextId]
+      properties:
+        url:
+          type: string
+        session:
+          type: string
+        contextId:
+          type: string
+        settleMs:
+          type: [integer, "null"]
+    InitInput:
+      type: object
+      # As-built (M9): only `name` is required by the wrapper handler + createAdapterDraft. `domain`/
+      # `strategy` are optional derived draft inputs (when omitted, `browser` defaults from strategy and
+      # the template is generated from `name`). `args`/`endpoint`/`columns`/`report` are RESERVED for the
+      # full rank→init same-source derivation (13-round design) and are NOT yet consumed by createAdapterDraft
+      # — clients should not expect them to take effect until that derivation lands. See 07 · As-built.
+      required: [name]
+      allOf:
+        - if:
+            properties:
+              writePolicy:
+                const: write
+            required: [writePolicy]
+          then:
+            required: [responsibleUseAcknowledgedAt]
+            properties:
+              responsibleUseAcknowledgedAt:
+                type: integer
+      properties:
+        name:
+          type: string
+          pattern: "^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$"
+        domain:
+          type: string
+        strategy:
+          type: string
+        browser:
+          type: boolean
+        args:
+          type: array
+          items:
+            $ref: "adapter-recorder.bundle.json#/$defs/ArgMapping"
+        endpoint:
+          $ref: "adapter-recorder.bundle.json#/$defs/EndpointDescriptor"
+        columns:
+          type: array
+          items:
+            $ref: "adapter-recorder.bundle.json#/$defs/ColumnDescriptor"
+        report:
+          type: [object, "null"]
+        writePolicy:
+          type: string
+          enum: [dry-run, write]
+        responsibleUseAcknowledgedAt:
+          type: [integer, "null"]
+          description: required when writePolicy=write
+    RequestStatus:
+      type: object
+      required: [requestId, type, status, startedAt, updatedAt]
+      properties:
+        requestId:
+          type: string
+        type:
+          type: string
+          enum: [analyze, init, verify]
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, timeout, cancelled]
+        startedAt:
+          type: integer
+        updatedAt:
+          type: integer
+        expiresAt:
+          type: [integer, "null"]
+        pollAfterMs:
+          type: [integer, "null"]
+        queueReason:
+          type: [string, "null"]
+          enum: [profile_busy, queue_full, null]
+        progress:
+          type: [object, "null"]
+        result:
+          # TODO(M-003, post-M6): per-type oneOf (RankStatus/AnalyzeStatus/InitStatus/
+          # VerifyStatus); verify → bundle $defs/VerifySummary (not RunnerResultEvent);
+          # rank → $defs/RankResult. Deferred until M6 finalizes verify summary. See 03.
+          type: [object, "null"]
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Error"
+            - type: "null"

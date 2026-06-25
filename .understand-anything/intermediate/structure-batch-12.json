@@ -1,0 +1,141 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 4,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/adapter-recorder.bundle.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 339,
+      "nonEmptyLines": 339,
+      "sections": [
+        {
+          "heading": "$schema",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "title",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "$defs",
+          "level": 1,
+          "line": 4
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/daemon-high-level.openapi.yaml",
+      "language": "yaml",
+      "fileCategory": "config",
+      "totalLines": 87,
+      "nonEmptyLines": 87,
+      "sections": [
+        {
+          "heading": "openapi",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "info",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "paths",
+          "level": 1,
+          "line": 13
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/high-level.openapi.yaml",
+      "language": "yaml",
+      "fileCategory": "config",
+      "totalLines": 198,
+      "nonEmptyLines": 198,
+      "sections": [
+        {
+          "heading": "openapi",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "info",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "paths",
+          "level": 1,
+          "line": 13
+        },
+        {
+          "heading": "components",
+          "level": 1,
+          "line": 81
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 4
+      }
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/recorder.openapi.yaml",
+      "language": "yaml",
+      "fileCategory": "config",
+      "totalLines": 536,
+      "nonEmptyLines": 536,
+      "sections": [
+        {
+          "heading": "openapi",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "info",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "paths",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "components",
+          "level": 1,
+          "line": 281
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 4
+      }
+    }
+  ]
+}

@@ -632,6 +632,8 @@ describe('background tab isolation', () => {
       registerListeners: vi.fn(),
       hasActiveNetworkCapture: vi.fn(() => true),
       detach: detachMock,
+      armFetchGuard: vi.fn(async () => ({ allow: () => true, blocked: [], observedIps: [] })),
+      disposeFetchGuard: vi.fn(async () => {}),
     }));
 
     const mod = await import('./background');
@@ -1970,6 +1972,8 @@ describe('background tab isolation', () => {
       registerFrameTracking: vi.fn(),
       hasActiveNetworkCapture: vi.fn(() => false),
       detach: vi.fn(async () => {}),
+      armFetchGuard: vi.fn(async () => ({ allow: () => true, blocked: [], observedIps: [] })),
+      disposeFetchGuard: vi.fn(async () => {}),
     }));
 
     const mod = await import('./background');

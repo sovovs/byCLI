@@ -1,0 +1,2718 @@
+{
+  "name": "@sovovs/bycli",
+  "description": "Make any website or Electron App your CLI. AI-powered.",
+  "rawDescription": "Make any website or Electron App your CLI. AI-powered.",
+  "languages": [
+    "yaml",
+    "markdown",
+    "unknown",
+    "txt",
+    "json",
+    "typescript",
+    "shell",
+    "html",
+    "javascript"
+  ],
+  "frameworks": [
+    "Node.js",
+    "TypeScript",
+    "Commander",
+    "Vitest",
+    "Chrome Extension",
+    "Vite"
+  ],
+  "files": [
+    {
+      "path": ".github/actions/setup-chrome/action.yml",
+      "language": "yaml",
+      "sizeLines": 27,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "language": "yaml",
+      "sizeLines": 83,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "language": "yaml",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "language": "yaml",
+      "sizeLines": 42,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/new_site_adapter.yml",
+      "language": "yaml",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "language": "markdown",
+      "sizeLines": 33,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".github/workflows/build-extension.yml",
+      "language": "yaml",
+      "sizeLines": 66,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 173,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/doc-check.yml",
+      "language": "yaml",
+      "sizeLines": 36,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/docs.yml",
+      "language": "yaml",
+      "sizeLines": 17,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/e2e-headed.yml",
+      "language": "yaml",
+      "sizeLines": 90,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "language": "yaml",
+      "sizeLines": 75,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/security.yml",
+      "language": "yaml",
+      "sizeLines": 33,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "adapter-sequence.md",
+      "language": "markdown",
+      "sizeLines": 27,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "adapter-stage-1-startup.md",
+      "language": "markdown",
+      "sizeLines": 67,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "adapter-stage-2-execution.md",
+      "language": "markdown",
+      "sizeLines": 85,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "adapter-stage-3-pipeline.md",
+      "language": "markdown",
+      "sizeLines": 80,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "adapter-stage-4-browser-func.md",
+      "language": "markdown",
+      "sizeLines": 93,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "AGENT.md",
+      "language": "markdown",
+      "sizeLines": 17,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "autoresearch/baseline-browse.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "autoresearch/baseline-skill.txt",
+      "language": "txt",
+      "sizeLines": 1,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "autoresearch/browse-tasks.json",
+      "language": "json",
+      "sizeLines": 685,
+      "fileCategory": "config"
+    },
+    {
+      "path": "autoresearch/commands/debug.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/commands/fix.ts",
+      "language": "typescript",
+      "sizeLines": 146,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/commands/plan.ts",
+      "language": "typescript",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/commands/run.ts",
+      "language": "typescript",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/config.ts",
+      "language": "typescript",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/engine.ts",
+      "language": "typescript",
+      "sizeLines": 363,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-all.ts",
+      "language": "typescript",
+      "sizeLines": 127,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-browse.ts",
+      "language": "typescript",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-publish.ts",
+      "language": "typescript",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-save.ts",
+      "language": "typescript",
+      "sizeLines": 249,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-skill.ts",
+      "language": "typescript",
+      "sizeLines": 254,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-v2ex.ts",
+      "language": "typescript",
+      "sizeLines": 220,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/eval-zhihu.ts",
+      "language": "typescript",
+      "sizeLines": 230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/logger.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/browser-reliability.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/combined-reliability.ts",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/index.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/save-reliability.ts",
+      "language": "typescript",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/skill-quality.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/v2ex-reliability.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/presets/zhihu-reliability.ts",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/publish-tasks.json",
+      "language": "json",
+      "sizeLines": 345,
+      "fileCategory": "config"
+    },
+    {
+      "path": "autoresearch/run-browse.sh",
+      "language": "shell",
+      "sizeLines": 9,
+      "fileCategory": "script"
+    },
+    {
+      "path": "autoresearch/run-save.sh",
+      "language": "shell",
+      "sizeLines": 11,
+      "fileCategory": "script"
+    },
+    {
+      "path": "autoresearch/run-skill.sh",
+      "language": "shell",
+      "sizeLines": 9,
+      "fileCategory": "script"
+    },
+    {
+      "path": "autoresearch/save-adapters/xhs-explore-deep.ts",
+      "language": "typescript",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-adapters/xhs-note-comments.ts",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-adapters/xhs-search-full.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-adapters/zhihu-hot-detail.ts",
+      "language": "typescript",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-adapters/zhihu-question-full.ts",
+      "language": "typescript",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-adapters/zhihu-search-detail.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "autoresearch/save-tasks.json",
+      "language": "json",
+      "sizeLines": 280,
+      "fileCategory": "config"
+    },
+    {
+      "path": "autoresearch/v2ex-tasks.json",
+      "language": "json",
+      "sizeLines": 898,
+      "fileCategory": "config"
+    },
+    {
+      "path": "autoresearch/zhihu-tasks.json",
+      "language": "json",
+      "sizeLines": 847,
+      "fileCategory": "config"
+    },
+    {
+      "path": "bycli-adapter-author-skill.md",
+      "language": "markdown",
+      "sizeLines": 334,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "bycli-autofix-skill.md",
+      "language": "markdown",
+      "sizeLines": 382,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "bycli-browser-vs-adapter.md",
+      "language": "markdown",
+      "sizeLines": 937,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "bycli-cli-strategy.md",
+      "language": "markdown",
+      "sizeLines": 857,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/daily-rl-research-monitor.md",
+      "language": "markdown",
+      "sizeLines": 56,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/find-paper-implementation.md",
+      "language": "markdown",
+      "sizeLines": 57,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/README.md",
+      "language": "markdown",
+      "sizeLines": 9,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/track-conference-papers.md",
+      "language": "markdown",
+      "sizeLines": 75,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "CLAUDE.md",
+      "language": "markdown",
+      "sizeLines": 26,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cli-manifest.json",
+      "language": "json",
+      "sizeLines": 32818,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-be/IMPLEMENTATION_PLAN.md",
+      "language": "markdown",
+      "sizeLines": 68,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-be/package.json",
+      "language": "json",
+      "sizeLines": 23,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-be/src/config.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/security/bootstrap.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/security/gates.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/server.ts",
+      "language": "typescript",
+      "sizeLines": 466,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/session/registry.ts",
+      "language": "typescript",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/session/stateMachine.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/static.ts",
+      "language": "typescript",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/transport/daemonBridge.ts",
+      "language": "typescript",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/src/transport/envelope.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/test/integration.test.ts",
+      "language": "typescript",
+      "sizeLines": 108,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/test/m3-navigate.test.ts",
+      "language": "typescript",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/test/shell.test.ts",
+      "language": "typescript",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard-be/tsconfig.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-docs/architecture-relationship.md",
+      "language": "markdown",
+      "sizeLines": 170,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/README.md",
+      "language": "markdown",
+      "sizeLines": 95,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/00-tdd-governance.md",
+      "language": "markdown",
+      "sizeLines": 45,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/01-system-overview.md",
+      "language": "markdown",
+      "sizeLines": 43,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/02-architecture-boundaries.md",
+      "language": "markdown",
+      "sizeLines": 78,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/03-contracts-and-versioning.md",
+      "language": "markdown",
+      "sizeLines": 147,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/04-security-model.md",
+      "language": "markdown",
+      "sizeLines": 139,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/05-recorder-local-service.md",
+      "language": "markdown",
+      "sizeLines": 207,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/06-recorder-core-engine.md",
+      "language": "markdown",
+      "sizeLines": 164,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/07-high-level-services.md",
+      "language": "markdown",
+      "sizeLines": 177,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/08-runner-and-isolation.md",
+      "language": "markdown",
+      "sizeLines": 162,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/09-config-observability.md",
+      "language": "markdown",
+      "sizeLines": 186,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/10-fixtures-and-test-plan.md",
+      "language": "markdown",
+      "sizeLines": 177,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/11-roadmap-and-acceptance.md",
+      "language": "markdown",
+      "sizeLines": 104,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0001-ui-channel.md",
+      "language": "markdown",
+      "sizeLines": 21,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0002-request-interception.md",
+      "language": "markdown",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0003-seedargs-boundary.md",
+      "language": "markdown",
+      "sizeLines": 21,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0004-high-level-module-first.md",
+      "language": "markdown",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0005-responsible-use.md",
+      "language": "markdown",
+      "sizeLines": 21,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0006-dns-rebinding-ip-enforcement.md",
+      "language": "markdown",
+      "sizeLines": 31,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/adr/0007-daemon-high-level-hosting.md",
+      "language": "markdown",
+      "sizeLines": 29,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/README.md",
+      "language": "markdown",
+      "sizeLines": 40,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/adapter-recorder.bundle.json",
+      "language": "json",
+      "sizeLines": 339,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/daemon-high-level.openapi.yaml",
+      "language": "yaml",
+      "sizeLines": 87,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/high-level.openapi.yaml",
+      "language": "yaml",
+      "sizeLines": 198,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-docs/system/adapter-recorder-system/schemas/recorder.openapi.yaml",
+      "language": "yaml",
+      "sizeLines": 536,
+      "fileCategory": "config"
+    },
+    {
+      "path": "dashboard-docs/TDD.md",
+      "language": "markdown",
+      "sizeLines": 113,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "designs/self-repair-protocol.md",
+      "language": "markdown",
+      "sizeLines": 151,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-1-execute-command.md",
+      "language": "markdown",
+      "sizeLines": 178,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-2-browser-session.md",
+      "language": "markdown",
+      "sizeLines": 160,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-3-daemon-bridge.md",
+      "language": "markdown",
+      "sizeLines": 225,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-4-extension-cdp.md",
+      "language": "markdown",
+      "sizeLines": 1005,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-5-trace-errors.md",
+      "language": "markdown",
+      "sizeLines": 214,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "execution-series.md",
+      "language": "markdown",
+      "sizeLines": 32,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "extension/manifest.json",
+      "language": "json",
+      "sizeLines": 41,
+      "fileCategory": "config"
+    },
+    {
+      "path": "extension/package.json",
+      "language": "json",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "extension/popup.html",
+      "language": "html",
+      "sizeLines": 146,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "extension/popup.js",
+      "language": "javascript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/README.md",
+      "language": "markdown",
+      "sizeLines": 26,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "extension/scripts/package-release.mjs",
+      "language": "javascript",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/background.test.ts",
+      "language": "typescript",
+      "sizeLines": 2006,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/background.ts",
+      "language": "typescript",
+      "sizeLines": 1944,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/cdp.test.ts",
+      "language": "typescript",
+      "sizeLines": 395,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/cdp.ts",
+      "language": "typescript",
+      "sizeLines": 909,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/identity.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/protocol.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/url-policy.test.ts",
+      "language": "typescript",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/src/url-policy.ts",
+      "language": "typescript",
+      "sizeLines": 207,
+      "fileCategory": "code"
+    },
+    {
+      "path": "extension/tsconfig.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "extension/vite.config.ts",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "NOTICE",
+      "language": "unknown",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "outputs/code-review-adapter-recorder-system-20260623.md",
+      "language": "markdown",
+      "sizeLines": 166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "outputs/code-review-adapter-recorder-system-20260623.zh.md",
+      "language": "markdown",
+      "sizeLines": 166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 117,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/recorder-core/package.json",
+      "language": "json",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": "packages/recorder-core/src/analyze.ts",
+      "language": "typescript",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/canonical.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/core.test.ts",
+      "language": "typescript",
+      "sizeLines": 194,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/index.ts",
+      "language": "typescript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/init.test.ts",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/init.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/normalize.ts",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/pairing.ts",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/rank.ts",
+      "language": "typescript",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/score.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/types.ts",
+      "language": "typescript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/verify.test.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/src/verify.ts",
+      "language": "typescript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "packages/recorder-core/tsconfig.json",
+      "language": "json",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "PRIVACY.md",
+      "language": "markdown",
+      "sizeLines": 57,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 41,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/check-doc-coverage.sh",
+      "language": "shell",
+      "sizeLines": 81,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/check-listing-id-pairing.mjs",
+      "language": "javascript",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check-silent-column-drop.mjs",
+      "language": "javascript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check-typed-error-lint.mjs",
+      "language": "javascript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/clean-dist.cjs",
+      "language": "javascript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/copy-yaml.cjs",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/fetch-adapters.js",
+      "language": "javascript",
+      "sizeLines": 293,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/m1-daemon-navigate-drive.mjs",
+      "language": "javascript",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/m1-extension-spike.mjs",
+      "language": "javascript",
+      "sizeLines": 237,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/m1-live-spike.mjs",
+      "language": "javascript",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/postinstall.js",
+      "language": "javascript",
+      "sizeLines": 174,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/silent-column-drop-baseline.json",
+      "language": "json",
+      "sizeLines": 910,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/typed-error-lint-baseline.json",
+      "language": "json",
+      "sizeLines": 1162,
+      "fileCategory": "config"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/adapter-template.md",
+      "language": "markdown",
+      "sizeLines": 471,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/api-discovery.md",
+      "language": "markdown",
+      "sizeLines": 286,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/coverage-matrix.md",
+      "language": "markdown",
+      "sizeLines": 79,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-conventions.md",
+      "language": "markdown",
+      "sizeLines": 172,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-decode-playbook.md",
+      "language": "markdown",
+      "sizeLines": 181,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/jsdom-fixture-pattern.md",
+      "language": "markdown",
+      "sizeLines": 196,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/output-design.md",
+      "language": "markdown",
+      "sizeLines": 149,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory.md",
+      "language": "markdown",
+      "sizeLines": 231,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/bilibili.md",
+      "language": "markdown",
+      "sizeLines": 70,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/eastmoney.md",
+      "language": "markdown",
+      "sizeLines": 70,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/tonghuashun.md",
+      "language": "markdown",
+      "sizeLines": 51,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory/xueqiu.md",
+      "language": "markdown",
+      "sizeLines": 58,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-recon.md",
+      "language": "markdown",
+      "sizeLines": 129,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/success-rate-pitfalls.md",
+      "language": "markdown",
+      "sizeLines": 162,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/typed-errors.md",
+      "language": "markdown",
+      "sizeLines": 234,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-adapter-author/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 215,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-autofix/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 297,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-browser/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 436,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/bycli-usage/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 168,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "src/adapter-shadow.test.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/adapter-shadow.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/adapter-source.test.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/adapter-source.ts",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser.test.ts",
+      "language": "typescript",
+      "sizeLines": 279,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/__fixtures__/article-extract/deno-v2.html",
+      "language": "html",
+      "sizeLines": 500,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/browser/__fixtures__/article-extract/openai-cookbook-readme.txt",
+      "language": "txt",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "src/browser/__fixtures__/article-extract/wikipedia-markdown.html",
+      "language": "html",
+      "sizeLines": 1248,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "src/browser/analyze.test.ts",
+      "language": "typescript",
+      "sizeLines": 212,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/analyze.ts",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/article-extract.e2e.test.ts",
+      "language": "typescript",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/article-extract.test.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/article-extract.ts",
+      "language": "typescript",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/ax-snapshot.test.ts",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/ax-snapshot.ts",
+      "language": "typescript",
+      "sizeLines": 271,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/base-page.test.ts",
+      "language": "typescript",
+      "sizeLines": 876,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/base-page.ts",
+      "language": "typescript",
+      "sizeLines": 1242,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/bridge.ts",
+      "language": "typescript",
+      "sizeLines": 212,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/cdp-click-fixture.test.ts",
+      "language": "typescript",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/cdp.test.ts",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/cdp.ts",
+      "language": "typescript",
+      "sizeLines": 642,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/compound.test.ts",
+      "language": "typescript",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/compound.ts",
+      "language": "typescript",
+      "sizeLines": 149,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/daemon-client.test.ts",
+      "language": "typescript",
+      "sizeLines": 246,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/daemon-client.ts",
+      "language": "typescript",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/daemon-lifecycle.ts",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/daemon-version.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/dom-helpers.test.ts",
+      "language": "typescript",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/dom-helpers.ts",
+      "language": "typescript",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/dom-snapshot.test.ts",
+      "language": "typescript",
+      "sizeLines": 362,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/dom-snapshot.ts",
+      "language": "typescript",
+      "sizeLines": 936,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/errors.test.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/errors.ts",
+      "language": "typescript",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/extract.test.ts",
+      "language": "typescript",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/extract.ts",
+      "language": "typescript",
+      "sizeLines": 170,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/find.test.ts",
+      "language": "typescript",
+      "sizeLines": 206,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/find.ts",
+      "language": "typescript",
+      "sizeLines": 455,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/html-tree.test.ts",
+      "language": "typescript",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/html-tree.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/index.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/navigation-guard.test.ts",
+      "language": "typescript",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/navigation-guard.ts",
+      "language": "typescript",
+      "sizeLines": 187,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/network-cache.test.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/network-cache.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/network-key.test.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/network-key.ts",
+      "language": "typescript",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/page.test.ts",
+      "language": "typescript",
+      "sizeLines": 474,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/page.ts",
+      "language": "typescript",
+      "sizeLines": 467,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/profile.ts",
+      "language": "typescript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/shape-filter.test.ts",
+      "language": "typescript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/shape-filter.ts",
+      "language": "typescript",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/shape.test.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/shape.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/stealth.test.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/stealth.ts",
+      "language": "typescript",
+      "sizeLines": 360,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/tabs.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/target-errors.test.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/target-errors.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/target-resolver.test.ts",
+      "language": "typescript",
+      "sizeLines": 133,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/target-resolver.ts",
+      "language": "typescript",
+      "sizeLines": 606,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/url-policy.test.ts",
+      "language": "typescript",
+      "sizeLines": 165,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/url-policy.ts",
+      "language": "typescript",
+      "sizeLines": 355,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/utils.test.ts",
+      "language": "typescript",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/utils.ts",
+      "language": "typescript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/verify-fixture.test.ts",
+      "language": "typescript",
+      "sizeLines": 289,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/verify-fixture.ts",
+      "language": "typescript",
+      "sizeLines": 375,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/browser/visual-refs.ts",
+      "language": "typescript",
+      "sizeLines": 111,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/build-manifest.test.ts",
+      "language": "typescript",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/build-manifest.ts",
+      "language": "typescript",
+      "sizeLines": 450,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/capabilityRouting.test.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/capabilityRouting.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/cli-argv-preprocess.test.ts",
+      "language": "typescript",
+      "sizeLines": 239,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/cli-argv-preprocess.ts",
+      "language": "typescript",
+      "sizeLines": 273,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/cli.test.ts",
+      "language": "typescript",
+      "sizeLines": 3263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/cli.ts",
+      "language": "typescript",
+      "sizeLines": 3432,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/commanderAdapter.test.ts",
+      "language": "typescript",
+      "sizeLines": 454,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/commanderAdapter.ts",
+      "language": "typescript",
+      "sizeLines": 229,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/commands/daemon.test.ts",
+      "language": "typescript",
+      "sizeLines": 266,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/commands/daemon.ts",
+      "language": "typescript",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/completion-fast.ts",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/completion-shared.ts",
+      "language": "typescript",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/completion.test.ts",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/completion.ts",
+      "language": "typescript",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/constants.ts",
+      "language": "typescript",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/convention-audit.test.ts",
+      "language": "typescript",
+      "sizeLines": 276,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/convention-audit.ts",
+      "language": "typescript",
+      "sizeLines": 614,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/daemon-utils.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/daemon.test.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/daemon.ts",
+      "language": "typescript",
+      "sizeLines": 542,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/discovery.ts",
+      "language": "typescript",
+      "sizeLines": 255,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/doctor.test.ts",
+      "language": "typescript",
+      "sizeLines": 312,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/doctor.ts",
+      "language": "typescript",
+      "sizeLines": 283,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/article-download.test.ts",
+      "language": "typescript",
+      "sizeLines": 300,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/article-download.ts",
+      "language": "typescript",
+      "sizeLines": 414,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/index.test.ts",
+      "language": "typescript",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/index.ts",
+      "language": "typescript",
+      "sizeLines": 421,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/media-download.test.ts",
+      "language": "typescript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/media-download.ts",
+      "language": "typescript",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/progress.test.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/download/progress.ts",
+      "language": "typescript",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/electron-apps.test.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/electron-apps.ts",
+      "language": "typescript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/engine.test.ts",
+      "language": "typescript",
+      "sizeLines": 338,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/errors.test.ts",
+      "language": "typescript",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/errors.ts",
+      "language": "typescript",
+      "sizeLines": 273,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/execution.test.ts",
+      "language": "typescript",
+      "sizeLines": 712,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/execution.ts",
+      "language": "typescript",
+      "sizeLines": 553,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/extension-manifest-regression.test.ts",
+      "language": "typescript",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/external-clis.yaml",
+      "language": "yaml",
+      "sizeLines": 109,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/external.test.ts",
+      "language": "typescript",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/external.ts",
+      "language": "typescript",
+      "sizeLines": 267,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/help.test.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/help.ts",
+      "language": "typescript",
+      "sizeLines": 647,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/hooks.test.ts",
+      "language": "typescript",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/hooks.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/interceptor.test.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/interceptor.ts",
+      "language": "typescript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/launcher.test.ts",
+      "language": "typescript",
+      "sizeLines": 181,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/launcher.ts",
+      "language": "typescript",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/logger.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/main.ts",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/manifest-types.ts",
+      "language": "typescript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/node-network.test.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/node-network.ts",
+      "language": "typescript",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/artifact.test.ts",
+      "language": "typescript",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/artifact.ts",
+      "language": "typescript",
+      "sizeLines": 298,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/events.ts",
+      "language": "typescript",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/index.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/manager.test.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/manager.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/redaction.test.ts",
+      "language": "typescript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/redaction.ts",
+      "language": "typescript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/retention.test.ts",
+      "language": "typescript",
+      "sizeLines": 137,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/retention.ts",
+      "language": "typescript",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/ring-buffer.test.ts",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/ring-buffer.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/observation/session.ts",
+      "language": "typescript",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/output.test.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/output.ts",
+      "language": "typescript",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/package-exports.test.ts",
+      "language": "typescript",
+      "sizeLines": 124,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/package-paths.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/executor.test.ts",
+      "language": "typescript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/executor.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/index.ts",
+      "language": "typescript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/registry.ts",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/browser.ts",
+      "language": "typescript",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/download.test.ts",
+      "language": "typescript",
+      "sizeLines": 137,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/download.ts",
+      "language": "typescript",
+      "sizeLines": 344,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/fetch.test.ts",
+      "language": "typescript",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/fetch.ts",
+      "language": "typescript",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/intercept.ts",
+      "language": "typescript",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/tap.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/steps/transform.ts",
+      "language": "typescript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/template.test.ts",
+      "language": "typescript",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/template.ts",
+      "language": "typescript",
+      "sizeLines": 330,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/pipeline/transform.test.ts",
+      "language": "typescript",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin-manifest.test.ts",
+      "language": "typescript",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin-manifest.ts",
+      "language": "typescript",
+      "sizeLines": 206,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin-scaffold.test.ts",
+      "language": "typescript",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin-scaffold.ts",
+      "language": "typescript",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin.test.ts",
+      "language": "typescript",
+      "sizeLines": 1457,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/plugin.ts",
+      "language": "typescript",
+      "sizeLines": 1574,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/recorder/highlevel/analyze.ts",
+      "language": "typescript",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/recorder/highlevel/init.ts",
+      "language": "typescript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/recorder/highlevel/verify.ts",
+      "language": "typescript",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/registry-api.ts",
+      "language": "typescript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/registry.test.ts",
+      "language": "typescript",
+      "sizeLines": 241,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/registry.ts",
+      "language": "typescript",
+      "sizeLines": 270,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/runtime-detect.test.ts",
+      "language": "typescript",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/runtime-detect.ts",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/runtime.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/scripts/framework.ts",
+      "language": "typescript",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/scripts/interact.ts",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/scripts/store.ts",
+      "language": "typescript",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/serialization.test.ts",
+      "language": "typescript",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/serialization.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/snapshotFormatter.test.ts",
+      "language": "typescript",
+      "sizeLines": 579,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/snapshotFormatter.ts",
+      "language": "typescript",
+      "sizeLines": 359,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/tui.test.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/tui.ts",
+      "language": "typescript",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/types.ts",
+      "language": "typescript",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/types/turndown-plugin-gfm.d.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/update-check.test.ts",
+      "language": "typescript",
+      "sizeLines": 137,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/update-check.ts",
+      "language": "typescript",
+      "sizeLines": 236,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/utils.test.ts",
+      "language": "typescript",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/utils.ts",
+      "language": "typescript",
+      "sizeLines": 218,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/validate.test.ts",
+      "language": "typescript",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/validate.ts",
+      "language": "typescript",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/verify.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/version.ts",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/weixin-download.test.ts",
+      "language": "typescript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "TESTING.md",
+      "language": "markdown",
+      "sizeLines": 252,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "tsconfig.json",
+      "language": "json",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "vitest.config.ts",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    }
+  ],
+  "totalFiles": 380,
+  "filteredByIgnore": 1654,
+  "estimatedComplexity": "large",
+  "stats": {
+    "filesScanned": 380,
+    "byCategory": {
+      "config": 27,
+      "docs": 76,
+      "infra": 7,
+      "code": 263,
+      "script": 4,
+      "markup": 3
+    },
+    "byLanguage": {
+      "yaml": 16,
+      "markdown": 73,
+      "unknown": 2,
+      "txt": 3,
+      "json": 18,
+      "typescript": 249,
+      "shell": 4,
+      "html": 3,
+      "javascript": 12
+    }
+  },
+  "importMap": {
+    ".github/actions/setup-chrome/action.yml": [],
+    ".github/ISSUE_TEMPLATE/bug_report.yml": [],
+    ".github/ISSUE_TEMPLATE/config.yml": [],
+    ".github/ISSUE_TEMPLATE/feature_request.yml": [],
+    ".github/ISSUE_TEMPLATE/new_site_adapter.yml": [],
+    ".github/pull_request_template.md": [],
+    ".github/workflows/build-extension.yml": [],
+    ".github/workflows/ci.yml": [],
+    ".github/workflows/doc-check.yml": [],
+    ".github/workflows/docs.yml": [],
+    ".github/workflows/e2e-headed.yml": [],
+    ".github/workflows/release.yml": [],
+    ".github/workflows/security.yml": [],
+    ".understand-anything/.understandignore": [],
+    "adapter-sequence.md": [],
+    "adapter-stage-1-startup.md": [],
+    "adapter-stage-2-execution.md": [],
+    "adapter-stage-3-pipeline.md": [],
+    "adapter-stage-4-browser-func.md": [],
+    "AGENT.md": [],
+    "autoresearch/baseline-browse.txt": [],
+    "autoresearch/baseline-skill.txt": [],
+    "autoresearch/browse-tasks.json": [],
+    "autoresearch/commands/debug.ts": [],
+    "autoresearch/commands/fix.ts": [],
+    "autoresearch/commands/plan.ts": [],
+    "autoresearch/commands/run.ts": [],
+    "autoresearch/config.ts": [],
+    "autoresearch/engine.ts": [],
+    "autoresearch/eval-all.ts": [],
+    "autoresearch/eval-browse.ts": [],
+    "autoresearch/eval-publish.ts": [],
+    "autoresearch/eval-save.ts": [],
+    "autoresearch/eval-skill.ts": [],
+    "autoresearch/eval-v2ex.ts": [],
+    "autoresearch/eval-zhihu.ts": [],
+    "autoresearch/logger.ts": [],
+    "autoresearch/presets/browser-reliability.ts": [],
+    "autoresearch/presets/combined-reliability.ts": [],
+    "autoresearch/presets/index.ts": [],
+    "autoresearch/presets/save-reliability.ts": [],
+    "autoresearch/presets/skill-quality.ts": [],
+    "autoresearch/presets/v2ex-reliability.ts": [],
+    "autoresearch/presets/zhihu-reliability.ts": [],
+    "autoresearch/publish-tasks.json": [],
+    "autoresearch/run-browse.sh": [],
+    "autoresearch/run-save.sh": [],
+    "autoresearch/run-skill.sh": [],
+    "autoresearch/save-adapters/xhs-explore-deep.ts": [],
+    "autoresearch/save-adapters/xhs-note-comments.ts": [],
+    "autoresearch/save-adapters/xhs-search-full.ts": [],
+    "autoresearch/save-adapters/zhihu-hot-detail.ts": [],
+    "autoresearch/save-adapters/zhihu-question-full.ts": [],
+    "autoresearch/save-adapters/zhihu-search-detail.ts": [],
+    "autoresearch/save-tasks.json": [],
+    "autoresearch/v2ex-tasks.json": [],
+    "autoresearch/zhihu-tasks.json": [],
+    "bycli-adapter-author-skill.md": [],
+    "bycli-autofix-skill.md": [],
+    "bycli-browser-vs-adapter.md": [],
+    "bycli-cli-strategy.md": [],
+    "cases/daily-rl-research-monitor.md": [],
+    "cases/find-paper-implementation.md": [],
+    "cases/README.md": [],
+    "cases/track-conference-papers.md": [],
+    "CLAUDE.md": [],
+    "cli-manifest.json": [],
+    "dashboard-be/IMPLEMENTATION_PLAN.md": [],
+    "dashboard-be/package.json": [],
+    "dashboard-be/src/config.ts": [],
+    "dashboard-be/src/security/bootstrap.ts": [],
+    "dashboard-be/src/security/gates.ts": [],
+    "dashboard-be/src/server.ts": [],
+    "dashboard-be/src/session/registry.ts": [],
+    "dashboard-be/src/session/stateMachine.ts": [],
+    "dashboard-be/src/static.ts": [],
+    "dashboard-be/src/transport/daemonBridge.ts": [],
+    "dashboard-be/src/transport/envelope.ts": [],
+    "dashboard-be/test/integration.test.ts": [],
+    "dashboard-be/test/m3-navigate.test.ts": [],
+    "dashboard-be/test/shell.test.ts": [],
+    "dashboard-be/tsconfig.json": [],
+    "dashboard-docs/architecture-relationship.md": [],
+    "dashboard-docs/README.md": [],
+    "dashboard-docs/system/adapter-recorder-system/00-tdd-governance.md": [],
+    "dashboard-docs/system/adapter-recorder-system/01-system-overview.md": [],
+    "dashboard-docs/system/adapter-recorder-system/02-architecture-boundaries.md": [],
+    "dashboard-docs/system/adapter-recorder-system/03-contracts-and-versioning.md": [],
+    "dashboard-docs/system/adapter-recorder-system/04-security-model.md": [],
+    "dashboard-docs/system/adapter-recorder-system/05-recorder-local-service.md": [],
+    "dashboard-docs/system/adapter-recorder-system/06-recorder-core-engine.md": [],
+    "dashboard-docs/system/adapter-recorder-system/07-high-level-services.md": [],
+    "dashboard-docs/system/adapter-recorder-system/08-runner-and-isolation.md": [],
+    "dashboard-docs/system/adapter-recorder-system/09-config-observability.md": [],
+    "dashboard-docs/system/adapter-recorder-system/10-fixtures-and-test-plan.md": [],
+    "dashboard-docs/system/adapter-recorder-system/11-roadmap-and-acceptance.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0001-ui-channel.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0002-request-interception.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0003-seedargs-boundary.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0004-high-level-module-first.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0005-responsible-use.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0006-dns-rebinding-ip-enforcement.md": [],
+    "dashboard-docs/system/adapter-recorder-system/adr/0007-daemon-high-level-hosting.md": [],
+    "dashboard-docs/system/adapter-recorder-system/README.md": [],
+    "dashboard-docs/system/adapter-recorder-system/schemas/adapter-recorder.bundle.json": [],
+    "dashboard-docs/system/adapter-recorder-system/schemas/daemon-high-level.openapi.yaml": [],
+    "dashboard-docs/system/adapter-recorder-system/schemas/high-level.openapi.yaml": [],
+    "dashboard-docs/system/adapter-recorder-system/schemas/recorder.openapi.yaml": [],
+    "dashboard-docs/TDD.md": [],
+    "designs/self-repair-protocol.md": [],
+    "execution-1-execute-command.md": [],
+    "execution-2-browser-session.md": [],
+    "execution-3-daemon-bridge.md": [],
+    "execution-4-extension-cdp.md": [],
+    "execution-5-trace-errors.md": [],
+    "execution-series.md": [],
+    "extension/manifest.json": [],
+    "extension/package.json": [],
+    "extension/popup.html": [],
+    "extension/popup.js": [],
+    "extension/README.md": [],
+    "extension/scripts/package-release.mjs": [],
+    "extension/src/background.test.ts": [],
+    "extension/src/background.ts": [
+      "extension/src/cdp.ts",
+      "extension/src/identity.ts",
+      "extension/src/protocol.ts",
+      "extension/src/url-policy.ts"
+    ],
+    "extension/src/cdp.test.ts": [],
+    "extension/src/cdp.ts": [],
+    "extension/src/identity.ts": [],
+    "extension/src/protocol.ts": [],
+    "extension/src/url-policy.test.ts": [],
+    "extension/src/url-policy.ts": [],
+    "extension/tsconfig.json": [],
+    "extension/vite.config.ts": [],
+    "NOTICE": [],
+    "outputs/code-review-adapter-recorder-system-20260623.md": [],
+    "outputs/code-review-adapter-recorder-system-20260623.zh.md": [],
+    "package.json": [],
+    "packages/recorder-core/package.json": [],
+    "packages/recorder-core/src/analyze.ts": [],
+    "packages/recorder-core/src/canonical.ts": [],
+    "packages/recorder-core/src/core.test.ts": [],
+    "packages/recorder-core/src/index.ts": [],
+    "packages/recorder-core/src/init.test.ts": [],
+    "packages/recorder-core/src/init.ts": [],
+    "packages/recorder-core/src/normalize.ts": [],
+    "packages/recorder-core/src/pairing.ts": [],
+    "packages/recorder-core/src/rank.ts": [],
+    "packages/recorder-core/src/score.ts": [],
+    "packages/recorder-core/src/types.ts": [],
+    "packages/recorder-core/src/verify.test.ts": [],
+    "packages/recorder-core/src/verify.ts": [],
+    "packages/recorder-core/tsconfig.json": [],
+    "PRIVACY.md": [],
+    "README.md": [],
+    "README.zh-CN.md": [],
+    "scripts/check-doc-coverage.sh": [],
+    "scripts/check-listing-id-pairing.mjs": [],
+    "scripts/check-silent-column-drop.mjs": [],
+    "scripts/check-typed-error-lint.mjs": [],
+    "scripts/clean-dist.cjs": [],
+    "scripts/copy-yaml.cjs": [],
+    "scripts/fetch-adapters.js": [],
+    "scripts/m1-daemon-navigate-drive.mjs": [],
+    "scripts/m1-extension-spike.mjs": [],
+    "scripts/m1-live-spike.mjs": [],
+    "scripts/postinstall.js": [],
+    "scripts/silent-column-drop-baseline.json": [],
+    "scripts/typed-error-lint-baseline.json": [],
+    "skills/bycli-adapter-author/references/adapter-template.md": [],
+    "skills/bycli-adapter-author/references/api-discovery.md": [],
+    "skills/bycli-adapter-author/references/coverage-matrix.md": [],
+    "skills/bycli-adapter-author/references/field-conventions.md": [],
+    "skills/bycli-adapter-author/references/field-decode-playbook.md": [],
+    "skills/bycli-adapter-author/references/jsdom-fixture-pattern.md": [],
+    "skills/bycli-adapter-author/references/output-design.md": [],
+    "skills/bycli-adapter-author/references/site-memory.md": [],
+    "skills/bycli-adapter-author/references/site-memory/bilibili.md": [],
+    "skills/bycli-adapter-author/references/site-memory/eastmoney.md": [],
+    "skills/bycli-adapter-author/references/site-memory/tonghuashun.md": [],
+    "skills/bycli-adapter-author/references/site-memory/xueqiu.md": [],
+    "skills/bycli-adapter-author/references/site-recon.md": [],
+    "skills/bycli-adapter-author/references/success-rate-pitfalls.md": [],
+    "skills/bycli-adapter-author/references/typed-errors.md": [],
+    "skills/bycli-adapter-author/SKILL.md": [],
+    "skills/bycli-autofix/SKILL.md": [],
+    "skills/bycli-browser/SKILL.md": [],
+    "skills/bycli-usage/SKILL.md": [],
+    "src/adapter-shadow.test.ts": [],
+    "src/adapter-shadow.ts": [],
+    "src/adapter-source.test.ts": [],
+    "src/adapter-source.ts": [],
+    "src/browser.test.ts": [],
+    "src/browser/__fixtures__/article-extract/deno-v2.html": [],
+    "src/browser/__fixtures__/article-extract/openai-cookbook-readme.txt": [],
+    "src/browser/__fixtures__/article-extract/wikipedia-markdown.html": [],
+    "src/browser/analyze.test.ts": [],
+    "src/browser/analyze.ts": [],
+    "src/browser/article-extract.e2e.test.ts": [],
+    "src/browser/article-extract.test.ts": [],
+    "src/browser/article-extract.ts": [],
+    "src/browser/ax-snapshot.test.ts": [],
+    "src/browser/ax-snapshot.ts": [],
+    "src/browser/base-page.test.ts": [],
+    "src/browser/base-page.ts": [],
+    "src/browser/bridge.ts": [],
+    "src/browser/cdp-click-fixture.test.ts": [],
+    "src/browser/cdp.test.ts": [],
+    "src/browser/cdp.ts": [],
+    "src/browser/compound.test.ts": [],
+    "src/browser/compound.ts": [],
+    "src/browser/daemon-client.test.ts": [],
+    "src/browser/daemon-client.ts": [],
+    "src/browser/daemon-lifecycle.ts": [],
+    "src/browser/daemon-version.ts": [],
+    "src/browser/dom-helpers.test.ts": [],
+    "src/browser/dom-helpers.ts": [],
+    "src/browser/dom-snapshot.test.ts": [],
+    "src/browser/dom-snapshot.ts": [],
+    "src/browser/errors.test.ts": [],
+    "src/browser/errors.ts": [],
+    "src/browser/extract.test.ts": [],
+    "src/browser/extract.ts": [],
+    "src/browser/find.test.ts": [],
+    "src/browser/find.ts": [],
+    "src/browser/html-tree.test.ts": [],
+    "src/browser/html-tree.ts": [],
+    "src/browser/index.ts": [],
+    "src/browser/navigation-guard.test.ts": [],
+    "src/browser/navigation-guard.ts": [],
+    "src/browser/network-cache.test.ts": [],
+    "src/browser/network-cache.ts": [],
+    "src/browser/network-key.test.ts": [],
+    "src/browser/network-key.ts": [],
+    "src/browser/page.test.ts": [],
+    "src/browser/page.ts": [],
+    "src/browser/profile.ts": [],
+    "src/browser/shape-filter.test.ts": [],
+    "src/browser/shape-filter.ts": [],
+    "src/browser/shape.test.ts": [],
+    "src/browser/shape.ts": [],
+    "src/browser/stealth.test.ts": [],
+    "src/browser/stealth.ts": [],
+    "src/browser/tabs.ts": [],
+    "src/browser/target-errors.test.ts": [],
+    "src/browser/target-errors.ts": [],
+    "src/browser/target-resolver.test.ts": [],
+    "src/browser/target-resolver.ts": [],
+    "src/browser/url-policy.test.ts": [],
+    "src/browser/url-policy.ts": [],
+    "src/browser/utils.test.ts": [],
+    "src/browser/utils.ts": [],
+    "src/browser/verify-fixture.test.ts": [],
+    "src/browser/verify-fixture.ts": [],
+    "src/browser/visual-refs.ts": [],
+    "src/build-manifest.test.ts": [],
+    "src/build-manifest.ts": [],
+    "src/capabilityRouting.test.ts": [],
+    "src/capabilityRouting.ts": [],
+    "src/cli-argv-preprocess.test.ts": [],
+    "src/cli-argv-preprocess.ts": [],
+    "src/cli.test.ts": [],
+    "src/cli.ts": [],
+    "src/commanderAdapter.test.ts": [],
+    "src/commanderAdapter.ts": [],
+    "src/commands/daemon.test.ts": [],
+    "src/commands/daemon.ts": [],
+    "src/completion-fast.ts": [],
+    "src/completion-shared.ts": [],
+    "src/completion.test.ts": [],
+    "src/completion.ts": [],
+    "src/constants.ts": [],
+    "src/convention-audit.test.ts": [],
+    "src/convention-audit.ts": [],
+    "src/daemon-utils.ts": [],
+    "src/daemon.test.ts": [],
+    "src/daemon.ts": [],
+    "src/discovery.ts": [],
+    "src/doctor.test.ts": [],
+    "src/doctor.ts": [],
+    "src/download/article-download.test.ts": [],
+    "src/download/article-download.ts": [],
+    "src/download/index.test.ts": [],
+    "src/download/index.ts": [],
+    "src/download/media-download.test.ts": [],
+    "src/download/media-download.ts": [],
+    "src/download/progress.test.ts": [],
+    "src/download/progress.ts": [],
+    "src/electron-apps.test.ts": [],
+    "src/electron-apps.ts": [],
+    "src/engine.test.ts": [],
+    "src/errors.test.ts": [],
+    "src/errors.ts": [],
+    "src/execution.test.ts": [],
+    "src/execution.ts": [],
+    "src/extension-manifest-regression.test.ts": [],
+    "src/external-clis.yaml": [],
+    "src/external.test.ts": [],
+    "src/external.ts": [],
+    "src/help.test.ts": [],
+    "src/help.ts": [],
+    "src/hooks.test.ts": [],
+    "src/hooks.ts": [],
+    "src/interceptor.test.ts": [],
+    "src/interceptor.ts": [],
+    "src/launcher.test.ts": [],
+    "src/launcher.ts": [],
+    "src/logger.ts": [],
+    "src/main.ts": [],
+    "src/manifest-types.ts": [],
+    "src/node-network.test.ts": [],
+    "src/node-network.ts": [],
+    "src/observation/artifact.test.ts": [],
+    "src/observation/artifact.ts": [],
+    "src/observation/events.ts": [],
+    "src/observation/index.ts": [],
+    "src/observation/manager.test.ts": [],
+    "src/observation/manager.ts": [],
+    "src/observation/redaction.test.ts": [],
+    "src/observation/redaction.ts": [],
+    "src/observation/retention.test.ts": [],
+    "src/observation/retention.ts": [],
+    "src/observation/ring-buffer.test.ts": [],
+    "src/observation/ring-buffer.ts": [],
+    "src/observation/session.ts": [],
+    "src/output.test.ts": [],
+    "src/output.ts": [],
+    "src/package-exports.test.ts": [],
+    "src/package-paths.ts": [],
+    "src/pipeline/executor.test.ts": [],
+    "src/pipeline/executor.ts": [],
+    "src/pipeline/index.ts": [],
+    "src/pipeline/registry.ts": [],
+    "src/pipeline/steps/browser.ts": [],
+    "src/pipeline/steps/download.test.ts": [],
+    "src/pipeline/steps/download.ts": [],
+    "src/pipeline/steps/fetch.test.ts": [],
+    "src/pipeline/steps/fetch.ts": [],
+    "src/pipeline/steps/intercept.ts": [],
+    "src/pipeline/steps/tap.ts": [],
+    "src/pipeline/steps/transform.ts": [],
+    "src/pipeline/template.test.ts": [],
+    "src/pipeline/template.ts": [],
+    "src/pipeline/transform.test.ts": [],
+    "src/plugin-manifest.test.ts": [],
+    "src/plugin-manifest.ts": [],
+    "src/plugin-scaffold.test.ts": [],
+    "src/plugin-scaffold.ts": [],
+    "src/plugin.test.ts": [],
+    "src/plugin.ts": [],
+    "src/recorder/highlevel/analyze.ts": [],
+    "src/recorder/highlevel/init.ts": [],
+    "src/recorder/highlevel/verify.ts": [],
+    "src/registry-api.ts": [],
+    "src/registry.test.ts": [],
+    "src/registry.ts": [],
+    "src/runtime-detect.test.ts": [],
+    "src/runtime-detect.ts": [],
+    "src/runtime.ts": [],
+    "src/scripts/framework.ts": [],
+    "src/scripts/interact.ts": [],
+    "src/scripts/store.ts": [],
+    "src/serialization.test.ts": [],
+    "src/serialization.ts": [],
+    "src/snapshotFormatter.test.ts": [],
+    "src/snapshotFormatter.ts": [],
+    "src/tui.test.ts": [],
+    "src/tui.ts": [],
+    "src/types.ts": [],
+    "src/types/turndown-plugin-gfm.d.ts": [],
+    "src/update-check.test.ts": [],
+    "src/update-check.ts": [],
+    "src/utils.test.ts": [],
+    "src/utils.ts": [],
+    "src/validate.test.ts": [],
+    "src/validate.ts": [],
+    "src/verify.ts": [],
+    "src/version.ts": [],
+    "src/weixin-download.test.ts": [],
+    "TESTING.md": [],
+    "tsconfig.json": [],
+    "vitest.config.ts": []
+  }
+}

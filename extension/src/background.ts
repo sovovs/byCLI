@@ -11,6 +11,7 @@ import type { Command, Result } from './protocol';
 import { DAEMON_HOST, DAEMON_PORT, DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
 import * as identity from './identity';
+import { checkUrlSyntax } from './url-policy';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -770,25 +771,31 @@ function initialTabIsAvailable(tabId: number | undefined): tabId is number {
   return true;
 }
 
-async function createOwnedTabLease(leaseKey: string, initialUrl?: string): Promise<ResolvedTab> {
-  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl));
+async function createOwnedTabLease(leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
+  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst));
 }
 
-async function createOwnedTabLeaseUnlocked(leaseKey: string, initialUrl?: string): Promise<ResolvedTab> {
-  const targetUrl = (initialUrl && isSafeNavigationUrl(initialUrl)) ? initialUrl : BLANK_PAGE;
+async function createOwnedTabLeaseUnlocked(leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
+  // blankFirst (M1 P0-1): handleNavigate sets this so a NEW owned tab is created at
+  // about:blank and an existing reusable tab is returned as-is (never pre-navigated
+  // to the target), so the guarded navigation in handleNavigate is the only path
+  // that loads the target. Non-navigate callers (e.g. tabs op:new) keep the original
+  // behaviour of opening directly at initialUrl.
+  const createUrl = blankFirst ? BLANK_PAGE : ((initialUrl && isSafeNavigationUrl(initialUrl)) ? initialUrl : BLANK_PAGE);
   const role = getOwnedWindowRole(leaseKey);
-  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, targetUrl, getWindowMode(leaseKey));
+  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? undefined : initialUrl, getWindowMode(leaseKey));
   let tab: chrome.tabs.Tab;
 
   if (initialTabIsAvailable(initialTabId)) {
     tab = await chrome.tabs.get(initialTabId);
-    if (!isTargetUrl(tab.url, targetUrl)) {
-      tab = await chrome.tabs.update(initialTabId, { url: targetUrl });
+    // blankFirst: reuse the existing tab as-is; handleNavigate will guard-navigate it.
+    if (!blankFirst && !isTargetUrl(tab.url, createUrl)) {
+      tab = await chrome.tabs.update(initialTabId, { url: createUrl });
       await new Promise(resolve => setTimeout(resolve, 300));
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    tab = await chrome.tabs.create({ windowId, url: targetUrl, active: true });
+    tab = await chrome.tabs.create({ windowId, url: createUrl, active: true });
   }
   if (!tab.id) throw new Error('Failed to create tab lease in automation container');
   await ensureOwnedContainerTabGroup(role, windowId, [tab.id]);
@@ -1129,7 +1136,7 @@ type ResolvedTab = { tabId: number; tab: chrome.tabs.Tab | null };
  * Resolve target tab for the session lease, returning both the tabId and
  * the Tab object (when available) so callers can skip a redundant chrome.tabs.get().
  */
-async function resolveTab(tabId: number | undefined, leaseKey: string, initialUrl?: string): Promise<ResolvedTab> {
+async function resolveTab(tabId: number | undefined, leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
   const existingSession = automationSessions.get(leaseKey);
   // Even when an explicit tabId is provided, validate it is still debuggable.
   if (tabId !== undefined) {
@@ -1202,12 +1209,12 @@ async function resolveTab(tabId: number | undefined, leaseKey: string, initialUr
           'Run "bycli browser bind" again, then retry the command.',
         );
       }
-      return createOwnedTabLease(leaseKey, initialUrl);
+      return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
     }
   }
 
   if (!existingSession || (existingSession.owned && existingSession.preferredTabId === null)) {
-    return createOwnedTabLease(leaseKey, initialUrl);
+    return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
   }
 
   // Get (or create) the dedicated automation container
@@ -1312,9 +1319,20 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
   if (!isSafeNavigationUrl(cmd.url)) {
     return { id: cmd.id, ok: false, error: 'Blocked URL scheme -- only http:// and https:// are allowed' };
   }
-  // Pass target URL so that first-time window creation can start on the right domain
+  // URL policy pre-check (syntax + literal-IP + forbidden ranges; no DNS in SW).
+  const pre = checkUrlSyntax(cmd.url);
+  if (!pre.ok) {
+    return {
+      id: cmd.id, ok: false,
+      errorCode: 'navigation_blocked_by_policy',
+      error: `Navigation blocked by URL policy: ${pre.detail}`,
+    };
+  }
+  // Pass target URL for tab selection/reuse + fast-path; the actual navigation
+  // below is guarded. New owned tabs are created blank-first (see
+  // createOwnedTabLeaseUnlocked) so no unguarded load races ahead of arming.
   const cmdTabId = await resolveCommandTabId(cmd);
-  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url);
+  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url, true);
   const tabId = resolved.tabId;
 
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
@@ -1338,6 +1356,23 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
     await executor.detach(tabId);
   }
 
+  // Arm Fetch before-send interception BEFORE navigating (M1 P0-1). Every main-frame
+  // request (initial + redirects) is re-checked against URL policy; forbidden targets
+  // are failRequest'd before send. Fail-closed: if interception cannot be armed we
+  // refuse to navigate rather than fall back to a bare (unguarded) navigation.
+  const aggressive = getSurfaceFromKey(leaseKey) === 'browser';
+  let guard;
+  try {
+    guard = await executor.armFetchGuard(tabId, (url) => checkUrlSyntax(url).ok, aggressive);
+  } catch (err) {
+    return {
+      id: cmd.id, ok: false,
+      errorCode: 'navigation_redirect_requires_interception',
+      error: `Cannot arm navigation request interception: ${err instanceof Error ? err.message : String(err)}`,
+      errorHint: 'Navigation is refused because redirects cannot be checked before send.',
+    };
+  }
+
   await chrome.tabs.update(tabId, { url: targetUrl });
 
   // Wait until navigation completes. Resolve when status is 'complete' AND either:
@@ -1347,6 +1382,7 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
   await new Promise<void>((resolve) => {
     let settled = false;
     let checkTimer: ReturnType<typeof setTimeout> | null = null;
+    let blockTimer: ReturnType<typeof setInterval> | null = null;
     let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
     const finish = () => {
@@ -1354,6 +1390,7 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
       settled = true;
       chrome.tabs.onUpdated.removeListener(listener);
       if (checkTimer) clearTimeout(checkTimer);
+      if (blockTimer) clearInterval(blockTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
       resolve();
     };
@@ -1380,6 +1417,15 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
       } catch { /* tab gone */ }
     }, 100);
 
+    // Short-circuit: if the Fetch guard blocked the main-frame request, the page
+    // load event will never fire — finish early instead of waiting out the timeout.
+    // The blocked verdict is read deterministically after the wait (not here).
+    blockTimer = setInterval(() => {
+      if ((guard?.blocked.length ?? 0) > 0) {
+        finish();
+      }
+    }, 100);
+
     // Timeout fallback with warning
     timeoutTimer = setTimeout(() => {
       timedOut = true;
@@ -1387,6 +1433,18 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
       finish();
     }, 15000);
   });
+
+  // Decide on the guard's blocked list directly (deterministic) — not on a flag set
+  // inside the wait loop, which races the tabs.onUpdated 'complete' listener (a
+  // blocked navigation can settle to an error page marked 'complete' first).
+  if ((guard?.blocked.length ?? 0) > 0) {
+    return {
+      id: cmd.id, ok: false,
+      errorCode: 'navigation_blocked_by_policy',
+      error: `Navigation blocked by URL policy on redirect: ${guard?.blocked.join(', ')}`,
+      errorHint: 'A redirected main-frame request resolved to a forbidden target and was blocked before send.',
+    };
+  }
 
   let tab = await chrome.tabs.get(tabId);
 
@@ -1404,7 +1462,19 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
     }
   }
 
-  return pageScopedResult(cmd.id, tabId, { title: tab.title, url: tab.url, timedOut });
+  return pageScopedResult(cmd.id, tabId, {
+    title: tab.title,
+    url: tab.url,
+    timedOut,
+    // M1: interception evidence for acceptance/observability. Extension capture form
+    // is ip-observed-only per ADR-0006 (no DNS in SW; rebinding not closed here).
+    interception: {
+      armed: true,
+      tier: 'ip-observed-only',
+      blocked: guard?.blocked ?? [],
+      observedIps: guard?.observedIps ?? [],
+    },
+  });
 }
 
 async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {

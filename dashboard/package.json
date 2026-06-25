@@ -1,0 +1,29 @@
+{
+  "name": "bycli-adapter-recorder-dashboard",
+  "version": "1.1.0",
+  "private": true,
+  "description": "byCLI Adapter Recorder — 方案文档 + 录制工作台 (Umi Max)",
+  "scripts": {
+    "dev": "max dev",
+    "build": "npm run check:contract && max build",
+    "check:contract": "node scripts/check-contract-drift.mjs",
+    "postinstall": "max setup",
+    "setup": "max setup",
+    "start": "npm run dev",
+    "test": "../node_modules/.bin/vitest run"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.2",
+    "@umijs/max": "^4.6.65",
+    "antd": "^5.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "reactflow": "^11.11.4",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}

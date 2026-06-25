@@ -1,0 +1,240 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "dashboard-docs/README.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 95,
+      "nonEmptyLines": 71,
+      "sections": [
+        {
+          "heading": "dashboard-docs · 结构提案(system 已迁入)",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "背景",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "关键前提(已与用户确认 + Codex 复审修正)",
+          "level": 2,
+          "line": 14
+        },
+        {
+          "heading": "目标目录结构",
+          "level": 2,
+          "line": 23
+        },
+        {
+          "heading": "三条铁律(否则三层会互相打架)",
+          "level": 2,
+          "line": 46
+        },
+        {
+          "heading": "铁律 1 · 契约单一来源 = 整个 system/schemas/",
+          "level": 3,
+          "line": 48
+        },
+        {
+          "heading": "铁律 2 · dashboard-be 是封装不是重造 + ownership 规则",
+          "level": 3,
+          "line": 57
+        },
+        {
+          "heading": "铁律 3 · 安全门禁不可选",
+          "level": 3,
+          "line": 65
+        },
+        {
+          "heading": "迁移方式(分步,不一次性执行)",
+          "level": 2,
+          "line": 69
+        },
+        {
+          "heading": "待复审确认的问题",
+          "level": 2,
+          "line": 77
+        },
+        {
+          "heading": "遗漏的阻塞性问题(Codex 复审发现,接真后端前必须解决)",
+          "level": 2,
+          "line": 86
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 11
+      }
+    },
+    {
+      "path": "dashboard-docs/TDD.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 114,
+      "nonEmptyLines": 102,
+      "sections": [
+        {
+          "heading": "软件系统开发核心关注维度（技术内建篇）",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. 核心铁三角（基线）",
+          "level": 2,
+          "line": 5
+        },
+        {
+          "heading": "2. SOLID 设计原则（架构基石）",
+          "level": 2,
+          "line": 16
+        },
+        {
+          "heading": "3. 代码质量与可测试性（Testability）",
+          "level": 2,
+          "line": 40
+        },
+        {
+          "heading": "4. 接口契约与版本管理（Contract Management）",
+          "level": 2,
+          "line": 50
+        },
+        {
+          "heading": "5. 异常处理与业务语义（Error Handling）",
+          "level": 2,
+          "line": 60
+        },
+        {
+          "heading": "6. 架构分层与依赖治理（Dependency Governance）",
+          "level": 2,
+          "line": 71
+        },
+        {
+          "heading": "7. 配置管理与特性开关（Configuration & Feature Flag）",
+          "level": 2,
+          "line": 81
+        },
+        {
+          "heading": "8. 数据一致性处理（Data Consistency）",
+          "level": 2,
+          "line": 90
+        },
+        {
+          "heading": "9. 日志追踪与开发调试性（Logging & Debug）",
+          "level": 2,
+          "line": 98
+        },
+        {
+          "heading": "10. 开发规范与团队协作（Standards）",
+          "level": 2,
+          "line": 106
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 11
+      }
+    },
+    {
+      "path": "dashboard-docs/architecture-relationship.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 170,
+      "nonEmptyLines": 136,
+      "sections": [
+        {
+          "heading": "dashboard 前端 / dashboard-be 后端 / byCLI 主仓 三者关系",
+          "level": 1,
+          "line": 16
+        },
+        {
+          "heading": "一句话",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "分层全景",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "三者职责与边界",
+          "level": 2,
+          "line": 74
+        },
+        {
+          "heading": "数据流(目标形态,接后端后)",
+          "level": 2,
+          "line": 82
+        },
+        {
+          "heading": "联调形态约束(踩坑留痕)",
+          "level": 2,
+          "line": 90
+        },
+        {
+          "heading": "transport 切换(前端唯一开关点)",
+          "level": 2,
+          "line": 96
+        },
+        {
+          "heading": "三条 ownership 铁律(否则三层互相打架)",
+          "level": 2,
+          "line": 102
+        },
+        {
+          "heading": "当前阻塞(接后端前)",
+          "level": 2,
+          "line": 108
+        },
+        {
+          "heading": "落地计划全景(整套系统:做了什么 / 为什么 / 接下来)",
+          "level": 1,
+          "line": 120
+        },
+        {
+          "heading": "总目标(为什么做这套系统)",
+          "level": 2,
+          "line": 125
+        },
+        {
+          "heading": "里程碑全景(M0–M10)",
+          "level": 2,
+          "line": 129
+        },
+        {
+          "heading": "已经做了什么(截至 2026-06-22)",
+          "level": 2,
+          "line": 145
+        },
+        {
+          "heading": "接下来做什么",
+          "level": 2,
+          "line": 153
+        },
+        {
+          "heading": "相关计划文档索引",
+          "level": 2,
+          "line": 165
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 15
+      }
+    }
+  ]
+}

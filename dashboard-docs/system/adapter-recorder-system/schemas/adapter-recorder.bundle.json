@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Adapter Recorder Unified Schema Bundle (version id: adapter-recorder.bundle.v1)",
+  "$defs": {
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "validation_failed",
+        "invalid_state",
+        "csrf_failed",
+        "auth_failed",
+        "auth_required",
+        "responsible_use_required",
+        "network_error",
+        "insufficient_samples",
+        "daemon_unavailable",
+        "extension_disconnected",
+        "profile_busy",
+        "queue_full",
+        "page_lost",
+        "navigation_url_forbidden",
+        "navigation_redirect_requires_interception",
+        "dns_resolution_failed",
+        "request_not_found",
+        "idempotency_conflict",
+        "temp_store_full",
+        "verify_timeout",
+        "analyze_timeout",
+        "adapter_runtime_error",
+        "runner_protocol_error",
+        "shape_mismatch",
+        "fixture_mismatch",
+        "output_truncated",
+        "feature_disabled",
+        "config_invalid"
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "title": "Adapter Recorder Error",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string" },
+        "hint": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true, "description": "Redacted diagnostic context only. Must contain exclusively fields permitted by the redaction allowlist (09 Redaction/Structured Logging) — never raw seed args, tokens, cookies, request/response bodies, full stdout/stderr or full trace paths. Enforced by redaction tests, not by JSON Schema alone." }
+      },
+      "additionalProperties": false
+    },
+    "SourceCompleteness": {
+      "type": "object",
+      "required": ["requestHeaders", "requestBody", "responseBody", "timing"],
+      "properties": {
+        "requestHeaders": { "enum": ["present", "missing"] },
+        "requestBody": { "enum": ["present", "missing", "truncated"] },
+        "responseBody": { "enum": ["present", "missing", "truncated"] },
+        "timing": { "enum": ["present", "missing"] }
+      },
+      "additionalProperties": false
+    },
+    "RecorderNetworkEntry": {
+      "type": "object",
+      "required": ["requestId", "method", "url", "sourceCompleteness"],
+      "properties": {
+        "requestId": { "type": "string" },
+        "page": { "type": "string" },
+        "method": { "type": "string" },
+        "url": { "type": "string" },
+        "host": { "type": "string" },
+        "pathname": { "type": "string" },
+        "queryParams": { "type": "object", "additionalProperties": true },
+        "requestHeadersShape": { "type": "object", "additionalProperties": true },
+        "authSignals": { "type": "object", "additionalProperties": true },
+        "requestBodyShape": {
+          "type": "object",
+          "properties": {
+            "type": { "enum": ["json", "form", "text", "empty"] },
+            "keys": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "integer" },
+            "mime": { "type": "string" },
+            "bodyShape": {
+              "type": "object",
+              "properties": {
+                "kind": { "enum": ["array", "object", "scalar", "html", "unknown"] },
+                "itemKeys": { "type": "array", "items": { "type": "string" } }
+              }
+            },
+            "shapeConfidence": { "type": "number" }
+          }
+        },
+        "timing": {
+          "type": "object",
+          "properties": {
+            "startedAt": { "type": "integer" },
+            "durationMs": { "type": "integer" }
+          }
+        },
+        "sourceCompleteness": { "$ref": "#/$defs/SourceCompleteness" }
+      },
+      "additionalProperties": true
+    },
+    "EvidenceSeedArg": {
+      "type": "object",
+      "required": ["placeholder", "type", "hmac", "length"],
+      "properties": {
+        "placeholder": { "type": "string" },
+        "type": { "type": "string" },
+        "hmac": { "type": "string" },
+        "length": { "type": "integer" },
+        "hmacScope": { "const": "recorder_session" },
+        "comparableAcrossRuns": { "const": false },
+        "usage": { "const": "display_only" }
+      },
+      "additionalProperties": false
+    },
+    "CaptureRawEntry": {
+      "description": "RAW network entry as the capture layer (extension/src/cdp.ts NetworkCaptureEntry) emits it over network-capture-read — the ACTUAL wire shape of CaptureSample.entries. Normalization to RecorderNetworkEntry (+ sourceCompleteness) happens inside rank (recorder-core/canonical.ts), NOT at the capture boundary. The scoring-critical field NAMES here ARE the producer↔consumer contract: recorder-core/canonical.ts CANONICAL_SCORING_RAW_FIELDS must stay a subset of these (pinned by a recorder-core contract test, so a capture-format rename fails loudly instead of silently degrading rank). page / requestId / timing are NOT per-entry here — canonical synthesizes requestId (net_<path> fallback), takes page from the Result envelope, and leaves timing 'missing' (unused downstream).",
+      "type": "object",
+      "required": ["url", "method"],
+      "properties": {
+        "kind": { "const": "cdp" },
+        "url": { "type": "string" },
+        "method": { "type": "string" },
+        "requestHeaders": { "type": "object", "additionalProperties": { "type": "string" } },
+        "requestBodyKind": { "type": "string" },
+        "requestBodyPreview": { "type": "string" },
+        "requestBodyFullSize": { "type": "integer" },
+        "requestBodyTruncated": { "type": "boolean" },
+        "responseStatus": { "type": "integer" },
+        "responseContentType": { "type": "string" },
+        "responseHeaders": { "type": "object", "additionalProperties": { "type": "string" } },
+        "responsePreview": { "type": "string" },
+        "responseBodyFullSize": { "type": "integer" },
+        "responseBodyTruncated": { "type": "boolean" },
+        "timestamp": { "type": "integer" }
+      }
+    },
+    "CaptureSample": {
+      "type": "object",
+      "required": ["sampleName", "entries"],
+      "properties": {
+        "sampleName": { "enum": ["A", "B"] },
+        "seedArgsEvidence": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/EvidenceSeedArg" }
+        },
+        "entries": {
+          "description": "Raw capture entries (CaptureRawEntry) as emitted by network-capture-read; rank normalizes them to RecorderNetworkEntry internally.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/CaptureRawEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ScoreExplanationItem": {
+      "type": "object",
+      "required": ["signal", "delta"],
+      "properties": {
+        "signal": { "type": "string" },
+        "delta": { "type": "integer" },
+        "detail": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "EndpointDescriptor": {
+      "type": "object",
+      "title": "Normalized endpoint candidate",
+      "description": "Stable machine contract for the endpoint produced by /recorder/rank Normalize (06) and consumed by /recorder/init. Replaces the former bare object so Core, UI and Init share one shape.",
+      "required": ["method", "urlTemplate", "host", "pathname"],
+      "properties": {
+        "method": { "type": "string" },
+        "urlTemplate": { "type": "string" },
+        "host": { "type": "string" },
+        "pathname": { "type": "string" },
+        "queryParams": { "type": "object", "additionalProperties": true },
+        "dynamicParams": { "type": "array", "items": { "type": "string" } },
+        "excludedParams": { "type": "array", "items": { "type": "string" } },
+        "requestBodyShape": {
+          "type": "object",
+          "properties": {
+            "type": { "enum": ["json", "form", "text", "empty"] },
+            "keys": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "authRequired": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ArgMapping": {
+      "type": "object",
+      "title": "Seed arg to endpoint parameter mapping",
+      "required": ["argName", "in", "paramName"],
+      "properties": {
+        "argName": { "type": "string" },
+        "in": { "enum": ["query", "body", "path", "header"] },
+        "paramName": { "type": "string" },
+        "valueType": { "type": "string" },
+        "evidenceId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ResponseShape": {
+      "type": "object",
+      "title": "Normalized response shape",
+      "properties": {
+        "kind": { "enum": ["array", "object", "scalar", "html", "unknown"] },
+        "itemKeys": { "type": "array", "items": { "type": "string" } },
+        "count": { "type": "integer" },
+        "shapeConfidence": { "type": "number" },
+        "echoesSeedArg": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ColumnDescriptor": {
+      "type": "object",
+      "title": "Adapter output column",
+      "required": ["name", "path"],
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "RankCandidate": {
+      "type": "object",
+      "required": ["id", "endpoint", "score", "confidence", "reviewRequired"],
+      "properties": {
+        "id": { "type": "string" },
+        "endpoint": { "$ref": "#/$defs/EndpointDescriptor" },
+        "score": { "type": "integer" },
+        "confidence": { "enum": ["high", "medium", "low", "rejected"] },
+        "reviewRequired": { "type": "boolean" },
+        "args": { "type": "array", "items": { "$ref": "#/$defs/ArgMapping" } },
+        "excludedParams": { "type": "array", "items": { "type": "string" } },
+        "responseShape": { "$ref": "#/$defs/ResponseShape" },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/ColumnDescriptor" } },
+        "scoreExplanation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ScoreExplanationItem" }
+        },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "evidenceIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "AnalyzeReport": {
+      "type": "object",
+      "required": ["pattern"],
+      "properties": {
+        "pattern": { "type": "object", "additionalProperties": true },
+        "anti_bot": { "type": "object", "additionalProperties": true },
+        "recommended_next_step": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "RecorderReport": {
+      "type": "object",
+      "required": ["adapterPath", "reportPath", "responsibleUseAcknowledgedAt", "releaseChannel", "localExperimentProfile", "configSnapshotVersion"],
+      "properties": {
+        "adapterPath": { "type": "string" },
+        "reportPath": { "type": "string" },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "responsibleUseAcknowledgedAt": { "type": "integer" },
+        "releaseChannel": { "enum": ["stable", "preview"] },
+        "localExperimentProfile": { "enum": ["off", "control", "candidate"] },
+        "configSnapshotVersion": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "RunnerStartedEvent": {
+      "type": "object",
+      "required": ["type", "requestId"],
+      "properties": {
+        "type": { "const": "started" },
+        "requestId": { "type": "string" },
+        "pid": { "type": "integer" },
+        "stage": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "RunnerProgressEvent": {
+      "type": "object",
+      "required": ["type", "requestId"],
+      "properties": {
+        "type": { "const": "progress" },
+        "requestId": { "type": "string" },
+        "stage": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "RunnerResultEvent": {
+      "type": "object",
+      "required": ["type", "requestId", "ok"],
+      "allOf": [
+        {
+          "if": { "properties": { "ok": { "const": true } } },
+          "then": { "required": ["data"], "properties": { "data": { "type": "object" } } }
+        },
+        {
+          "if": { "properties": { "ok": { "const": false } } },
+          "then": { "required": ["error"], "properties": { "error": { "type": "object" } } }
+        }
+      ],
+      "properties": {
+        "type": { "const": "result" },
+        "requestId": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "data": {
+          "type": ["object", "null"],
+          "properties": {
+            "stage": { "enum": ["fixture", "load", "execute", "validate"] },
+            "rows": { "type": "integer" },
+            "fieldCount": { "type": "integer" },
+            "fixture": {
+              "type": "object",
+              "properties": {
+                "status": { "enum": ["matched", "updated", "ignored"] }
+              }
+            },
+            "trace": {
+              "type": "object",
+              "properties": {
+                "policy": { "enum": ["off", "retain-on-failure", "always"] },
+                "retained": { "type": "boolean" },
+                "truncated": { "type": "boolean" },
+                "path": { "type": ["string", "null"] }
+              }
+            }
+          }
+        },
+        "error": {
+          "type": ["object", "null"],
+          "required": ["code"],
+          "properties": {
+            "code": { "$ref": "#/$defs/ErrorCode" },
+            "message": { "type": "string" },
+            "hint": { "type": "string" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RunnerEvent": {
+      "oneOf": [
+        { "$ref": "#/$defs/RunnerStartedEvent" },
+        { "$ref": "#/$defs/RunnerProgressEvent" },
+        { "$ref": "#/$defs/RunnerResultEvent" }
+      ]
+    },
+    "VerifySummary": {
+      "type": "object",
+      "description": "Summary-only verify result (07:138) carried by GET /recorder/requests/{id}.result for a verify request. NOT RunnerResultEvent: normalizeRunnerResult strips raw seed args, stdout/stderr and the trace path/bytes (keeps only trace.retained). Redaction (Codex M7c): rows expose only fieldCount (never key NAMES — a key could be a seed value); an execute-stage error keeps only a safe code + fixed message (message/hint/unsafe-code withheld). Mirrors packages/recorder-core VerifySummary.",
+      "required": ["ok"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "stage": { "type": "string" },
+        "rows": { "type": "integer" },
+        "fieldCount": { "type": "integer" },
+        "fixture": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": { "status": { "type": "string" } }
+        },
+        "trace": {
+          "type": "object",
+          "required": ["retained"],
+          "additionalProperties": false,
+          "properties": { "retained": { "type": "boolean" } }
+        },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "additionalProperties": false,
+          "properties": {
+            "code": { "$ref": "#/$defs/ErrorCode" },
+            "message": { "type": "string" },
+            "hint": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

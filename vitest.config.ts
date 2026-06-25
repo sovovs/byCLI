@@ -40,7 +40,7 @@ export default defineConfig({
             'tests/e2e/plugin-management.test.ts',
             'tests/e2e/browser-tabs.test.ts',
             'tests/e2e/article-download-pipeline.test.ts',
-            ...(includeAxChromeE2e ? ['tests/e2e/browser-ax-chrome.test.ts'] : []),
+            ...(includeAxChromeE2e ? ['tests/e2e/browser-ax-chrome.test.ts', 'tests/e2e/recorder-real-chrome.test.ts'] : []),
             // Extended browser tests (20+ sites) — opt-in only:
             //   BYCLI_E2E=1 npx vitest run
             ...(includeExtendedE2e ? ['tests/e2e/browser-public-extended.test.ts', 'tests/e2e/browser-auth.test.ts', 'tests/e2e/douban.test.ts'] : []),

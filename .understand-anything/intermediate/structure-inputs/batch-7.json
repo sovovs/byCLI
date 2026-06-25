@@ -1,0 +1,35 @@
+{
+  "projectRoot": "/Users/lijiahui/Desktop/OpenCLI",
+  "batchFiles": [
+    {
+      "path": "cases/README.md",
+      "language": "markdown",
+      "sizeLines": 9,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/daily-rl-research-monitor.md",
+      "language": "markdown",
+      "sizeLines": 56,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/find-paper-implementation.md",
+      "language": "markdown",
+      "sizeLines": 57,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "cases/track-conference-papers.md",
+      "language": "markdown",
+      "sizeLines": 75,
+      "fileCategory": "docs"
+    }
+  ],
+  "batchImportData": {
+    "cases/README.md": [],
+    "cases/daily-rl-research-monitor.md": [],
+    "cases/find-paper-implementation.md": [],
+    "cases/track-conference-papers.md": []
+  }
+}

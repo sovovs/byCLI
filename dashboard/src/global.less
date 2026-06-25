@@ -1,0 +1,26 @@
+// 全局样式 —— Fira 字体引入、等宽 .code class、prefers-reduced-motion 兜底。
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+// 等宽语义:trace / selector / JSON payload / URL / 命令
+.code,
+code,
+pre {
+  font-family: 'Fira Code', 'SFMono-Regular', Menlo, monospace;
+  font-variant-ligatures: none;
+}
+
+// 可访问性:尊重系统的减少动效偏好(MASTER.md 自检项)
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

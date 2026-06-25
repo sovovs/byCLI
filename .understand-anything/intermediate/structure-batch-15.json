@@ -1,0 +1,873 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 11,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "skills/bycli-adapter-author/references/adapter-template.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 471,
+      "nonEmptyLines": 365,
+      "sections": [
+        {
+          "heading": "Adapter Template",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "活例子：convertible.js",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "三段解剖",
+          "level": 2,
+          "line": 89
+        },
+        {
+          "heading": "1. Declaration — 标头",
+          "level": 3,
+          "line": 91
+        },
+        {
+          "heading": "2. Args & Columns",
+          "level": 3,
+          "line": 105
+        },
+        {
+          "heading": "3. func — 主体",
+          "level": 3,
+          "line": 123
+        },
+        {
+          "heading": "COOKIE adapter 骨架（需要登录态）",
+          "level": 2,
+          "line": 174
+        },
+        {
+          "heading": "JSON API 用 `page.fetchJson()`，不要手写 `page.evaluate(fetch(...))`",
+          "level": 3,
+          "line": 253
+        },
+        {
+          "heading": "页面内 DOM 逻辑用 `page.evaluate(fn, ...args)`",
+          "level": 3,
+          "line": 267
+        },
+        {
+          "heading": "HTML 不走 browser fetch",
+          "level": 3,
+          "line": 280
+        },
+        {
+          "heading": "Selector 稳定性 — 不要 select 用户可见文本",
+          "level": 3,
+          "line": 290
+        },
+        {
+          "heading": "Cookie 域的双查",
+          "level": 3,
+          "line": 332
+        },
+        {
+          "heading": "空态抛 `EmptyResultError`，**不**塞 sentinel 行",
+          "level": 3,
+          "line": 348
+        },
+        {
+          "heading": "同类型 adapter 对照",
+          "level": 2,
+          "line": 370
+        },
+        {
+          "heading": "Verify fixture（每个 adapter 配一份 `~/.bycli/sites/<site>/verify/<name>.json`）",
+          "level": 2,
+          "line": 386
+        },
+        {
+          "heading": "args 形态：object vs array",
+          "level": 3,
+          "line": 392
+        },
+        {
+          "heading": "种子 → 手改",
+          "level": 3,
+          "line": 425
+        },
+        {
+          "heading": "私人 adapter vs repo 贡献",
+          "level": 2,
+          "line": 459
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 18
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/api-discovery.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 286,
+      "nonEmptyLines": 191,
+      "sections": [
+        {
+          "heading": "API Discovery",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "§0 进入 §1 之前：先看两条红线",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "0.1 反爬厂商 → 决定 fetch 能不能从 Node 走",
+          "level": 3,
+          "line": 13
+        },
+        {
+          "heading": "0.2 跨 subdomain = CORS 默认关",
+          "level": 3,
+          "line": 26
+        },
+        {
+          "heading": "§1 network 精读（首选，Pattern A / D 命中率最高）",
+          "level": 2,
+          "line": 47
+        },
+        {
+          "heading": "拿候选",
+          "level": 3,
+          "line": 49
+        },
+        {
+          "heading": "按 shape 初筛",
+          "level": 3,
+          "line": 62
+        },
+        {
+          "heading": "按期望字段反查（`--filter`）",
+          "level": 3,
+          "line": 70
+        },
+        {
+          "heading": "拉完整 body",
+          "level": 3,
+          "line": 86
+        },
+        {
+          "heading": "关键 request headers",
+          "level": 3,
+          "line": 96
+        },
+        {
+          "heading": "触发懒加载接口",
+          "level": 3,
+          "line": 108
+        },
+        {
+          "heading": "§2 `__INITIAL_STATE__` / inline HTML（Pattern B）",
+          "level": 2,
+          "line": 126
+        },
+        {
+          "heading": "§3 JS bundle / script src 搜索（Pattern C，也是 A/D 的降级）",
+          "level": 2,
+          "line": 156
+        },
+        {
+          "heading": "扫 script src",
+          "level": 3,
+          "line": 158
+        },
+        {
+          "heading": "搜 bundle 里的 baseURL",
+          "level": 3,
+          "line": 169
+        },
+        {
+          "heading": "直接试候选 endpoint",
+          "level": 3,
+          "line": 177
+        },
+        {
+          "heading": "URL 后缀探测",
+          "level": 3,
+          "line": 187
+        },
+        {
+          "heading": "§4 Token / CSRF 来源排查（Pattern D）",
+          "level": 2,
+          "line": 201
+        },
+        {
+          "heading": "Cookie 里",
+          "level": 3,
+          "line": 205
+        },
+        {
+          "heading": "localStorage / sessionStorage 里",
+          "level": 3,
+          "line": 217
+        },
+        {
+          "heading": "Bundle 硬编码",
+          "level": 3,
+          "line": 225
+        },
+        {
+          "heading": "Store action 绕签名",
+          "level": 3,
+          "line": 233
+        },
+        {
+          "heading": "§5 installInterceptor（最后降级）",
+          "level": 2,
+          "line": 247
+        },
+        {
+          "heading": "诊断不出来怎么办",
+          "level": 2,
+          "line": 266
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 24
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/coverage-matrix.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 79,
+      "nonEmptyLines": 61,
+      "sections": [
+        {
+          "heading": "Coverage Matrix",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "支持（skill 里有对应的招）",
+          "level": 2,
+          "line": 12
+        },
+        {
+          "heading": "不支持（承认搞不定，skill 不教）",
+          "level": 2,
+          "line": 44
+        },
+        {
+          "heading": "决定用不用 skill 的快速自测",
+          "level": 2,
+          "line": 59
+        },
+        {
+          "heading": "本轮硬验证 / 当前证据",
+          "level": 2,
+          "line": 71
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 5
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-conventions.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 172,
+      "nonEmptyLines": 133,
+      "sections": [
+        {
+          "heading": "Field Conventions",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "eastmoney（东方财富）",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "通用行情字段（`push2` clist/ulist/stock）",
+          "level": 3,
+          "line": 11
+        },
+        {
+          "heading": "Convertible bond（可转债）专属",
+          "level": 3,
+          "line": 43
+        },
+        {
+          "heading": "K-line `push2his` stock/kline/get",
+          "level": 3,
+          "line": 58
+        },
+        {
+          "heading": "Market 前缀（secid 格式 `<market>.<code>`）",
+          "level": 3,
+          "line": 66
+        },
+        {
+          "heading": "fs 市场/板块过滤码",
+          "level": 3,
+          "line": 80
+        },
+        {
+          "heading": "datacenter-web 报表 `reportName`",
+          "level": 3,
+          "line": 98
+        },
+        {
+          "heading": "xueqiu（雪球）",
+          "level": 2,
+          "line": 107
+        },
+        {
+          "heading": "bilibili",
+          "level": 2,
+          "line": 131
+        },
+        {
+          "heading": "tonghuashun（同花顺）",
+          "level": 2,
+          "line": 153
+        },
+        {
+          "heading": "字段不在词典时",
+          "level": 2,
+          "line": 168
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 12
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/field-decode-playbook.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 181,
+      "nonEmptyLines": 121,
+      "sections": [
+        {
+          "heading": "Field Decode Playbook",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "决策树",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "§1 肉眼对网页（字符串/时间/URL 类）",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "§2 排序键对比法（数字类核心手段）",
+          "level": 2,
+          "line": 50
+        },
+        {
+          "heading": "流程",
+          "level": 3,
+          "line": 54
+        },
+        {
+          "heading": "实例：推 f237（可转债溢价率）",
+          "level": 3,
+          "line": 89
+        },
+        {
+          "heading": "§3 结构差分法（数组 / 嵌套对象类）",
+          "level": 2,
+          "line": 105
+        },
+        {
+          "heading": "流程",
+          "level": 3,
+          "line": 109
+        },
+        {
+          "heading": "§4 常量 / 精度位排查",
+          "level": 2,
+          "line": 136
+        },
+        {
+          "heading": "§5 写完要做的事",
+          "level": 2,
+          "line": 151
+        },
+        {
+          "heading": "§6 通用坑",
+          "level": 2,
+          "line": 161
+        },
+        {
+          "heading": "§7 真推不出来",
+          "level": 2,
+          "line": 173
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 12
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/jsdom-fixture-pattern.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 196,
+      "nonEmptyLines": 156,
+      "sections": [
+        {
+          "heading": "JSDOM-against-frozen-fixture pattern (for in-browser DOM extractors)",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "When this pattern applies",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "File layout",
+          "level": 2,
+          "line": 24
+        },
+        {
+          "heading": "Creating the HTML fixture",
+          "level": 2,
+          "line": 33
+        },
+        {
+          "heading": "Mandatory steps (in order)",
+          "level": 3,
+          "line": 39
+        },
+        {
+          "heading": "Anti-patterns to avoid",
+          "level": 3,
+          "line": 82
+        },
+        {
+          "heading": "Writing the JSDOM unit test",
+          "level": 2,
+          "line": 100
+        },
+        {
+          "heading": "Reverse-validation (mandatory before claiming the test catches the bug)",
+          "level": 2,
+          "line": 160
+        },
+        {
+          "heading": "See also",
+          "level": 2,
+          "line": 190
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/output-design.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 149,
+      "nonEmptyLines": 102,
+      "sections": [
+        {
+          "heading": "Output Design",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "核心约定",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "1. 命名",
+          "level": 3,
+          "line": 9
+        },
+        {
+          "heading": "2. 类型",
+          "level": 3,
+          "line": 26
+        },
+        {
+          "heading": "3. 顺序",
+          "level": 3,
+          "line": 43
+        },
+        {
+          "heading": "4. 必有列（按类型）",
+          "level": 3,
+          "line": 57
+        },
+        {
+          "heading": "5. 控量",
+          "level": 3,
+          "line": 66
+        },
+        {
+          "heading": "对齐邻居 adapter",
+          "level": 2,
+          "line": 75
+        },
+        {
+          "heading": "常见错误",
+          "level": 2,
+          "line": 87
+        },
+        {
+          "heading": "description 字段",
+          "level": 2,
+          "line": 100
+        },
+        {
+          "heading": "args 命名",
+          "level": 2,
+          "line": 117
+        },
+        {
+          "heading": "示例对比",
+          "level": 2,
+          "line": 133
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 12
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-memory.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 231,
+      "nonEmptyLines": 172,
+      "sections": [
+        {
+          "heading": "Site Memory",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "两层结构",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "Layer 1 — In-repo 种子（`references/site-memory/<site>.md`）",
+          "level": 2,
+          "line": 23
+        },
+        {
+          "heading": "Layer 2 — 本地工作目录（`~/.bycli/sites/<site>/`）",
+          "level": 2,
+          "line": 55
+        },
+        {
+          "heading": "`endpoints.json` 格式（schema 锁死）",
+          "level": 3,
+          "line": 75
+        },
+        {
+          "heading": "`field-map.json` 格式（schema 锁死）",
+          "level": 3,
+          "line": 103
+        },
+        {
+          "heading": "`verify/<cmd>.json` 格式（schema 锁死）",
+          "level": 3,
+          "line": 122
+        },
+        {
+          "heading": "什么时候手写 vs `--write-fixture` 自动生成",
+          "level": 3,
+          "line": 159
+        },
+        {
+          "heading": "`notes.md` 格式",
+          "level": 3,
+          "line": 171
+        },
+        {
+          "heading": "`fixtures/<cmd>-<YYYYMMDDHHMM>.json` 格式",
+          "level": 3,
+          "line": 183
+        },
+        {
+          "heading": "runbook 里的读/写时机",
+          "level": 2,
+          "line": 194
+        },
+        {
+          "heading": "不要写进 `~/.bycli/sites/` 的东西",
+          "level": 2,
+          "line": 217
+        },
+        {
+          "heading": "不要写进 **repo / adapter 目录** 的东西",
+          "level": 2,
+          "line": 223
+        },
+        {
+          "heading": "没有 site-memory 时",
+          "level": 2,
+          "line": 229
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 14
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/site-recon.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 129,
+      "nonEmptyLines": 85,
+      "sections": [
+        {
+          "heading": "Site Recon",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "一步诊断（推荐）",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "手动三步诊断（analyze 给不出明确结论时）",
+          "level": 2,
+          "line": 29
+        },
+        {
+          "heading": "Pattern A — SPA / JSON XHR",
+          "level": 2,
+          "line": 53
+        },
+        {
+          "heading": "Pattern B — SSR / inline data",
+          "level": 2,
+          "line": 66
+        },
+        {
+          "heading": "Pattern C — JSONP / `<script src>` 驱动",
+          "level": 2,
+          "line": 79
+        },
+        {
+          "heading": "Pattern D — Token / CSRF / Bearer",
+          "level": 2,
+          "line": 93
+        },
+        {
+          "heading": "Pattern E — 流式",
+          "level": 2,
+          "line": 106
+        },
+        {
+          "heading": "识别失败怎么办",
+          "level": 2,
+          "line": 119
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/success-rate-pitfalls.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 162,
+      "nonEmptyLines": 100,
+      "sections": [
+        {
+          "heading": "Success-Rate Pitfalls",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. fixture pattern 被放松以过 verify",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "2. 字段内容污染但 `notEmpty` / `columns` 都过",
+          "level": 2,
+          "line": 21
+        },
+        {
+          "heading": "3. 字段语义分歧（两个字段看起来都对）",
+          "level": 2,
+          "line": 34
+        },
+        {
+          "heading": "4. 字段单位混淆（数值量级错）",
+          "level": 2,
+          "line": 46
+        },
+        {
+          "heading": "5. JSON-in-attribute vs 渲染后 innerText",
+          "level": 2,
+          "line": 63
+        },
+        {
+          "heading": "6. cookie 域 / origin 不一致的隐式假设",
+          "level": 2,
+          "line": 76
+        },
+        {
+          "heading": "7. 等不够就抓导致空 DOM / 空 network",
+          "level": 2,
+          "line": 86
+        },
+        {
+          "heading": "8. adapter 里的 falsy `|| 0` 兜底静默",
+          "level": 2,
+          "line": 99
+        },
+        {
+          "heading": "9. 跨 session cookie 污染 / 登录态漂移",
+          "level": 2,
+          "line": 112
+        },
+        {
+          "heading": "10. adapter 默认 timeout 不统一",
+          "level": 2,
+          "line": 125
+        },
+        {
+          "heading": "11. `aria-label` / `placeholder` / `title` 是 locale-dependent 文本",
+          "level": 2,
+          "line": 138
+        },
+        {
+          "heading": "总结：静默失败的共同特征",
+          "level": 2,
+          "line": 156
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 13
+      }
+    },
+    {
+      "path": "skills/bycli-adapter-author/references/typed-errors.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 234,
+      "nonEmptyLines": 171,
+      "sections": [
+        {
+          "heading": "Typed Error Conventions",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "1. 5-classification 落点表",
+          "level": 2,
+          "line": 9
+        },
+        {
+          "heading": "2. Anti-pattern A：silent-clamp 不止 limit",
+          "level": 2,
+          "line": 25
+        },
+        {
+          "heading": "何时抽 site-level helper",
+          "level": 3,
+          "line": 69
+        },
+        {
+          "heading": "3. Anti-pattern B：sentinel row / scalar sentinel 吞 empty / unknown / failure",
+          "level": 2,
+          "line": 75
+        },
+        {
+          "heading": "4. Anti-pattern C：`return []` 当 silent fallback",
+          "level": 2,
+          "line": 167
+        },
+        {
+          "heading": "5. Anti-pattern D：generic `CliError('CODE')` 隐藏分类",
+          "level": 2,
+          "line": 183
+        },
+        {
+          "heading": "6. Verify fixture 怎么挡这三类",
+          "level": 2,
+          "line": 210
+        },
+        {
+          "heading": "7. 已经 grandfathered 的旧 adapter",
+          "level": 2,
+          "line": 221
+        },
+        {
+          "heading": "8. 自查清单（PR push 前）",
+          "level": 2,
+          "line": 227
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 10
+      }
+    }
+  ]
+}

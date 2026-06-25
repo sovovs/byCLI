@@ -16,6 +16,8 @@ import type { IBrowserFactory } from '../runtime.js';
 import { buildEvaluateExpression } from './utils.js';
 import { generateStealthJs } from './stealth.js';
 import { waitForDomStableJs } from './dom-helpers.js';
+import { armNavigationGuard, NavigationBlockedError, type NavigationGuard } from './navigation-guard.js';
+import { checkUrlPolicy, type DnsResolver } from './url-policy.js';
 import { isRecord, saveBase64ToFile } from '../utils.js';
 import { getAllElectronApps } from '../electron-apps.js';
 import { BasePage } from './base-page.js';
@@ -25,6 +27,32 @@ export interface CDPTarget {
   url?: string;
   title?: string;
   webSocketDebuggerUrl?: string;
+}
+
+/** Lazily-built DnsResolver backed by node:dns/promises (for guarded navigation). */
+let _dnsResolver: DnsResolver | undefined;
+function getDefaultDnsResolver(): DnsResolver {
+  if (_dnsResolver) return _dnsResolver;
+  // Imported lazily so the module stays usable in environments without node:dns.
+  const dns = require('node:dns').promises as typeof import('node:dns').promises;
+  _dnsResolver = {
+    resolve4: (h: string) => dns.resolve4(h),
+    resolve6: (h: string) => dns.resolve6(h),
+  };
+  return _dnsResolver;
+}
+
+/** Resolve once the guard records a blocked main-frame request (polled). */
+function waitForBlocked(guard: NavigationGuard, intervalMs = 100, timeoutMs = 30_000): Promise<void> {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      if (guard.blocked.length > 0 || Date.now() - start > timeoutMs) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, intervalMs);
+  });
 }
 
 interface RuntimeEvaluateResult {
@@ -206,18 +234,47 @@ class CDPPage extends BasePage {
     super();
   }
 
-  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number; allowBoundNavigation?: boolean }): Promise<void> {
+  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number; allowBoundNavigation?: boolean; guardNavigation?: boolean }): Promise<void> {
     if (!this._pageEnabled) {
       await this.bridge.send('Page.enable');
       this._pageEnabled = true;
     }
-    const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000).catch(() => {});
-    await this.bridge.send('Page.navigate', { url });
-    await loadPromise;
-    this._lastUrl = url;
-    if (options?.waitUntil !== 'none') {
-      const maxMs = options?.settleMs ?? 1000;
-      await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
+
+    // Opt-in guarded navigation (M1 P0-1, direct-CDP side). Only the recorder path
+    // sets guardNavigation; general automation (incl. localhost fixtures) is
+    // unchanged. Pre-checks the target (syntax + DNS) and arms Fetch before-send
+    // interception before Page.navigate, so redirects to forbidden targets are
+    // failRequest'd before send. ip-observed-only per ADR-0006.
+    let guard: NavigationGuard | undefined;
+    if (options?.guardNavigation) {
+      const resolver = getDefaultDnsResolver();
+      const pre = await checkUrlPolicy(url, resolver);
+      if (!pre.ok) {
+        throw new NavigationBlockedError(url, pre.reason, pre.detail);
+      }
+      guard = await armNavigationGuard(this.bridge, resolver, { observeIp: true });
+    }
+
+    try {
+      const loadPromise = this.bridge.waitForEvent('Page.loadEventFired', 30_000).catch(() => {});
+      await this.bridge.send('Page.navigate', { url });
+      if (guard) {
+        // A blocked main-frame request never fires loadEventFired — race the load
+        // against a short poll of the guard's blocked list so we don't wait 30s.
+        await Promise.race([loadPromise, waitForBlocked(guard)]);
+        if (guard.blocked.length > 0) {
+          throw new NavigationBlockedError(url, 'forbidden_ip', `redirect blocked: ${guard.blocked.map((b) => b.url).join(', ')}`);
+        }
+      } else {
+        await loadPromise;
+      }
+      this._lastUrl = url;
+      if (options?.waitUntil !== 'none') {
+        const maxMs = options?.settleMs ?? 1000;
+        await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
+      }
+    } finally {
+      if (guard) await guard.dispose();
     }
   }
 

@@ -1,0 +1,165 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "dashboard-be/IMPLEMENTATION_PLAN.md",
+      "language": "markdown",
+      "fileCategory": "docs",
+      "totalLines": 68,
+      "nonEmptyLines": 59,
+      "sections": [
+        {
+          "heading": "dashboard-be M2 Shell 实现计划",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "决策(已拍板)",
+          "level": 2,
+          "line": 3
+        },
+        {
+          "heading": "本次交付的 endpoint",
+          "level": 2,
+          "line": 7
+        },
+        {
+          "heading": "04 章安全门禁(全套,硬性义务)",
+          "level": 2,
+          "line": 17
+        },
+        {
+          "heading": "目录结构(be 私有:HTTP adapter + bootstrap + 门禁;无 domain 核心)",
+          "level": 2,
+          "line": 26
+        },
+        {
+          "heading": "契约对齐(不重定义)",
+          "level": 2,
+          "line": 48
+        },
+        {
+          "heading": "ownership 铁律遵守",
+          "level": 2,
+          "line": 53
+        },
+        {
+          "heading": "验证",
+          "level": 2,
+          "line": 57
+        },
+        {
+          "heading": "明确不做(本次)",
+          "level": 2,
+          "line": 62
+        },
+        {
+          "heading": "后续顺序",
+          "level": 2,
+          "line": 67
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 10
+      }
+    },
+    {
+      "path": "dashboard-be/package.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 23,
+      "nonEmptyLines": 23,
+      "sections": [
+        {
+          "heading": "name",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "version",
+          "level": 1,
+          "line": 3
+        },
+        {
+          "heading": "private",
+          "level": 1,
+          "line": 4
+        },
+        {
+          "heading": "type",
+          "level": 1,
+          "line": 5
+        },
+        {
+          "heading": "description",
+          "level": 1,
+          "line": 6
+        },
+        {
+          "heading": "main",
+          "level": 1,
+          "line": 7
+        },
+        {
+          "heading": "scripts",
+          "level": 1,
+          "line": 8
+        },
+        {
+          "heading": "dependencies",
+          "level": 1,
+          "line": 15
+        },
+        {
+          "heading": "devDependencies",
+          "level": 1,
+          "line": 18
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 9
+      }
+    },
+    {
+      "path": "dashboard-be/tsconfig.json",
+      "language": "json",
+      "fileCategory": "config",
+      "totalLines": 19,
+      "nonEmptyLines": 19,
+      "sections": [
+        {
+          "heading": "compilerOptions",
+          "level": 1,
+          "line": 2
+        },
+        {
+          "heading": "include",
+          "level": 1,
+          "line": 17
+        },
+        {
+          "heading": "exclude",
+          "level": 1,
+          "line": 18
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 3
+      }
+    }
+  ]
+}

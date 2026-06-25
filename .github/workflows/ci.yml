@@ -89,6 +89,37 @@ jobs:
       - name: Run unit tests (Node ${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
         run: npx vitest run --project unit --project extension --reporter=verbose --shard=${{ matrix.shard }}/2
 
+  # ── Recorder real-daemon e2e (Tier A) ──
+  # Closes the "be ↔ real daemon" integration gap: real frontend httpRecorderClient →
+  # real dashboard-be → real daemon subprocess (dist) → fake WS extension, exercising the
+  # full recorder chain (navigate/capture/rank, init real FS write, verify real runner
+  # subprocess). No Chrome needed, so it runs on every PR. ubuntu-only: the test reaps the
+  # daemon process group via process.kill(-pid), which is POSIX-only.
+  recorder-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # dashboard-be is an npm workspace (root "workspaces": ["packages/*","dashboard-be"]),
+      # so the root install already provisions its node_modules (incl. its pinned vitest 2.x).
+      - name: Install dependencies
+        run: npm ci
+
+      # dist is required: the daemon subprocess runs dist/src/daemon.js and the verify
+      # runner spawns node dist/src/main.js (no tsx) — see dashboard-be/test/recorder-real-daemon-e2e.test.ts.
+      - name: Build
+        run: npm run build
+
+      - name: Run recorder real-daemon e2e (Tier A)
+        working-directory: dashboard-be
+        run: npm run test:e2e
+    timeout-minutes: 10
+
   # ── Bun compatibility check ──
   bun-test:
     runs-on: ubuntu-latest

@@ -1,0 +1,5210 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "src/download/media-download.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 196,
+      "nonEmptyLines": 172,
+      "functions": [
+        {
+          "name": "downloadMedia",
+          "startLine": 74,
+          "endLine": 181,
+          "params": [
+            "items",
+            "options"
+          ]
+        },
+        {
+          "name": "resolveMediaFilename",
+          "startLine": 183,
+          "endLine": 191,
+          "params": [
+            "filename",
+            "prefix",
+            "index",
+            "ext"
+          ]
+        },
+        {
+          "name": "sanitizePathSegment",
+          "startLine": 193,
+          "endLine": 196,
+          "params": [
+            "value"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "downloadMedia",
+          "line": 74,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "downloadMedia",
+          "callee": "path.join",
+          "lineNumber": 94
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 95
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "checkYtdlp",
+          "lineNumber": 98
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "items.some",
+          "lineNumber": 102
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "getTempDir",
+          "lineNumber": 104
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 105
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "path.join",
+          "lineNumber": 106
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "Date.now",
+          "lineNumber": 106
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "exportCookiesToNetscape",
+          "lineNumber": 107
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "resolveMediaFilename",
+          "lineNumber": 118
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "path.join",
+          "lineNumber": 119
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "tracker.onFileStart",
+          "lineNumber": 121
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "ytdlpDownload",
+          "lineNumber": 128
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "progressBar.update",
+          "lineNumber": 132
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "httpDownload",
+          "lineNumber": 138
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "progressBar.update",
+          "lineNumber": 142
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "progressBar.complete",
+          "lineNumber": 148
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "formatBytes",
+          "lineNumber": 148
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "tracker.onFileComplete",
+          "lineNumber": 150
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "results.push",
+          "lineNumber": 152
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "formatBytes",
+          "lineNumber": 156
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "getErrorMessage",
+          "lineNumber": 159
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "progressBar.fail",
+          "lineNumber": 160
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "tracker.onFileComplete",
+          "lineNumber": 161
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "results.push",
+          "lineNumber": 163
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "tracker.finish",
+          "lineNumber": 172
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "fs.existsSync",
+          "lineNumber": 175
+        },
+        {
+          "caller": "downloadMedia",
+          "callee": "fs.unlinkSync",
+          "lineNumber": 176
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "sanitizePathSegment",
+          "lineNumber": 184
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "path.basename",
+          "lineNumber": 184
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "path.win32.basename",
+          "lineNumber": 184
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "path.basename",
+          "lineNumber": 188
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "path.win32.basename",
+          "lineNumber": 188
+        },
+        {
+          "caller": "resolveMediaFilename",
+          "callee": "sanitizePathSegment",
+          "lineNumber": 189
+        },
+        {
+          "caller": "sanitizePathSegment",
+          "callee": "sanitizeFilename",
+          "lineNumber": 194
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 1,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/download/progress.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 45,
+      "nonEmptyLines": 36,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/download/progress.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 134,
+      "nonEmptyLines": 118,
+      "functions": [
+        {
+          "name": "formatBytes",
+          "startLine": 15,
+          "endLine": 21,
+          "params": [
+            "bytes"
+          ]
+        },
+        {
+          "name": "formatDuration",
+          "startLine": 26,
+          "endLine": 38,
+          "params": [
+            "ms"
+          ]
+        },
+        {
+          "name": "createProgressBar",
+          "startLine": 43,
+          "endLine": 64,
+          "params": [
+            "filename",
+            "index",
+            "total"
+          ]
+        },
+        {
+          "name": "clampPercent",
+          "startLine": 66,
+          "endLine": 69,
+          "params": [
+            "percent"
+          ]
+        },
+        {
+          "name": "createBar",
+          "startLine": 74,
+          "endLine": 78,
+          "params": [
+            "percent",
+            "width"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "DownloadProgressTracker",
+          "startLine": 83,
+          "endLine": 134,
+          "methods": [
+            "constructor",
+            "onFileStart",
+            "onFileComplete",
+            "getSummary",
+            "finish"
+          ],
+          "properties": [
+            "completed",
+            "failed",
+            "skipped",
+            "total",
+            "startTime",
+            "verbose"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "formatBytes",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "formatDuration",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "createProgressBar",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "DownloadProgressTracker",
+          "line": 83,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "formatBytes",
+          "callee": "Number.isFinite",
+          "lineNumber": 16
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "Math.min",
+          "lineNumber": 19
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "Math.floor",
+          "lineNumber": 19
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "Math.log",
+          "lineNumber": 19
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "Math.log",
+          "lineNumber": 19
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "(bytes / Math.pow(k, i)).toFixed",
+          "lineNumber": 20
+        },
+        {
+          "caller": "formatBytes",
+          "callee": "Math.pow",
+          "lineNumber": 20
+        },
+        {
+          "caller": "formatDuration",
+          "callee": "Math.floor",
+          "lineNumber": 28
+        },
+        {
+          "caller": "formatDuration",
+          "callee": "Math.floor",
+          "lineNumber": 30
+        },
+        {
+          "caller": "formatDuration",
+          "callee": "Math.floor",
+          "lineNumber": 35
+        },
+        {
+          "caller": "createProgressBar",
+          "callee": "filename.slice",
+          "lineNumber": 45
+        },
+        {
+          "caller": "update",
+          "callee": "clampPercent",
+          "lineNumber": 49
+        },
+        {
+          "caller": "update",
+          "callee": "Math.round",
+          "lineNumber": 49
+        },
+        {
+          "caller": "update",
+          "callee": "createBar",
+          "lineNumber": 50
+        },
+        {
+          "caller": "update",
+          "callee": "formatBytes",
+          "lineNumber": 51
+        },
+        {
+          "caller": "update",
+          "callee": "process.stderr.write",
+          "lineNumber": 53
+        },
+        {
+          "caller": "complete",
+          "callee": "process.stderr.write",
+          "lineNumber": 58
+        },
+        {
+          "caller": "fail",
+          "callee": "process.stderr.write",
+          "lineNumber": 61
+        },
+        {
+          "caller": "clampPercent",
+          "callee": "Number.isFinite",
+          "lineNumber": 67
+        },
+        {
+          "caller": "clampPercent",
+          "callee": "Math.max",
+          "lineNumber": 68
+        },
+        {
+          "caller": "clampPercent",
+          "callee": "Math.min",
+          "lineNumber": 68
+        },
+        {
+          "caller": "createBar",
+          "callee": "Math.round",
+          "lineNumber": 75
+        },
+        {
+          "caller": "createBar",
+          "callee": "'█'.repeat",
+          "lineNumber": 77
+        },
+        {
+          "caller": "createBar",
+          "callee": "'░'.repeat",
+          "lineNumber": 77
+        },
+        {
+          "caller": "constructor",
+          "callee": "Date.now",
+          "lineNumber": 93
+        },
+        {
+          "caller": "onFileStart",
+          "callee": "createProgressBar",
+          "lineNumber": 99
+        },
+        {
+          "caller": "getSummary",
+          "callee": "formatDuration",
+          "lineNumber": 113
+        },
+        {
+          "caller": "getSummary",
+          "callee": "Date.now",
+          "lineNumber": 113
+        },
+        {
+          "caller": "getSummary",
+          "callee": "parts.push",
+          "lineNumber": 117
+        },
+        {
+          "caller": "getSummary",
+          "callee": "parts.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "getSummary",
+          "callee": "parts.push",
+          "lineNumber": 123
+        },
+        {
+          "caller": "getSummary",
+          "callee": "parts.join",
+          "lineNumber": 126
+        },
+        {
+          "caller": "finish",
+          "callee": "process.stderr.write",
+          "lineNumber": 131
+        },
+        {
+          "caller": "finish",
+          "callee": "this.getSummary",
+          "lineNumber": 131
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 5,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "src/electron-apps.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 58,
+      "nonEmptyLines": 49,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/electron-apps.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 96,
+      "nonEmptyLines": 84,
+      "functions": [
+        {
+          "name": "loadApps",
+          "startLine": 45,
+          "endLine": 57,
+          "params": [
+            "userApps"
+          ]
+        },
+        {
+          "name": "ensureLoaded",
+          "startLine": 61,
+          "endLine": 78,
+          "params": []
+        },
+        {
+          "name": "getElectronApp",
+          "startLine": 80,
+          "endLine": 82,
+          "params": [
+            "site"
+          ]
+        },
+        {
+          "name": "isElectronApp",
+          "startLine": 84,
+          "endLine": 86,
+          "params": [
+            "site"
+          ]
+        },
+        {
+          "name": "getAllElectronApps",
+          "startLine": 89,
+          "endLine": 91,
+          "params": []
+        },
+        {
+          "name": "_resetRegistry",
+          "startLine": 94,
+          "endLine": 96,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "builtinApps",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "loadApps",
+          "line": 45,
+          "isDefault": false
+        },
+        {
+          "name": "getElectronApp",
+          "line": 80,
+          "isDefault": false
+        },
+        {
+          "name": "isElectronApp",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "getAllElectronApps",
+          "line": 89,
+          "isDefault": false
+        },
+        {
+          "name": "_resetRegistry",
+          "line": 94,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "loadApps",
+          "callee": "Object.entries",
+          "lineNumber": 50
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "path.join",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "os.homedir",
+          "lineNumber": 66
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "fs.existsSync",
+          "lineNumber": 67
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "fs.readFileSync",
+          "lineNumber": 68
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "yaml.load",
+          "lineNumber": 69
+        },
+        {
+          "caller": "ensureLoaded",
+          "callee": "loadApps",
+          "lineNumber": 76
+        },
+        {
+          "caller": "getElectronApp",
+          "callee": "ensureLoaded",
+          "lineNumber": 81
+        },
+        {
+          "caller": "isElectronApp",
+          "callee": "ensureLoaded",
+          "lineNumber": 85
+        },
+        {
+          "caller": "getAllElectronApps",
+          "callee": "ensureLoaded",
+          "lineNumber": 90
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 6,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/engine.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 338,
+      "nonEmptyLines": 294,
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/errors.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 135,
+      "nonEmptyLines": 121,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/errors.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 273,
+      "nonEmptyLines": 245,
+      "functions": [
+        {
+          "name": "attachTraceReceipt",
+          "startLine": 61,
+          "endLine": 73,
+          "params": [
+            "err",
+            "receipt"
+          ]
+        },
+        {
+          "name": "getTraceReceipt",
+          "startLine": 75,
+          "endLine": 78,
+          "params": [
+            "err"
+          ]
+        },
+        {
+          "name": "adapterLoadError",
+          "startLine": 145,
+          "endLine": 147,
+          "params": [
+            "message",
+            "hint"
+          ]
+        },
+        {
+          "name": "selectorError",
+          "startLine": 149,
+          "endLine": 156,
+          "params": [
+            "selector",
+            "hint"
+          ]
+        },
+        {
+          "name": "getErrorMessage",
+          "startLine": 223,
+          "endLine": 225,
+          "params": [
+            "error"
+          ]
+        },
+        {
+          "name": "serializeCause",
+          "startLine": 228,
+          "endLine": 236,
+          "params": [
+            "cause",
+            "depth"
+          ]
+        },
+        {
+          "name": "toEnvelope",
+          "startLine": 239,
+          "endLine": 273,
+          "params": [
+            "err"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CliError",
+          "startLine": 42,
+          "endLine": 57,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "code",
+            "hint",
+            "exitCode"
+          ]
+        },
+        {
+          "name": "BrowserConnectError",
+          "startLine": 84,
+          "endLine": 90,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "kind"
+          ]
+        },
+        {
+          "name": "CommandExecutionError",
+          "startLine": 92,
+          "endLine": 96,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "ConfigError",
+          "startLine": 98,
+          "endLine": 102,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "AuthRequiredError",
+          "startLine": 104,
+          "endLine": 115,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "domain"
+          ]
+        },
+        {
+          "name": "TimeoutError",
+          "startLine": 117,
+          "endLine": 126,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "ArgumentError",
+          "startLine": 128,
+          "endLine": 132,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "EmptyResultError",
+          "startLine": 134,
+          "endLine": 143,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "PluginError",
+          "startLine": 158,
+          "endLine": 162,
+          "methods": [
+            "constructor"
+          ],
+          "properties": []
+        },
+        {
+          "name": "LoginWallError",
+          "startLine": 175,
+          "endLine": 196,
+          "methods": [
+            "constructor"
+          ],
+          "properties": [
+            "status",
+            "url",
+            "bodyPreview"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "EXIT_CODES",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "CliError",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "attachTraceReceipt",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "getTraceReceipt",
+          "line": 75,
+          "isDefault": false
+        },
+        {
+          "name": "BrowserConnectError",
+          "line": 84,
+          "isDefault": false
+        },
+        {
+          "name": "CommandExecutionError",
+          "line": 92,
+          "isDefault": false
+        },
+        {
+          "name": "ConfigError",
+          "line": 98,
+          "isDefault": false
+        },
+        {
+          "name": "AuthRequiredError",
+          "line": 104,
+          "isDefault": false
+        },
+        {
+          "name": "TimeoutError",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "ArgumentError",
+          "line": 128,
+          "isDefault": false
+        },
+        {
+          "name": "EmptyResultError",
+          "line": 134,
+          "isDefault": false
+        },
+        {
+          "name": "adapterLoadError",
+          "line": 145,
+          "isDefault": false
+        },
+        {
+          "name": "selectorError",
+          "line": 149,
+          "isDefault": false
+        },
+        {
+          "name": "PluginError",
+          "line": 158,
+          "isDefault": false
+        },
+        {
+          "name": "LoginWallError",
+          "line": 175,
+          "isDefault": false
+        },
+        {
+          "name": "getErrorMessage",
+          "line": 223,
+          "isDefault": false
+        },
+        {
+          "name": "toEnvelope",
+          "line": 239,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 51
+        },
+        {
+          "caller": "attachTraceReceipt",
+          "callee": "Object.defineProperty",
+          "lineNumber": 64
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 87
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 94
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 100
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 107
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 119
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 130
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 136
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 160
+        },
+        {
+          "caller": "constructor",
+          "callee": "super",
+          "lineNumber": 186
+        },
+        {
+          "caller": "getErrorMessage",
+          "callee": "String",
+          "lineNumber": 224
+        },
+        {
+          "caller": "serializeCause",
+          "callee": "parts.push",
+          "lineNumber": 232
+        },
+        {
+          "caller": "serializeCause",
+          "callee": "serializeCause",
+          "lineNumber": 232
+        },
+        {
+          "caller": "serializeCause",
+          "callee": "parts.join",
+          "lineNumber": 233
+        },
+        {
+          "caller": "serializeCause",
+          "callee": "String",
+          "lineNumber": 235
+        },
+        {
+          "caller": "toEnvelope",
+          "callee": "serializeCause",
+          "lineNumber": 240
+        },
+        {
+          "caller": "toEnvelope",
+          "callee": "getTraceReceipt",
+          "lineNumber": 241
+        },
+        {
+          "caller": "toEnvelope",
+          "callee": "getErrorMessage",
+          "lineNumber": 262
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 17,
+        "functionCount": 7,
+        "classCount": 10
+      }
+    },
+    {
+      "path": "src/execution.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 712,
+      "nonEmptyLines": 617,
+      "metrics": {
+        "importCount": 7,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/execution.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 553,
+      "nonEmptyLines": 516,
+      "functions": [
+        {
+          "name": "normalizeTraceMode",
+          "startLine": 47,
+          "endLine": 51,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "coerceAndValidateArgs",
+          "startLine": 53,
+          "endLine": 95,
+          "params": [
+            "cmdArgs",
+            "kwargs"
+          ]
+        },
+        {
+          "name": "runCommand",
+          "startLine": 97,
+          "endLine": 150,
+          "params": [
+            "cmd",
+            "page",
+            "kwargs",
+            "debug"
+          ]
+        },
+        {
+          "name": "runCommandFunc",
+          "startLine": 152,
+          "endLine": 158,
+          "params": [
+            "cmd",
+            "page",
+            "kwargs",
+            "debug"
+          ]
+        },
+        {
+          "name": "resolvePreNav",
+          "startLine": 160,
+          "endLine": 165,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "urlMatchesDomain",
+          "startLine": 167,
+          "endLine": 175,
+          "params": [
+            "url",
+            "domain"
+          ]
+        },
+        {
+          "name": "isDomainRootPreNav",
+          "startLine": 177,
+          "endLine": 187,
+          "params": [
+            "preNavUrl",
+            "domain"
+          ]
+        },
+        {
+          "name": "shouldRunPreNav",
+          "startLine": 189,
+          "endLine": 194,
+          "params": [
+            "cmd",
+            "page",
+            "siteSession",
+            "preNavUrl"
+          ]
+        },
+        {
+          "name": "executeCommand",
+          "startLine": 196,
+          "endLine": 399,
+          "params": [
+            "cmd",
+            "rawKwargs",
+            "debug",
+            "opts"
+          ]
+        },
+        {
+          "name": "collectObservationEvidence",
+          "startLine": 401,
+          "endLine": 446,
+          "params": [
+            "session",
+            "page"
+          ]
+        },
+        {
+          "name": "exportTraceArtifact",
+          "startLine": 448,
+          "endLine": 471,
+          "params": [
+            "session",
+            "status",
+            "error",
+            "onTraceExport"
+          ]
+        },
+        {
+          "name": "prepareCommandArgs",
+          "startLine": 473,
+          "endLine": 480,
+          "params": [
+            "cmd",
+            "rawKwargs"
+          ]
+        },
+        {
+          "name": "normalizeSiteSession",
+          "startLine": 490,
+          "endLine": 494,
+          "params": [
+            "raw"
+          ]
+        },
+        {
+          "name": "resolveSiteSession",
+          "startLine": 496,
+          "endLine": 498,
+          "params": [
+            "cmd",
+            "rawOption"
+          ]
+        },
+        {
+          "name": "resolveAdapterBrowserSession",
+          "startLine": 500,
+          "endLine": 503,
+          "params": [
+            "cmd",
+            "siteSession"
+          ]
+        },
+        {
+          "name": "normalizeBooleanOption",
+          "startLine": 505,
+          "endLine": 510,
+          "params": [
+            "name",
+            "raw"
+          ]
+        },
+        {
+          "name": "resolveKeepTab",
+          "startLine": 512,
+          "endLine": 515,
+          "params": [
+            "siteSession",
+            "rawOption"
+          ]
+        },
+        {
+          "name": "normalizeWindowMode",
+          "startLine": 517,
+          "endLine": 521,
+          "params": [
+            "name",
+            "raw"
+          ]
+        },
+        {
+          "name": "resolveBrowserWindowMode",
+          "startLine": 523,
+          "endLine": 527,
+          "params": [
+            "defaultMode",
+            "rawOption"
+          ]
+        },
+        {
+          "name": "readUserTimeoutSeconds",
+          "startLine": 542,
+          "endLine": 553,
+          "params": [
+            "cmd",
+            "kwargs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "coerceAndValidateArgs",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "executeCommand",
+          "line": 196,
+          "isDefault": false
+        },
+        {
+          "name": "prepareCommandArgs",
+          "line": 473,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "normalizeTraceMode",
+          "callee": "String",
+          "lineNumber": 50
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "Number",
+          "lineNumber": 68
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "Number.isNaN",
+          "lineNumber": 69
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "val.toLowerCase",
+          "lineNumber": 75
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "Boolean",
+          "lineNumber": 80
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "argDef.choices.map(String).includes",
+          "lineNumber": 86
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "argDef.choices.map",
+          "lineNumber": 86
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "String",
+          "lineNumber": 86
+        },
+        {
+          "caller": "coerceAndValidateArgs",
+          "callee": "argDef.choices.join",
+          "lineNumber": 87
+        },
+        {
+          "caller": "runCommand",
+          "callee": "modulePath.startsWith",
+          "lineNumber": 107
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.has",
+          "lineNumber": 108
+        },
+        {
+          "caller": "runCommand",
+          "callee": "fs.statSync",
+          "lineNumber": 110
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_moduleMtimes.get",
+          "lineNumber": 111
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.delete",
+          "lineNumber": 113
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_moduleMtimes.delete",
+          "lineNumber": 114
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.has",
+          "lineNumber": 118
+        },
+        {
+          "caller": "runCommand",
+          "callee": "pathToFileURL",
+          "lineNumber": 119
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_moduleMtimes.has",
+          "lineNumber": 120
+        },
+        {
+          "caller": "runCommand",
+          "callee": "Date.now",
+          "lineNumber": 120
+        },
+        {
+          "caller": "runCommand",
+          "callee": "import(importUrl).then",
+          "lineNumber": 121
+        },
+        {
+          "caller": "runCommand",
+          "callee": "import",
+          "lineNumber": 121
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_moduleMtimes.set",
+          "lineNumber": 123
+        },
+        {
+          "caller": "runCommand",
+          "callee": "fs.statSync",
+          "lineNumber": 123
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.delete",
+          "lineNumber": 126
+        },
+        {
+          "caller": "runCommand",
+          "callee": "adapterLoadError",
+          "lineNumber": 127
+        },
+        {
+          "caller": "runCommand",
+          "callee": "getErrorMessage",
+          "lineNumber": 128
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.set",
+          "lineNumber": 133
+        },
+        {
+          "caller": "runCommand",
+          "callee": "_loadedModules.get",
+          "lineNumber": 135
+        },
+        {
+          "caller": "runCommand",
+          "callee": "getRegistry().get",
+          "lineNumber": 137
+        },
+        {
+          "caller": "runCommand",
+          "callee": "getRegistry",
+          "lineNumber": 137
+        },
+        {
+          "caller": "runCommand",
+          "callee": "fullName",
+          "lineNumber": 137
+        },
+        {
+          "caller": "runCommand",
+          "callee": "runCommandFunc",
+          "lineNumber": 139
+        },
+        {
+          "caller": "runCommand",
+          "callee": "executePipeline",
+          "lineNumber": 141
+        },
+        {
+          "caller": "runCommand",
+          "callee": "runCommandFunc",
+          "lineNumber": 144
+        },
+        {
+          "caller": "runCommand",
+          "callee": "executePipeline",
+          "lineNumber": 145
+        },
+        {
+          "caller": "runCommand",
+          "callee": "fullName",
+          "lineNumber": 147
+        },
+        {
+          "caller": "runCommandFunc",
+          "callee": "cmd.func!",
+          "lineNumber": 153
+        },
+        {
+          "caller": "runCommandFunc",
+          "callee": "fullName",
+          "lineNumber": 155
+        },
+        {
+          "caller": "runCommandFunc",
+          "callee": "(cmd as BrowserCliCommand).func!",
+          "lineNumber": 157
+        },
+        {
+          "caller": "urlMatchesDomain",
+          "callee": "hostname.endsWith",
+          "lineNumber": 171
+        },
+        {
+          "caller": "isDomainRootPreNav",
+          "callee": "parsed.hostname.endsWith",
+          "lineNumber": 181
+        },
+        {
+          "caller": "shouldRunPreNav",
+          "callee": "isDomainRootPreNav",
+          "lineNumber": 191
+        },
+        {
+          "caller": "shouldRunPreNav",
+          "callee": "page.getCurrentUrl?.().catch",
+          "lineNumber": 192
+        },
+        {
+          "caller": "shouldRunPreNav",
+          "callee": "page.getCurrentUrl",
+          "lineNumber": 192
+        },
+        {
+          "caller": "shouldRunPreNav",
+          "callee": "urlMatchesDomain",
+          "lineNumber": 193
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "prepareCommandArgs",
+          "lineNumber": 212
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "getErrorMessage",
+          "lineNumber": 215
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "readUserTimeoutSeconds",
+          "lineNumber": 218
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "normalizeTraceMode",
+          "lineNumber": 219
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "fullName",
+          "lineNumber": 222
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "Date.now",
+          "lineNumber": 224
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "emitHook",
+          "lineNumber": 226
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "shouldUseBrowserSession",
+          "lineNumber": 230
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "isElectronApp",
+          "lineNumber": 231
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "Number",
+          "lineNumber": 238
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "probeCDP",
+          "lineNumber": 239
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveElectronEndpoint",
+          "lineNumber": 247
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "getBrowserFactory",
+          "lineNumber": 251
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveProfileContextId",
+          "lineNumber": 252
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveSiteSession",
+          "lineNumber": 254
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveAdapterBrowserSession",
+          "lineNumber": 255
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveKeepTab",
+          "lineNumber": 256
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveBrowserWindowMode",
+          "lineNumber": 257
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "browserSession",
+          "lineNumber": 258
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.getActivePage",
+          "lineNumber": 265
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "fullName",
+          "lineNumber": 267
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolveAdapterSourcePath",
+          "lineNumber": 268
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation.record",
+          "lineNumber": 272
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.startNetworkCapture?.().catch",
+          "lineNumber": 278
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.startNetworkCapture",
+          "lineNumber": 278
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "resolvePreNav",
+          "lineNumber": 280
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "shouldRunPreNav",
+          "lineNumber": 281
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation?.record",
+          "lineNumber": 282
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.goto",
+          "lineNumber": 294
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation?.record",
+          "lineNumber": 295
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation?.record",
+          "lineNumber": 302
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "String",
+          "lineNumber": 306
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation.record",
+          "lineNumber": 313
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence(observation, page).catch",
+          "lineNumber": 320
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence",
+          "lineNumber": 320
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "exportTraceArtifact",
+          "lineNumber": 321
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "runWithTimeout",
+          "lineNumber": 330
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "runCommand",
+          "lineNumber": 330
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "fullName",
+          "lineNumber": 332
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation?.record",
+          "lineNumber": 334
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence(observation, page).catch",
+          "lineNumber": 340
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence",
+          "lineNumber": 340
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "exportTraceArtifact",
+          "lineNumber": 341
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.closeWindow?.().catch",
+          "lineNumber": 346
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.closeWindow",
+          "lineNumber": 346
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation.record",
+          "lineNumber": 350
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "String",
+          "lineNumber": 354
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "observation.record",
+          "lineNumber": 356
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "String",
+          "lineNumber": 358
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence(observation, page).catch",
+          "lineNumber": 362
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "collectObservationEvidence",
+          "lineNumber": 362
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "exportTraceArtifact",
+          "lineNumber": 363
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.closeWindow?.().catch",
+          "lineNumber": 369
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "page.closeWindow",
+          "lineNumber": 369
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "runWithTimeout",
+          "lineNumber": 380
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "runCommand",
+          "lineNumber": 380
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "fullName",
+          "lineNumber": 382
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "runCommand",
+          "lineNumber": 386
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "Date.now",
+          "lineNumber": 391
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "emitHook",
+          "lineNumber": 392
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "Date.now",
+          "lineNumber": 396
+        },
+        {
+          "caller": "executeCommand",
+          "callee": "emitHook",
+          "lineNumber": 397
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.getActivePage",
+          "lineNumber": 402
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "Promise.all",
+          "lineNumber": 403
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.getCurrentUrl?.().catch",
+          "lineNumber": 404
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.getCurrentUrl",
+          "lineNumber": 404
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "Promise.resolve",
+          "lineNumber": 404
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.snapshot().catch",
+          "lineNumber": 405
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.snapshot",
+          "lineNumber": 405
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.readNetworkCapture?.().catch",
+          "lineNumber": 406
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.readNetworkCapture",
+          "lineNumber": 406
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "Promise.resolve",
+          "lineNumber": 406
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.consoleMessages('all').catch",
+          "lineNumber": 407
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.consoleMessages",
+          "lineNumber": 407
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.screenshot({ format: 'png' }).catch",
+          "lineNumber": 408
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "page.screenshot",
+          "lineNumber": 408
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "session.record",
+          "lineNumber": 412
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "Array.isArray",
+          "lineNumber": 414
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "session.record",
+          "lineNumber": 416
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "String",
+          "lineNumber": 418
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "Array.isArray",
+          "lineNumber": 430
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "session.record",
+          "lineNumber": 433
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "String",
+          "lineNumber": 435
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "String",
+          "lineNumber": 436
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "session.record",
+          "lineNumber": 440
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "String",
+          "lineNumber": 440
+        },
+        {
+          "caller": "collectObservationEvidence",
+          "callee": "session.record",
+          "lineNumber": 444
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "exportObservationSession",
+          "lineNumber": 455
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "attachTraceReceipt",
+          "lineNumber": 457
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "process.stderr.write",
+          "lineNumber": 459
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "onTraceExport",
+          "lineNumber": 462
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "log.warn",
+          "lineNumber": 464
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "String",
+          "lineNumber": 464
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "log.warn",
+          "lineNumber": 468
+        },
+        {
+          "caller": "exportTraceArtifact",
+          "callee": "String",
+          "lineNumber": 468
+        },
+        {
+          "caller": "prepareCommandArgs",
+          "callee": "coerceAndValidateArgs",
+          "lineNumber": 477
+        },
+        {
+          "caller": "prepareCommandArgs",
+          "callee": "cmd.validateArgs",
+          "lineNumber": 478
+        },
+        {
+          "caller": "normalizeSiteSession",
+          "callee": "String",
+          "lineNumber": 493
+        },
+        {
+          "caller": "resolveSiteSession",
+          "callee": "normalizeSiteSession",
+          "lineNumber": 497
+        },
+        {
+          "caller": "resolveAdapterBrowserSession",
+          "callee": "crypto.randomUUID",
+          "lineNumber": 502
+        },
+        {
+          "caller": "normalizeBooleanOption",
+          "callee": "String",
+          "lineNumber": 509
+        },
+        {
+          "caller": "resolveKeepTab",
+          "callee": "normalizeBooleanOption",
+          "lineNumber": 514
+        },
+        {
+          "caller": "normalizeWindowMode",
+          "callee": "String",
+          "lineNumber": 520
+        },
+        {
+          "caller": "resolveBrowserWindowMode",
+          "callee": "normalizeWindowMode",
+          "lineNumber": 524
+        },
+        {
+          "caller": "resolveBrowserWindowMode",
+          "callee": "normalizeWindowMode",
+          "lineNumber": 525
+        },
+        {
+          "caller": "readUserTimeoutSeconds",
+          "callee": "cmd.args.some",
+          "lineNumber": 543
+        },
+        {
+          "caller": "readUserTimeoutSeconds",
+          "callee": "String",
+          "lineNumber": 546
+        },
+        {
+          "caller": "readUserTimeoutSeconds",
+          "callee": "Number",
+          "lineNumber": 548
+        },
+        {
+          "caller": "readUserTimeoutSeconds",
+          "callee": "Number.isInteger",
+          "lineNumber": 549
+        },
+        {
+          "caller": "readUserTimeoutSeconds",
+          "callee": "String",
+          "lineNumber": 550
+        }
+      ],
+      "metrics": {
+        "importCount": 13,
+        "exportCount": 3,
+        "functionCount": 20,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/extension-manifest-regression.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 17,
+      "nonEmptyLines": 15,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/external-clis.yaml",
+      "language": "yaml",
+      "fileCategory": "config",
+      "totalLines": 109,
+      "nonEmptyLines": 97,
+      "sections": [
+        {
+          "heading": "gh",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "obsidian",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "ntn",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "docker",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "lark-cli",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "longbridge",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "dws",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "wecom-cli",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "vercel",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "tg",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "discord",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "wx",
+          "level": 1,
+          "line": 1
+        },
+        {
+          "heading": "wrangler",
+          "level": 1,
+          "line": 1
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0,
+        "sectionCount": 13
+      }
+    },
+    {
+      "path": "src/external.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 188,
+      "nonEmptyLines": 163,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/external.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 267,
+      "nonEmptyLines": 232,
+      "functions": [
+        {
+          "name": "getUserRegistryPath",
+          "startLine": 36,
+          "endLine": 39,
+          "params": []
+        },
+        {
+          "name": "loadExternalClis",
+          "startLine": 43,
+          "endLine": 75,
+          "params": []
+        },
+        {
+          "name": "isBinaryInstalled",
+          "startLine": 77,
+          "endLine": 85,
+          "params": [
+            "binary"
+          ]
+        },
+        {
+          "name": "getInstallCmd",
+          "startLine": 87,
+          "endLine": 95,
+          "params": [
+            "installConfig"
+          ]
+        },
+        {
+          "name": "formatExternalCliLabel",
+          "startLine": 97,
+          "endLine": 99,
+          "params": [
+            "cli"
+          ]
+        },
+        {
+          "name": "parseCommand",
+          "startLine": 112,
+          "endLine": 135,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "shouldRetryWithCmdShim",
+          "startLine": 137,
+          "endLine": 140,
+          "params": [
+            "binary",
+            "err"
+          ]
+        },
+        {
+          "name": "runInstallCommand",
+          "startLine": 142,
+          "endLine": 154,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "installExternalCli",
+          "startLine": 156,
+          "endLine": 180,
+          "params": [
+            "cli"
+          ]
+        },
+        {
+          "name": "executeExternalCli",
+          "startLine": 182,
+          "endLine": 220,
+          "params": [
+            "name",
+            "args",
+            "preloaded"
+          ]
+        },
+        {
+          "name": "registerExternalCli",
+          "startLine": 228,
+          "endLine": 267,
+          "params": [
+            "name",
+            "opts"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "loadExternalClis",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "isBinaryInstalled",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "getInstallCmd",
+          "line": 87,
+          "isDefault": false
+        },
+        {
+          "name": "formatExternalCliLabel",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "parseCommand",
+          "line": 112,
+          "isDefault": false
+        },
+        {
+          "name": "installExternalCli",
+          "line": 156,
+          "isDefault": false
+        },
+        {
+          "name": "executeExternalCli",
+          "line": 182,
+          "isDefault": false
+        },
+        {
+          "name": "registerExternalCli",
+          "line": 228,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getUserRegistryPath",
+          "callee": "os.homedir",
+          "lineNumber": 37
+        },
+        {
+          "caller": "getUserRegistryPath",
+          "callee": "path.join",
+          "lineNumber": 38
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "path.resolve",
+          "lineNumber": 48
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "fs.existsSync",
+          "lineNumber": 50
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "fs.readFileSync",
+          "lineNumber": 51
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "yaml.load",
+          "lineNumber": 52
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "configs.set",
+          "lineNumber": 53
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "log.warn",
+          "lineNumber": 56
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "getErrorMessage",
+          "lineNumber": 56
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "getUserRegistryPath",
+          "lineNumber": 60
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "fs.existsSync",
+          "lineNumber": 62
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "fs.readFileSync",
+          "lineNumber": 63
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "yaml.load",
+          "lineNumber": 64
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "configs.set",
+          "lineNumber": 66
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "log.warn",
+          "lineNumber": 70
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "getErrorMessage",
+          "lineNumber": 70
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "Array.from(configs.values()).sort",
+          "lineNumber": 73
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "Array.from",
+          "lineNumber": 73
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "configs.values",
+          "lineNumber": 73
+        },
+        {
+          "caller": "loadExternalClis",
+          "callee": "a.name.localeCompare",
+          "lineNumber": 73
+        },
+        {
+          "caller": "isBinaryInstalled",
+          "callee": "os.platform",
+          "lineNumber": 79
+        },
+        {
+          "caller": "isBinaryInstalled",
+          "callee": "execFileSync",
+          "lineNumber": 80
+        },
+        {
+          "caller": "getInstallCmd",
+          "callee": "os.platform",
+          "lineNumber": 89
+        },
+        {
+          "caller": "parseCommand",
+          "callee": "shellOperators.test",
+          "lineNumber": 114
+        },
+        {
+          "caller": "parseCommand",
+          "callee": "re.exec",
+          "lineNumber": 125
+        },
+        {
+          "caller": "parseCommand",
+          "callee": "tokens.push",
+          "lineNumber": 126
+        },
+        {
+          "caller": "shouldRetryWithCmdShim",
+          "callee": "os.platform",
+          "lineNumber": 139
+        },
+        {
+          "caller": "shouldRetryWithCmdShim",
+          "callee": "path.extname",
+          "lineNumber": 139
+        },
+        {
+          "caller": "runInstallCommand",
+          "callee": "parseCommand",
+          "lineNumber": 143
+        },
+        {
+          "caller": "runInstallCommand",
+          "callee": "execFileSync",
+          "lineNumber": 146
+        },
+        {
+          "caller": "runInstallCommand",
+          "callee": "shouldRetryWithCmdShim",
+          "lineNumber": 148
+        },
+        {
+          "caller": "runInstallCommand",
+          "callee": "execFileSync",
+          "lineNumber": 149
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.error",
+          "lineNumber": 158
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.info",
+          "lineNumber": 159
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "getInstallCmd",
+          "lineNumber": 163
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.error",
+          "lineNumber": 165
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "os.platform",
+          "lineNumber": 165
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.info",
+          "lineNumber": 166
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.info",
+          "lineNumber": 170
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.verbose",
+          "lineNumber": 171
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "runInstallCommand",
+          "lineNumber": 173
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.success",
+          "lineNumber": 174
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "log.error",
+          "lineNumber": 177
+        },
+        {
+          "caller": "installExternalCli",
+          "callee": "getErrorMessage",
+          "lineNumber": 177
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "loadExternalClis",
+          "lineNumber": 183
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "configs.find",
+          "lineNumber": 184
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "isBinaryInstalled",
+          "lineNumber": 190
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "installExternalCli",
+          "lineNumber": 192
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "isBinaryInstalled",
+          "lineNumber": 198
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "log.error",
+          "lineNumber": 199
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "log.info",
+          "lineNumber": 200
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "log.info",
+          "lineNumber": 203
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "spawnSync",
+          "lineNumber": 210
+        },
+        {
+          "caller": "executeExternalCli",
+          "callee": "log.error",
+          "lineNumber": 212
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "getUserRegistryPath",
+          "lineNumber": 229
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "path.dirname",
+          "lineNumber": 230
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "fs.existsSync",
+          "lineNumber": 232
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "fs.mkdirSync",
+          "lineNumber": 233
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "fs.existsSync",
+          "lineNumber": 237
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "fs.readFileSync",
+          "lineNumber": 239
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "yaml.load",
+          "lineNumber": 240
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "items.findIndex",
+          "lineNumber": 246
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "log.success",
+          "lineNumber": 257
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "items.push",
+          "lineNumber": 259
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "log.success",
+          "lineNumber": 260
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "yaml.dump",
+          "lineNumber": 263
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "fs.writeFileSync",
+          "lineNumber": 264
+        },
+        {
+          "caller": "registerExternalCli",
+          "callee": "log.verbose",
+          "lineNumber": 266
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 8,
+        "functionCount": 11,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/help.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 66,
+      "nonEmptyLines": 58,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/help.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 647,
+      "nonEmptyLines": 591,
+      "functions": [
+        {
+          "name": "normalizeStructuredHelpFormat",
+          "startLine": 78,
+          "endLine": 83,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "getRequestedHelpFormat",
+          "startLine": 85,
+          "endLine": 99,
+          "params": [
+            "argv"
+          ]
+        },
+        {
+          "name": "renderStructuredHelp",
+          "startLine": 101,
+          "endLine": 104,
+          "params": [
+            "data",
+            "format"
+          ]
+        },
+        {
+          "name": "wrapCommaList",
+          "startLine": 106,
+          "endLine": 128,
+          "params": [
+            "items",
+            "opts"
+          ]
+        },
+        {
+          "name": "classifyAdapter",
+          "startLine": 143,
+          "endLine": 146,
+          "params": [
+            "domain"
+          ]
+        },
+        {
+          "name": "formatGroupSection",
+          "startLine": 162,
+          "endLine": 169,
+          "params": [
+            "label",
+            "names"
+          ]
+        },
+        {
+          "name": "formatRootAdapterHelpText",
+          "startLine": 171,
+          "endLine": 182,
+          "params": [
+            "groups"
+          ]
+        },
+        {
+          "name": "compactArg",
+          "startLine": 184,
+          "endLine": 195,
+          "params": [
+            "arg"
+          ]
+        },
+        {
+          "name": "compactCommonOption",
+          "startLine": 197,
+          "endLine": 205,
+          "params": [
+            "option"
+          ]
+        },
+        {
+          "name": "compactCommanderArgument",
+          "startLine": 207,
+          "endLine": 216,
+          "params": [
+            "arg"
+          ]
+        },
+        {
+          "name": "compactCommanderOption",
+          "startLine": 218,
+          "endLine": 231,
+          "params": [
+            "option"
+          ]
+        },
+        {
+          "name": "compactCommanderOptions",
+          "startLine": 233,
+          "endLine": 237,
+          "params": [
+            "options"
+          ]
+        },
+        {
+          "name": "leadingPositionalFromUsage",
+          "startLine": 249,
+          "endLine": 254,
+          "params": [
+            "command"
+          ]
+        },
+        {
+          "name": "commanderPath",
+          "startLine": 256,
+          "endLine": 278,
+          "params": [
+            "command"
+          ]
+        },
+        {
+          "name": "commandPathFromRoot",
+          "startLine": 280,
+          "endLine": 287,
+          "params": [
+            "namespaceRoot",
+            "command"
+          ]
+        },
+        {
+          "name": "collectLeafCommands",
+          "startLine": 289,
+          "endLine": 292,
+          "params": [
+            "command"
+          ]
+        },
+        {
+          "name": "collectDescendantCommands",
+          "startLine": 294,
+          "endLine": 296,
+          "params": [
+            "command"
+          ]
+        },
+        {
+          "name": "formatCommanderPositionals",
+          "startLine": 298,
+          "endLine": 305,
+          "params": [
+            "args"
+          ]
+        },
+        {
+          "name": "formatCommanderUsage",
+          "startLine": 307,
+          "endLine": 318,
+          "params": [
+            "command",
+            "opts"
+          ]
+        },
+        {
+          "name": "compactCommanderCommand",
+          "startLine": 320,
+          "endLine": 335,
+          "params": [
+            "namespaceRoot",
+            "command",
+            "opts"
+          ]
+        },
+        {
+          "name": "commanderNamespaceHelpData",
+          "startLine": 337,
+          "endLine": 367,
+          "params": [
+            "namespaceRoot",
+            "opts"
+          ]
+        },
+        {
+          "name": "commanderCommandHelpData",
+          "startLine": 369,
+          "endLine": 384,
+          "params": [
+            "namespaceRoot",
+            "command",
+            "opts"
+          ]
+        },
+        {
+          "name": "commanderGroupHelpData",
+          "startLine": 386,
+          "endLine": 409,
+          "params": [
+            "namespaceRoot",
+            "groupCommand",
+            "opts"
+          ]
+        },
+        {
+          "name": "installCommanderNamespaceStructuredHelp",
+          "startLine": 411,
+          "endLine": 423,
+          "params": [
+            "namespaceRoot",
+            "opts"
+          ]
+        },
+        {
+          "name": "positionals",
+          "startLine": 425,
+          "endLine": 427,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "commandOptions",
+          "startLine": 429,
+          "endLine": 431,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "formatPositionals",
+          "startLine": 433,
+          "endLine": 437,
+          "params": [
+            "args"
+          ]
+        },
+        {
+          "name": "formatCommandOptionTerm",
+          "startLine": 439,
+          "endLine": 442,
+          "params": [
+            "arg"
+          ]
+        },
+        {
+          "name": "formatCommandListTerm",
+          "startLine": 444,
+          "endLine": 448,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "formatUsage",
+          "startLine": 450,
+          "endLine": 453,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "compactCommand",
+          "startLine": 455,
+          "endLine": 473,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "rootHelpData",
+          "startLine": 475,
+          "endLine": 508,
+          "params": [
+            "program",
+            "groups"
+          ]
+        },
+        {
+          "name": "siteHelpData",
+          "startLine": 510,
+          "endLine": 524,
+          "params": [
+            "site",
+            "commands"
+          ]
+        },
+        {
+          "name": "commandHelpData",
+          "startLine": 526,
+          "endLine": 534,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "formatRows",
+          "startLine": 536,
+          "endLine": 540,
+          "params": [
+            "rows"
+          ]
+        },
+        {
+          "name": "formatArgHelp",
+          "startLine": 542,
+          "endLine": 548,
+          "params": [
+            "arg"
+          ]
+        },
+        {
+          "name": "formatCommonOptionsHelpText",
+          "startLine": 550,
+          "endLine": 558,
+          "params": []
+        },
+        {
+          "name": "formatBrowserCommonOptionsHelpText",
+          "startLine": 560,
+          "endLine": 567,
+          "params": []
+        },
+        {
+          "name": "formatSiteHelpText",
+          "startLine": 569,
+          "endLine": 587,
+          "params": [
+            "site",
+            "commands"
+          ]
+        },
+        {
+          "name": "formatCommandHelpText",
+          "startLine": 589,
+          "endLine": 628,
+          "params": [
+            "cmd"
+          ]
+        },
+        {
+          "name": "installStructuredHelp",
+          "startLine": 630,
+          "endLine": 642,
+          "params": [
+            "command",
+            "data",
+            "textSuffix"
+          ]
+        },
+        {
+          "name": "formatSiteCommandDescription",
+          "startLine": 644,
+          "endLine": 647,
+          "params": [
+            "cmd"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "getRequestedHelpFormat",
+          "line": 85,
+          "isDefault": false
+        },
+        {
+          "name": "renderStructuredHelp",
+          "line": 101,
+          "isDefault": false
+        },
+        {
+          "name": "wrapCommaList",
+          "line": 106,
+          "isDefault": false
+        },
+        {
+          "name": "classifyAdapter",
+          "line": 143,
+          "isDefault": false
+        },
+        {
+          "name": "formatRootAdapterHelpText",
+          "line": 171,
+          "isDefault": false
+        },
+        {
+          "name": "leadingPositionalFromUsage",
+          "line": 249,
+          "isDefault": false
+        },
+        {
+          "name": "commanderNamespaceHelpData",
+          "line": 337,
+          "isDefault": false
+        },
+        {
+          "name": "commanderCommandHelpData",
+          "line": 369,
+          "isDefault": false
+        },
+        {
+          "name": "commanderGroupHelpData",
+          "line": 386,
+          "isDefault": false
+        },
+        {
+          "name": "installCommanderNamespaceStructuredHelp",
+          "line": 411,
+          "isDefault": false
+        },
+        {
+          "name": "formatCommandListTerm",
+          "line": 444,
+          "isDefault": false
+        },
+        {
+          "name": "rootHelpData",
+          "line": 475,
+          "isDefault": false
+        },
+        {
+          "name": "siteHelpData",
+          "line": 510,
+          "isDefault": false
+        },
+        {
+          "name": "commandHelpData",
+          "line": 526,
+          "isDefault": false
+        },
+        {
+          "name": "formatCommonOptionsHelpText",
+          "line": 550,
+          "isDefault": false
+        },
+        {
+          "name": "formatBrowserCommonOptionsHelpText",
+          "line": 560,
+          "isDefault": false
+        },
+        {
+          "name": "formatSiteHelpText",
+          "line": 569,
+          "isDefault": false
+        },
+        {
+          "name": "formatCommandHelpText",
+          "line": 589,
+          "isDefault": false
+        },
+        {
+          "name": "installStructuredHelp",
+          "line": 630,
+          "isDefault": false
+        },
+        {
+          "name": "formatSiteCommandDescription",
+          "line": 644,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "normalizeStructuredHelpFormat",
+          "callee": "value?.toLowerCase",
+          "lineNumber": 79
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "normalizeStructuredHelpFormat",
+          "lineNumber": 89
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "token.startsWith",
+          "lineNumber": 91
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "normalizeStructuredHelpFormat",
+          "lineNumber": 92
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "token.slice",
+          "lineNumber": 92
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "token.startsWith",
+          "lineNumber": 94
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "normalizeStructuredHelpFormat",
+          "lineNumber": 95
+        },
+        {
+          "caller": "getRequestedHelpFormat",
+          "callee": "token.slice",
+          "lineNumber": 95
+        },
+        {
+          "caller": "renderStructuredHelp",
+          "callee": "JSON.stringify",
+          "lineNumber": 102
+        },
+        {
+          "caller": "renderStructuredHelp",
+          "callee": "yaml.dump",
+          "lineNumber": 103
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "Math.max",
+          "lineNumber": 110
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "[...items].sort",
+          "lineNumber": 112
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "a.localeCompare",
+          "lineNumber": 112
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "sorted.forEach",
+          "lineNumber": 116
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "line.trim",
+          "lineNumber": 119
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "lines.push",
+          "lineNumber": 120
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "line.trim",
+          "lineNumber": 126
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "lines.push",
+          "lineNumber": 126
+        },
+        {
+          "caller": "wrapCommaList",
+          "callee": "lines.join",
+          "lineNumber": 127
+        },
+        {
+          "caller": "classifyAdapter",
+          "callee": "domain.includes",
+          "lineNumber": 145
+        },
+        {
+          "caller": "formatGroupSection",
+          "callee": "wrapCommaList",
+          "lineNumber": 166
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 175
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "formatGroupSection",
+          "lineNumber": 175
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "groups.external.map",
+          "lineNumber": 175
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 176
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "formatGroupSection",
+          "lineNumber": 176
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 177
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "formatGroupSection",
+          "lineNumber": 177
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 178
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 179
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.push",
+          "lineNumber": 180
+        },
+        {
+          "caller": "formatRootAdapterHelpText",
+          "callee": "lines.join",
+          "lineNumber": 181
+        },
+        {
+          "caller": "compactCommanderArgument",
+          "callee": "arg.name",
+          "lineNumber": 209
+        },
+        {
+          "caller": "compactCommanderOption",
+          "callee": "option.attributeName",
+          "lineNumber": 221
+        },
+        {
+          "caller": "compactCommanderOptions",
+          "callee": "options\n    .map(compactCommanderOption)\n    .filter",
+          "lineNumber": 234
+        },
+        {
+          "caller": "compactCommanderOptions",
+          "callee": "options\n    .map",
+          "lineNumber": 234
+        },
+        {
+          "caller": "leadingPositionalFromUsage",
+          "callee": "usage.match",
+          "lineNumber": 252
+        },
+        {
+          "caller": "commanderPath",
+          "callee": "current.name",
+          "lineNumber": 260
+        },
+        {
+          "caller": "commanderPath",
+          "callee": "parts.push",
+          "lineNumber": 262
+        },
+        {
+          "caller": "commanderPath",
+          "callee": "leadingPositionalFromUsage",
+          "lineNumber": 267
+        },
+        {
+          "caller": "commanderPath",
+          "callee": "parts.splice",
+          "lineNumber": 272
+        },
+        {
+          "caller": "commanderPath",
+          "callee": "parts.reverse",
+          "lineNumber": 277
+        },
+        {
+          "caller": "commandPathFromRoot",
+          "callee": "commanderPath",
+          "lineNumber": 281
+        },
+        {
+          "caller": "commandPathFromRoot",
+          "callee": "commanderPath",
+          "lineNumber": 282
+        },
+        {
+          "caller": "commandPathFromRoot",
+          "callee": "commandPath.slice(rootPath.length).filter",
+          "lineNumber": 286
+        },
+        {
+          "caller": "commandPathFromRoot",
+          "callee": "commandPath.slice",
+          "lineNumber": 286
+        },
+        {
+          "caller": "commandPathFromRoot",
+          "callee": "/^<.+>$/.test",
+          "lineNumber": 286
+        },
+        {
+          "caller": "collectLeafCommands",
+          "callee": "command.commands.flatMap",
+          "lineNumber": 291
+        },
+        {
+          "caller": "collectLeafCommands",
+          "callee": "collectLeafCommands",
+          "lineNumber": 291
+        },
+        {
+          "caller": "collectDescendantCommands",
+          "callee": "command.commands.flatMap",
+          "lineNumber": 295
+        },
+        {
+          "caller": "collectDescendantCommands",
+          "callee": "collectDescendantCommands",
+          "lineNumber": 295
+        },
+        {
+          "caller": "formatCommanderPositionals",
+          "callee": "args\n    .map(arg => {\n      const name = `${arg.name()}${arg.variadic ? '...' : ''}`;\n      return arg.required ? `<${name}>` : `[${name}]`;\n    })\n    .join",
+          "lineNumber": 299
+        },
+        {
+          "caller": "formatCommanderPositionals",
+          "callee": "args\n    .map",
+          "lineNumber": 299
+        },
+        {
+          "caller": "formatCommanderPositionals",
+          "callee": "arg.name",
+          "lineNumber": 301
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "commanderPath(command).join",
+          "lineNumber": 311
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "commanderPath",
+          "lineNumber": 311
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "formatCommanderPositionals",
+          "lineNumber": 312
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 313
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 314
+        },
+        {
+          "caller": "formatCommanderUsage",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 315
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 325
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "relativePath.join",
+          "lineNumber": 327
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "commanderPath(command).join",
+          "lineNumber": 328
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "commanderPath",
+          "lineNumber": 328
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "formatCommanderUsage",
+          "lineNumber": 329
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "command.description",
+          "lineNumber": 330
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "command.aliases",
+          "lineNumber": 331
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "command.aliases",
+          "lineNumber": 331
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "command.registeredArguments.map",
+          "lineNumber": 332
+        },
+        {
+          "caller": "compactCommanderCommand",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 333
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "collectLeafCommands(namespaceRoot)\n    .filter(command => command !== namespaceRoot)\n    .sort",
+          "lineNumber": 341
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "collectLeafCommands(namespaceRoot)\n    .filter",
+          "lineNumber": 341
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "collectLeafCommands",
+          "lineNumber": 341
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, a).join(' ').localeCompare",
+          "lineNumber": 343
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, a).join",
+          "lineNumber": 343
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 343
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, b).join",
+          "lineNumber": 343
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 343
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commanderPath(namespaceRoot).join",
+          "lineNumber": 348
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "commanderPath",
+          "lineNumber": 348
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "namespaceRoot.name",
+          "lineNumber": 354
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "namespaceRoot.description",
+          "lineNumber": 357
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "leaves.map",
+          "lineNumber": 359
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "compactCommanderCommand",
+          "lineNumber": 359
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 360
+        },
+        {
+          "caller": "commanderNamespaceHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 361
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "namespaceRoot.name",
+          "lineNumber": 375
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "compactCommanderCommand",
+          "lineNumber": 376
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 377
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 378
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "commanderPath(command).join",
+          "lineNumber": 381
+        },
+        {
+          "caller": "commanderCommandHelpData",
+          "callee": "commanderPath",
+          "lineNumber": 381
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "collectLeafCommands(groupCommand)\n    .filter(command => command !== groupCommand)\n    .sort",
+          "lineNumber": 391
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "collectLeafCommands(groupCommand)\n    .filter",
+          "lineNumber": 391
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "collectLeafCommands",
+          "lineNumber": 391
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, a).join(' ').localeCompare",
+          "lineNumber": 393
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, a).join",
+          "lineNumber": 393
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 393
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, b).join",
+          "lineNumber": 393
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 393
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "namespaceRoot.name",
+          "lineNumber": 395
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot(namespaceRoot, groupCommand).join",
+          "lineNumber": 396
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commandPathFromRoot",
+          "lineNumber": 396
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath(groupCommand).join",
+          "lineNumber": 397
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath",
+          "lineNumber": 397
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath(groupCommand).join",
+          "lineNumber": 398
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath",
+          "lineNumber": 398
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "groupCommand.description",
+          "lineNumber": 399
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "leaves.map",
+          "lineNumber": 401
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "compactCommanderCommand",
+          "lineNumber": 401
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 402
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "compactCommanderOptions",
+          "lineNumber": 403
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath(groupCommand).join",
+          "lineNumber": 406
+        },
+        {
+          "caller": "commanderGroupHelpData",
+          "callee": "commanderPath",
+          "lineNumber": 406
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "installStructuredHelp",
+          "lineNumber": 415
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "commanderNamespaceHelpData",
+          "lineNumber": 415
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "collectDescendantCommands",
+          "lineNumber": 416
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "installStructuredHelp",
+          "lineNumber": 418
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "commanderGroupHelpData",
+          "lineNumber": 418
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "installStructuredHelp",
+          "lineNumber": 420
+        },
+        {
+          "caller": "installCommanderNamespaceStructuredHelp",
+          "callee": "commanderCommandHelpData",
+          "lineNumber": 420
+        },
+        {
+          "caller": "positionals",
+          "callee": "cmd.args.filter",
+          "lineNumber": 426
+        },
+        {
+          "caller": "commandOptions",
+          "callee": "cmd.args.filter",
+          "lineNumber": 430
+        },
+        {
+          "caller": "formatPositionals",
+          "callee": "args\n    .map(arg => arg.required ? `<${arg.name}>` : `[${arg.name}]`)\n    .join",
+          "lineNumber": 434
+        },
+        {
+          "caller": "formatPositionals",
+          "callee": "args\n    .map",
+          "lineNumber": 434
+        },
+        {
+          "caller": "formatCommandListTerm",
+          "callee": "formatPositionals",
+          "lineNumber": 445
+        },
+        {
+          "caller": "formatCommandListTerm",
+          "callee": "positionals",
+          "lineNumber": 445
+        },
+        {
+          "caller": "formatCommandListTerm",
+          "callee": "commandOptions",
+          "lineNumber": 446
+        },
+        {
+          "caller": "formatUsage",
+          "callee": "formatPositionals",
+          "lineNumber": 451
+        },
+        {
+          "caller": "formatUsage",
+          "callee": "positionals",
+          "lineNumber": 451
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "formatUsage",
+          "lineNumber": 459
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "positionals(cmd).map",
+          "lineNumber": 465
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "positionals",
+          "lineNumber": 465
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "commandOptions(cmd).map",
+          "lineNumber": 466
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "commandOptions",
+          "lineNumber": 466
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "BROWSER_COMMON_OPTIONS.map",
+          "lineNumber": 467
+        },
+        {
+          "caller": "compactCommand",
+          "callee": "formatCommandExample",
+          "lineNumber": 468
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "groups.external.map",
+          "lineNumber": 476
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "program.commands\n    .filter(command => !adapterNames.has(command.name()))\n    .map",
+          "lineNumber": 477
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "program.commands\n    .filter",
+          "lineNumber": 477
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "adapterNames.has",
+          "lineNumber": 478
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "command.name",
+          "lineNumber": 478
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "command.name",
+          "lineNumber": 480
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "command.description",
+          "lineNumber": 481
+        },
+        {
+          "caller": "sortLocale",
+          "callee": "a.localeCompare",
+          "lineNumber": 484
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "program.name",
+          "lineNumber": 486
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "program.description",
+          "lineNumber": 487
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "groups.external.map(cli => cli.name).sort",
+          "lineNumber": 491
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "groups.external.map",
+          "lineNumber": 491
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "groups.external.map(cli => cli.label).sort",
+          "lineNumber": 492
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "groups.external.map",
+          "lineNumber": 492
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "[...groups.apps].sort",
+          "lineNumber": 496
+        },
+        {
+          "caller": "rootHelpData",
+          "callee": "[...groups.sites].sort",
+          "lineNumber": 500
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "[...new Map(commands.map(cmd => [fullName(cmd), cmd])).values()]\n    .sort",
+          "lineNumber": 511
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "new Map(commands.map(cmd => [fullName(cmd), cmd])).values",
+          "lineNumber": 511
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "commands.map",
+          "lineNumber": 511
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "fullName",
+          "lineNumber": 511
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "a.name.localeCompare",
+          "lineNumber": 512
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "unique.map",
+          "lineNumber": 516
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "compactCommand",
+          "lineNumber": 516
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "COMMON_OPTIONS.map",
+          "lineNumber": 517
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "unique.some",
+          "lineNumber": 518
+        },
+        {
+          "caller": "siteHelpData",
+          "callee": "BROWSER_COMMON_OPTIONS.map",
+          "lineNumber": 518
+        },
+        {
+          "caller": "commandHelpData",
+          "callee": "compactCommand",
+          "lineNumber": 529
+        },
+        {
+          "caller": "commandHelpData",
+          "callee": "COMMON_OPTIONS.map",
+          "lineNumber": 530
+        },
+        {
+          "caller": "commandHelpData",
+          "callee": "BROWSER_COMMON_OPTIONS.map",
+          "lineNumber": 531
+        },
+        {
+          "caller": "formatRows",
+          "callee": "Math.min",
+          "lineNumber": 538
+        },
+        {
+          "caller": "formatRows",
+          "callee": "Math.max",
+          "lineNumber": 538
+        },
+        {
+          "caller": "formatRows",
+          "callee": "rows.map",
+          "lineNumber": 538
+        },
+        {
+          "caller": "formatRows",
+          "callee": "rows.map",
+          "lineNumber": 539
+        },
+        {
+          "caller": "formatRows",
+          "callee": "left.padEnd",
+          "lineNumber": 539
+        },
+        {
+          "caller": "formatArgHelp",
+          "callee": "parts.push",
+          "lineNumber": 544
+        },
+        {
+          "caller": "formatArgHelp",
+          "callee": "parts.push",
+          "lineNumber": 545
+        },
+        {
+          "caller": "formatArgHelp",
+          "callee": "parts.push",
+          "lineNumber": 546
+        },
+        {
+          "caller": "formatArgHelp",
+          "callee": "arg.choices.join",
+          "lineNumber": 546
+        },
+        {
+          "caller": "formatArgHelp",
+          "callee": "parts.join",
+          "lineNumber": 547
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "COMMON_OPTIONS.map",
+          "lineNumber": 551
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "details.push",
+          "lineNumber": 553
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "details.push",
+          "lineNumber": 554
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "option.choices.join",
+          "lineNumber": 554
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "details.join",
+          "lineNumber": 555
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "['Common options:', ...formatRows(rows)].join",
+          "lineNumber": 557
+        },
+        {
+          "caller": "formatCommonOptionsHelpText",
+          "callee": "formatRows",
+          "lineNumber": 557
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "BROWSER_COMMON_OPTIONS.map",
+          "lineNumber": 561
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "details.push",
+          "lineNumber": 563
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "option.choices.join",
+          "lineNumber": 563
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "details.join",
+          "lineNumber": 564
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "['Browser common options:', ...formatRows(rows)].join",
+          "lineNumber": 566
+        },
+        {
+          "caller": "formatBrowserCommonOptionsHelpText",
+          "callee": "formatRows",
+          "lineNumber": 566
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "[...new Map(commands.map(cmd => [fullName(cmd), cmd])).values()]\n    .sort",
+          "lineNumber": 570
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "new Map(commands.map(cmd => [fullName(cmd), cmd])).values",
+          "lineNumber": 570
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "commands.map",
+          "lineNumber": 570
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "fullName",
+          "lineNumber": 570
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "a.name.localeCompare",
+          "lineNumber": 571
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "wrapCommaList",
+          "lineNumber": 575
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "unique.map",
+          "lineNumber": 575
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "formatRows",
+          "lineNumber": 578
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "unique.map",
+          "lineNumber": 578
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "formatCommandListTerm",
+          "lineNumber": 578
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "formatSiteCommandDescription",
+          "lineNumber": 578
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "formatCommonOptionsHelpText",
+          "lineNumber": 580
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "unique.some",
+          "lineNumber": 581
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "formatBrowserCommonOptionsHelpText",
+          "lineNumber": 581
+        },
+        {
+          "caller": "formatSiteHelpText",
+          "callee": "lines.join",
+          "lineNumber": 586
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatUsage",
+          "lineNumber": 591
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "positionals(cmd).map",
+          "lineNumber": 597
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "positionals",
+          "lineNumber": 597
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatArgHelp",
+          "lineNumber": 599
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 602
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatRows",
+          "lineNumber": 602
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "commandOptions(cmd).map",
+          "lineNumber": 605
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "commandOptions",
+          "lineNumber": 605
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatCommandOptionTerm",
+          "lineNumber": 606
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatArgHelp",
+          "lineNumber": 607
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 610
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatRows",
+          "lineNumber": 610
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 613
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatCommonOptionsHelpText",
+          "lineNumber": 613
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 614
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatBrowserCommonOptionsHelpText",
+          "lineNumber": 614
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.push",
+          "lineNumber": 617
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.push",
+          "lineNumber": 618
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.push",
+          "lineNumber": 619
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.push",
+          "lineNumber": 620
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.push",
+          "lineNumber": 621
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "cmd.aliases.join",
+          "lineNumber": 621
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 622
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "meta.join",
+          "lineNumber": 622
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 623
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "formatCommandExample",
+          "lineNumber": 623
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 624
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "cmd.columns.join",
+          "lineNumber": 624
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 625
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.push",
+          "lineNumber": 626
+        },
+        {
+          "caller": "formatCommandHelpText",
+          "callee": "lines.join",
+          "lineNumber": 627
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "command.helpInformation.bind",
+          "lineNumber": 635
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "getRequestedHelpFormat",
+          "lineNumber": 637
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "renderStructuredHelp",
+          "lineNumber": 638
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "data",
+          "lineNumber": 638
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "textSuffix",
+          "lineNumber": 639
+        },
+        {
+          "caller": "installStructuredHelp",
+          "callee": "original",
+          "lineNumber": 640
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 20,
+        "functionCount": 42,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/hooks.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 126,
+      "nonEmptyLines": 99,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/hooks.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 91,
+      "nonEmptyLines": 77,
+      "functions": [
+        {
+          "name": "addHook",
+          "startLine": 45,
+          "endLine": 50,
+          "params": [
+            "name",
+            "fn"
+          ]
+        },
+        {
+          "name": "onStartup",
+          "startLine": 53,
+          "endLine": 55,
+          "params": [
+            "fn"
+          ]
+        },
+        {
+          "name": "onBeforeExecute",
+          "startLine": 58,
+          "endLine": 60,
+          "params": [
+            "fn"
+          ]
+        },
+        {
+          "name": "onAfterExecute",
+          "startLine": 63,
+          "endLine": 65,
+          "params": [
+            "fn"
+          ]
+        },
+        {
+          "name": "emitHook",
+          "startLine": 73,
+          "endLine": 84,
+          "params": [
+            "name",
+            "ctx",
+            "result"
+          ]
+        },
+        {
+          "name": "clearAllHooks",
+          "startLine": 89,
+          "endLine": 91,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "onStartup",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "onBeforeExecute",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "onAfterExecute",
+          "line": 63,
+          "isDefault": false
+        },
+        {
+          "name": "emitHook",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "clearAllHooks",
+          "line": 89,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "addHook",
+          "callee": "_hooks.get",
+          "lineNumber": 46
+        },
+        {
+          "caller": "addHook",
+          "callee": "list.includes",
+          "lineNumber": 47
+        },
+        {
+          "caller": "addHook",
+          "callee": "list.push",
+          "lineNumber": 48
+        },
+        {
+          "caller": "addHook",
+          "callee": "_hooks.set",
+          "lineNumber": 49
+        },
+        {
+          "caller": "onStartup",
+          "callee": "addHook",
+          "lineNumber": 54
+        },
+        {
+          "caller": "onBeforeExecute",
+          "callee": "addHook",
+          "lineNumber": 59
+        },
+        {
+          "caller": "onAfterExecute",
+          "callee": "addHook",
+          "lineNumber": 64
+        },
+        {
+          "caller": "emitHook",
+          "callee": "_hooks.get",
+          "lineNumber": 74
+        },
+        {
+          "caller": "emitHook",
+          "callee": "fn",
+          "lineNumber": 79
+        },
+        {
+          "caller": "emitHook",
+          "callee": "log.warn",
+          "lineNumber": 81
+        },
+        {
+          "caller": "emitHook",
+          "callee": "String",
+          "lineNumber": 81
+        },
+        {
+          "caller": "clearAllHooks",
+          "callee": "_hooks.clear",
+          "lineNumber": 90
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 5,
+        "functionCount": 6,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/interceptor.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 94,
+      "nonEmptyLines": 81,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/interceptor.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 201,
+      "nonEmptyLines": 190,
+      "functions": [
+        {
+          "name": "generateInterceptorJs",
+          "startLine": 58,
+          "endLine": 119,
+          "params": [
+            "patternExpr",
+            "opts"
+          ]
+        },
+        {
+          "name": "generateReadInterceptedJs",
+          "startLine": 124,
+          "endLine": 132,
+          "params": [
+            "arrayName"
+          ]
+        },
+        {
+          "name": "generateTapInterceptorJs",
+          "startLine": 143,
+          "endLine": 201,
+          "params": [
+            "patternExpr"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "generateInterceptorJs",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "generateReadInterceptedJs",
+          "line": 124,
+          "isDefault": false
+        },
+        {
+          "name": "generateTapInterceptorJs",
+          "line": 143,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 3,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/launcher.test.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 181,
+      "nonEmptyLines": 156,
+      "functions": [
+        {
+          "name": "createMockChildProcess",
+          "startLine": 12,
+          "endLine": 27,
+          "params": []
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "createMockChildProcess",
+          "callee": "vi.fn",
+          "lineNumber": 16
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listeners.set",
+          "lineNumber": 17
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listeners.get",
+          "lineNumber": 17
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "vi.fn",
+          "lineNumber": 19
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listeners.set",
+          "lineNumber": 20
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "(listeners.get(event) ?? []).filter",
+          "lineNumber": 20
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listeners.get",
+          "lineNumber": 20
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "vi.fn",
+          "lineNumber": 22
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listeners.get",
+          "lineNumber": 24
+        },
+        {
+          "caller": "createMockChildProcess",
+          "callee": "listener",
+          "lineNumber": 24
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/launcher.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 263,
+      "nonEmptyLines": 233,
+      "functions": [
+        {
+          "name": "probeCDP",
+          "startLine": 30,
+          "endLine": 43,
+          "params": [
+            "port",
+            "timeoutMs"
+          ]
+        },
+        {
+          "name": "detectProcess",
+          "startLine": 49,
+          "endLine": 57,
+          "params": [
+            "processName"
+          ]
+        },
+        {
+          "name": "killProcess",
+          "startLine": 62,
+          "endLine": 81,
+          "params": [
+            "processName"
+          ]
+        },
+        {
+          "name": "discoverAppPath",
+          "startLine": 88,
+          "endLine": 101,
+          "params": [
+            "displayName"
+          ]
+        },
+        {
+          "name": "resolveExecutable",
+          "startLine": 103,
+          "endLine": 105,
+          "params": [
+            "appPath",
+            "processName"
+          ]
+        },
+        {
+          "name": "isMissingExecutableError",
+          "startLine": 107,
+          "endLine": 110,
+          "params": [
+            "err",
+            "label"
+          ]
+        },
+        {
+          "name": "resolveExecutableCandidates",
+          "startLine": 112,
+          "endLine": 115,
+          "params": [
+            "appPath",
+            "app"
+          ]
+        },
+        {
+          "name": "launchDetachedApp",
+          "startLine": 117,
+          "endLine": 146,
+          "params": [
+            "executable",
+            "args",
+            "label"
+          ]
+        },
+        {
+          "name": "launchElectronApp",
+          "startLine": 148,
+          "endLine": 177,
+          "params": [
+            "appPath",
+            "app",
+            "args",
+            "label"
+          ]
+        },
+        {
+          "name": "pollForReady",
+          "startLine": 179,
+          "endLine": 189,
+          "params": [
+            "port"
+          ]
+        },
+        {
+          "name": "resolveElectronEndpoint",
+          "startLine": 196,
+          "endLine": 263,
+          "params": [
+            "site"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "probeCDP",
+          "line": 30,
+          "isDefault": false
+        },
+        {
+          "name": "detectProcess",
+          "line": 49,
+          "isDefault": false
+        },
+        {
+          "name": "killProcess",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "discoverAppPath",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "resolveExecutableCandidates",
+          "line": 112,
+          "isDefault": false
+        },
+        {
+          "name": "launchDetachedApp",
+          "line": 117,
+          "isDefault": false
+        },
+        {
+          "name": "launchElectronApp",
+          "line": 148,
+          "isDefault": false
+        },
+        {
+          "name": "resolveElectronEndpoint",
+          "line": 196,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "probeCDP",
+          "callee": "httpRequest",
+          "lineNumber": 32
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "res.resume",
+          "lineNumber": 35
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "resolve",
+          "lineNumber": 36
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "req.on",
+          "lineNumber": 39
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "resolve",
+          "lineNumber": 39
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "req.on",
+          "lineNumber": 40
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "req.destroy",
+          "lineNumber": 40
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "resolve",
+          "lineNumber": 40
+        },
+        {
+          "caller": "probeCDP",
+          "callee": "req.end",
+          "lineNumber": 41
+        },
+        {
+          "caller": "detectProcess",
+          "callee": "execFileSync",
+          "lineNumber": 52
+        },
+        {
+          "caller": "killProcess",
+          "callee": "execFileSync",
+          "lineNumber": 65
+        },
+        {
+          "caller": "killProcess",
+          "callee": "Date.now",
+          "lineNumber": 70
+        },
+        {
+          "caller": "killProcess",
+          "callee": "Date.now",
+          "lineNumber": 71
+        },
+        {
+          "caller": "killProcess",
+          "callee": "detectProcess",
+          "lineNumber": 72
+        },
+        {
+          "caller": "killProcess",
+          "callee": "setTimeout",
+          "lineNumber": 73
+        },
+        {
+          "caller": "killProcess",
+          "callee": "execFileSync",
+          "lineNumber": 77
+        },
+        {
+          "caller": "discoverAppPath",
+          "callee": "execFileSync",
+          "lineNumber": 94
+        },
+        {
+          "caller": "discoverAppPath",
+          "callee": "result.trim().replace",
+          "lineNumber": 97
+        },
+        {
+          "caller": "discoverAppPath",
+          "callee": "result.trim",
+          "lineNumber": 97
+        },
+        {
+          "caller": "isMissingExecutableError",
+          "callee": "err.message.startsWith",
+          "lineNumber": 109
+        },
+        {
+          "caller": "resolveExecutableCandidates",
+          "callee": "[...new Set(executableNames)].map",
+          "lineNumber": 114
+        },
+        {
+          "caller": "resolveExecutableCandidates",
+          "callee": "resolveExecutable",
+          "lineNumber": 114
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "spawn",
+          "lineNumber": 119
+        },
+        {
+          "caller": "onError",
+          "callee": "reject",
+          "lineNumber": 126
+        },
+        {
+          "caller": "onError",
+          "callee": "reject",
+          "lineNumber": 133
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "child.once",
+          "lineNumber": 139
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "child.once",
+          "lineNumber": 140
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "child.off",
+          "lineNumber": 141
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "child.unref",
+          "lineNumber": 142
+        },
+        {
+          "caller": "launchDetachedApp",
+          "callee": "resolve",
+          "lineNumber": 143
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "resolveExecutableCandidates",
+          "lineNumber": 149
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "log.debug",
+          "lineNumber": 153
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "args.join",
+          "lineNumber": 153
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "launchDetachedApp",
+          "lineNumber": 155
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "isMissingExecutableError",
+          "lineNumber": 158
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "path.join",
+          "lineNumber": 168
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "executables.map((executable) => path.basename(executable)).join",
+          "lineNumber": 169
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "executables.map",
+          "lineNumber": 169
+        },
+        {
+          "caller": "launchElectronApp",
+          "callee": "path.basename",
+          "lineNumber": 169
+        },
+        {
+          "caller": "pollForReady",
+          "callee": "Date.now",
+          "lineNumber": 180
+        },
+        {
+          "caller": "pollForReady",
+          "callee": "Date.now",
+          "lineNumber": 181
+        },
+        {
+          "caller": "pollForReady",
+          "callee": "probeCDP",
+          "lineNumber": 182
+        },
+        {
+          "caller": "pollForReady",
+          "callee": "setTimeout",
+          "lineNumber": 183
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "getElectronApp",
+          "lineNumber": 197
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "log.debug",
+          "lineNumber": 210
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "probeCDP",
+          "lineNumber": 211
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "log.debug",
+          "lineNumber": 212
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "detectProcess",
+          "lineNumber": 227
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "log.debug",
+          "lineNumber": 229
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "confirmPrompt",
+          "lineNumber": 230
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "process.stderr.write",
+          "lineNumber": 240
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "killProcess",
+          "lineNumber": 241
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "discoverAppPath",
+          "lineNumber": 245
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "launchElectronApp",
+          "lineNumber": 255
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "process.stderr.write",
+          "lineNumber": 258
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "pollForReady",
+          "lineNumber": 259
+        },
+        {
+          "caller": "resolveElectronEndpoint",
+          "callee": "process.stderr.write",
+          "lineNumber": 260
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 8,
+        "functionCount": 11,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/logger.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 59,
+      "nonEmptyLines": 49,
+      "functions": [
+        {
+          "name": "isVerbose",
+          "startLine": 8,
+          "endLine": 10,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "log",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "info",
+          "callee": "process.stderr.write",
+          "lineNumber": 15
+        },
+        {
+          "caller": "status",
+          "callee": "process.stderr.write",
+          "lineNumber": 20
+        },
+        {
+          "caller": "success",
+          "callee": "process.stderr.write",
+          "lineNumber": 25
+        },
+        {
+          "caller": "warn",
+          "callee": "process.stderr.write",
+          "lineNumber": 30
+        },
+        {
+          "caller": "error",
+          "callee": "process.stderr.write",
+          "lineNumber": 35
+        },
+        {
+          "caller": "verbose",
+          "callee": "isVerbose",
+          "lineNumber": 40
+        },
+        {
+          "caller": "verbose",
+          "callee": "process.stderr.write",
+          "lineNumber": 41
+        },
+        {
+          "caller": "debug",
+          "callee": "this.verbose",
+          "lineNumber": 47
+        },
+        {
+          "caller": "step",
+          "callee": "process.stderr.write",
+          "lineNumber": 52
+        },
+        {
+          "caller": "stepResult",
+          "callee": "process.stderr.write",
+          "lineNumber": 57
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/main.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 175,
+      "nonEmptyLines": 160,
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/manifest-types.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 42,
+      "nonEmptyLines": 41,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

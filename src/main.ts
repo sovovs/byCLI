@@ -61,6 +61,24 @@ if (argv[0] === 'completion' && argv.length >= 2) {
   // Unknown shell — fall through to full path for proper error handling
 }
 
+// Fast path: internal verify-runner — the child process spawned by the verify RunnerPort
+// (08). It loads ONLY the target adapter (by path, from input.json) and emits JSONL; it must
+// never run full adapter discovery, and its stdout must stay pure JSONL.
+if (argv[0] === 'internal' && argv[1] === 'verify-runner') {
+  const { runVerifyRunnerCli } = await import('./recorder/runner/verify-runner-main.js');
+  await runVerifyRunnerCli(argv.slice(2));
+  process.exit(process.exitCode ?? EXIT_CODES.SUCCESS);
+}
+
+// Fast path: internal highlevel-http — the OPTIONAL standalone High-Level HTTP wrapper (M9,
+// 07 · Optional HTTP Wrapper). Default off; opt-in only via this command. Binds 127.0.0.1 and
+// keeps running, so it must skip full adapter discovery. Distinct from the daemon /v1/* family.
+if (argv[0] === 'internal' && argv[1] === 'highlevel-http') {
+  const { runWrapperCli } = await import('./recorder/http/wrapper-server.js');
+  await runWrapperCli(); // blocks while the server is alive; resolves on close (SIGTERM/SIGINT)
+  process.exit(process.exitCode ?? EXIT_CODES.SUCCESS); // never fall through to CLI discovery
+}
+
 // Fast path: --get-completions — read from manifest, skip discovery
 const getCompIdx = process.argv.indexOf('--get-completions');
 if (getCompIdx !== -1) {
