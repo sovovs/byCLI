@@ -232,7 +232,7 @@ export const mockRecorder: RecorderClient = {
     await delay(260);
     return ok({
       sessionId: 'mock-session',
-      state: (sample === 'A' ? 'capture_a' : 'capture_b') as const,
+      state: (sample === 'A' ? 'capture_a' : 'capture_b') as 'capture_a' | 'capture_b',
       stateVersion: 1,
       sampleName: sample,
       started: true,
