@@ -147,7 +147,7 @@ export default function Workbench() {
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-      <Title level={4} style={{ marginBottom: 4 }}>录制工作台</Title>
+      <Title level={2} style={{ marginBottom: 4 }}>录制工作台</Title>
       <Paragraph type="secondary" style={{ marginBottom: 16 }}>
         按 8 步状态机录制并生成 adapter:健康检查 → 绑定 → 导航 → 采集 A/B → 排序 → 草稿 → Verify。
       </Paragraph>
