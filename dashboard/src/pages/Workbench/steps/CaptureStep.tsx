@@ -1,36 +1,41 @@
 // Step 3 · 采集 A/B 样本 —— capture/start + capture/read 两个样本窗口(串行)
 import { CheckCircleFilled } from '@ant-design/icons';
-import { Button, Card, Col, Row, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Col, Row, Space, Table, Tag, Typography, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { CaptureSample, NetworkEntry, SessionState } from '@/types/recorder';
 
 const { Paragraph, Text } = Typography;
 
-const entryColumns: ColumnsType<NetworkEntry> = [
-  { title: '方法', dataIndex: 'method', width: 64, render: (m) => <Tag className="code">{m}</Tag> },
-  { title: 'Path', dataIndex: 'pathname', render: (p) => <Text className="code" style={{ fontSize: 12 }}>{p}</Text> },
-  {
-    title: '状态',
-    dataIndex: ['response', 'status'],
-    width: 70,
-    render: (s: number) => <Tag color={s < 300 ? '#56d364' : '#f0a868'} className="code">{s}</Tag>,
-  },
-  {
-    title: '耗时',
-    dataIndex: ['timing', 'durationMs'],
-    width: 80,
-    render: (d: number) => <Text className="code" type="secondary">{d}ms</Text>,
-  },
-];
-
 function SampleCard({ name, sample }: { name: 'A' | 'B'; sample?: CaptureSample }) {
+  const { token } = theme.useToken();
+  // 列定义放组件内,状态色走 token(2xx=success 绿、其余=warning 琥珀)
+  const entryColumns: ColumnsType<NetworkEntry> = [
+    { title: '方法', dataIndex: 'method', width: 64, render: (m) => <Tag className="code">{m}</Tag> },
+    { title: 'Path', dataIndex: 'pathname', render: (p) => <Text className="code" style={{ fontSize: 12 }}>{p}</Text> },
+    {
+      title: '状态',
+      dataIndex: ['response', 'status'],
+      width: 70,
+      render: (s: number) => (
+        <Tag color={s < 300 ? token.colorSuccess : token.colorWarning} className="code">
+          {s}
+        </Tag>
+      ),
+    },
+    {
+      title: '耗时',
+      dataIndex: ['timing', 'durationMs'],
+      width: 80,
+      render: (d: number) => <Text className="code" type="secondary">{d}ms</Text>,
+    },
+  ];
   return (
     <Card
       size="small"
       title={
         <Space>
           样本 {name}
-          {sample && <CheckCircleFilled style={{ color: '#56d364' }} />}
+          {sample && <CheckCircleFilled style={{ color: token.colorSuccess }} />}
         </Space>
       }
     >

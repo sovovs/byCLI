@@ -1,6 +1,7 @@
 // 录制工作台主框架 —— 全屏单页:标题 + 会话状态带、青色进度轨(StepRail)、当前 step 操作区。
 // 失败态切 ErrorRecovery;完成态显示 Result。数据/状态机走 useRecorderSession model。
 import { useModel } from '@umijs/max';
+import { useRef } from 'react';
 import { Result } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import StepRail from './components/StepRail';
@@ -19,8 +20,12 @@ export default function Workbench() {
 
   const order = STATE_ORDER[state];
   const failed = isFailed(state);
-  // 当前活动 step 序号(0-based);done 时全部完成
-  const currentStep = state === 'done' ? FLOW_STEPS.length : Math.max(0, order);
+  // 记录已到达的最高 step:失败态 order=-1,用它把"失败"定位到失败前所在步骤,而非错误落到步骤 0。
+  const lastReachedRef = useRef(0);
+  if (order >= 0) lastReachedRef.current = order;
+  // 当前活动 step 序号(0-based);done=全完成;failed=定位失败前步骤;其余=order。
+  const currentStep =
+    state === 'done' ? FLOW_STEPS.length : failed ? lastReachedRef.current : Math.max(0, order);
   const selectedCandidate = data.candidates?.find((c) => c.id === data.selectedCandidateId);
 
   const renderActiveStep = () => {

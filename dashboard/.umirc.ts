@@ -8,7 +8,8 @@ export default defineConfig({
       token: {
         // 青色主题:teal 为主导强调色,背景偏冷的深青黑。
         colorPrimary: '#2dd4bf',
-        colorInfo: '#2dd4bf',
+        // colorInfo 保持蓝色:作语义信息/「中」置信度的区分色(青色主导靠 colorPrimary)
+        colorInfo: '#58a6ff',
         colorBgBase: '#080d10',
         colorBgContainer: '#0e171b',
         colorBgElevated: '#14222a',

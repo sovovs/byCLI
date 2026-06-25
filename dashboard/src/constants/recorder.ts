@@ -52,31 +52,13 @@ export const isFailed = (s: SessionState) => s === 'failed';
 export const TERMINAL_ERROR_CODES: ErrorCode[] = ['page_lost', 'daemon_unavailable', 'verify_timeout'];
 export const isTerminalError = (code: string): boolean => (TERMINAL_ERROR_CODES as string[]).includes(code);
 
-/**
- * confidence → antd Tag 颜色 + token 色值。
- * 语义对齐 MASTER.md:高=主色 teal、中=info 蓝、低=warning 琥珀、拒绝=error 红。
- */
-export const CONFIDENCE_COLOR: Record<Confidence, string> = {
-  high: '#2dd4bf', // colorPrimary
-  medium: '#58a6ff', // colorInfo
-  low: '#f0a868', // colorWarning
-  rejected: '#f47067', // colorError
-};
-
+// confidence → 主题 token 配色已下放到 CandidateCard(theme.useToken),不再在此硬编码 hex。
 export const CONFIDENCE_LABEL: Record<Confidence, string> = {
   high: '高',
   medium: '中',
   low: '低',
   rejected: '已拒绝',
 };
-
-/** FlowGraph 节点配色(MASTER.md 图表语义) */
-export const FLOW_COLOR = {
-  done: '#56d364', // happy path / 已完成
-  active: '#2dd4bf', // 当前态高亮(主色)
-  pending: '#2d3744', // 未到达(边框色)
-  failed: '#f47067', // 瓶颈 / 失败
-} as const;
 
 /** 状态机非法转移时的统一文案 */
 export const INVALID_STATE_HINT = '当前会话状态不允许此操作,请按流程顺序推进。';

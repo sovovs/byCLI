@@ -1,7 +1,7 @@
 // Step 2 · 新建录制会话 —— 输入 URL,一键「新建录制会话」即自动绑定浏览器 + 导航打开录制页。
 // 需要登录的站点走「先建会话 · 等待登录」分支:bind(await_login)→ 登录 → confirm-auth → 打开录制页面。
 import { LinkOutlined, LoginOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Form, Input, Space, Switch, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, Space, Switch, Tooltip, Typography, theme } from 'antd';
 import { useState } from 'react';
 import { mockFlags } from '@/services/mockRecorder';
 import type { SessionState } from '@/types/recorder';
@@ -29,6 +29,7 @@ export default function BindNavigateStep({
   const [url, setUrl] = useState('https://example.com/search');
   const [needLogin, setNeedLogin] = useState(false);
   const [injectFault, setInjectFault] = useState(false);
+  const { token } = theme.useToken();
 
   const preBind = state === 'health_checked'; // 尚未建会话
   const awaitingLogin = state === 'awaiting_user_login'; // 已建会话,等用户登录
@@ -88,7 +89,7 @@ export default function BindNavigateStep({
                     <Switch checked={injectFault} onChange={setInjectFault} />
                   </Tooltip>
                   <span>
-                    <ThunderboltOutlined style={{ color: '#f0a868' }} /> 模拟故障(page_lost)
+                    <ThunderboltOutlined style={{ color: token.colorWarning }} /> 模拟故障(page_lost)
                   </span>
                 </Space>
               </Form.Item>

@@ -2,7 +2,7 @@
 // 预览不推进会话;写入(带 responsibleUseAcknowledgedAt)推进 ranked→draft_created。
 import { useState } from 'react';
 import { FileTextOutlined, EyeOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Checkbox, Descriptions, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Descriptions, Space, Tag, Typography, theme } from 'antd';
 import type { InitResult, RankCandidate } from '@/types/recorder';
 
 const { Paragraph, Text } = Typography;
@@ -20,6 +20,7 @@ interface Props {
 
 export default function InitStep({ loading, selectedCandidate, adapterName, preview, onPreview, onWrite }: Props) {
   const [acknowledged, setAcknowledged] = useState(false);
+  const { token } = theme.useToken();
 
   return (
     <Card title="生成 Adapter 草稿" variant="borderless">
@@ -64,9 +65,9 @@ export default function InitStep({ loading, selectedCandidate, adapterName, prev
             </Descriptions.Item>
             <Descriptions.Item label="Dry-run">
               {preview.dryRun.exists ? (
-                <Tag color="#f0a868">已存在,将覆盖</Tag>
+                <Tag color={token.colorWarning}>已存在,将覆盖</Tag>
               ) : (
-                <Tag color="#56d364">新建</Tag>
+                <Tag color={token.colorSuccess}>新建</Tag>
               )}
               <Text type="secondary" style={{ marginLeft: 8 }}>
                 变更 {preview.dryRun.changedLines ?? '—'} 行

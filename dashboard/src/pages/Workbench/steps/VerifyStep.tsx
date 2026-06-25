@@ -2,7 +2,7 @@
 // 安全(M7c redaction):仅返回脱敏 VerifySummary(行数 + 字段**数**〔非列名,列名可能是 seed 值〕+
 // fixture/trace 状态),不回原始行数据,故展示为摘要而非数据表。
 import { CheckCircleFilled, PlayCircleOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Descriptions, Tag, Typography, theme } from 'antd';
 import type { InitResult, VerifySummary } from '@/types/recorder';
 
 const { Paragraph, Text } = Typography;
@@ -16,6 +16,7 @@ interface Props {
 }
 
 export default function VerifyStep({ loading, draft, result, onVerify }: Props) {
+  const { token } = theme.useToken();
   return (
     <Card title="执行 Verify" variant="borderless">
       <Paragraph type="secondary" style={{ lineHeight: 1.6 }}>
@@ -74,7 +75,7 @@ export default function VerifyStep({ loading, draft, result, onVerify }: Props) 
           </Descriptions>
 
           {result.ok && (
-            <Tag color="#56d364" className="code" style={{ marginTop: 12 }}>
+            <Tag color={token.colorSuccess} className="code" style={{ marginTop: 12 }}>
               session → done
             </Tag>
           )}

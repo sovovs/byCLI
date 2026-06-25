@@ -1,9 +1,9 @@
 // 单个 RankCandidate 候选卡 —— 展示 score/confidence/risks/scoreExplanation/endpoint。
-// 配色全走 token(CONFIDENCE_COLOR),等宽字段用 Fira Code(.code class)。
+// 配色全走主题 token(theme.useToken),等宽字段用 Fira Code(.code class)。
 import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { Button, Card, Descriptions, Progress, Space, Tag, Tooltip, Typography, theme } from 'antd';
-import { CONFIDENCE_COLOR, CONFIDENCE_LABEL } from '@/constants/recorder';
-import type { RankCandidate } from '@/types/recorder';
+import { CONFIDENCE_LABEL } from '@/constants/recorder';
+import type { Confidence, RankCandidate } from '@/types/recorder';
 
 const { Text, Paragraph } = Typography;
 
@@ -17,7 +17,14 @@ interface Props {
 export default function CandidateCard({ candidate, selected, disabled, onSelect }: Props) {
   const { id, endpoint, score, confidence, reviewRequired, args, responseShape, scoreExplanation, risks } = candidate;
   const { token } = theme.useToken();
-  const color = CONFIDENCE_COLOR[confidence];
+  // confidence → 主题 token 色(高=主色青 / 中=info 蓝 / 低=warning 琥珀 / 拒绝=error 红)
+  const confidenceColor: Record<Confidence, string> = {
+    high: token.colorPrimary,
+    medium: token.colorInfo,
+    low: token.colorWarning,
+    rejected: token.colorError,
+  };
+  const color = confidenceColor[confidence];
   const selectable = !disabled && confidence !== 'rejected';
 
   return (
