@@ -1,7 +1,7 @@
 // 单个 RankCandidate 候选卡 —— 展示 score/confidence/risks/scoreExplanation/endpoint。
 // 配色全走 token(CONFIDENCE_COLOR),等宽字段用 Fira Code(.code class)。
 import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { Button, Card, Descriptions, Progress, Space, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Descriptions, Progress, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { CONFIDENCE_COLOR, CONFIDENCE_LABEL } from '@/constants/recorder';
 import type { RankCandidate } from '@/types/recorder';
 
@@ -16,6 +16,7 @@ interface Props {
 
 export default function CandidateCard({ candidate, selected, disabled, onSelect }: Props) {
   const { id, endpoint, score, confidence, reviewRequired, args, responseShape, scoreExplanation, risks } = candidate;
+  const { token } = theme.useToken();
   const color = CONFIDENCE_COLOR[confidence];
   const selectable = !disabled && confidence !== 'rejected';
 
@@ -88,7 +89,7 @@ export default function CandidateCard({ candidate, selected, disabled, onSelect 
               <Tooltip title={s.detail}>
                 <Text type="secondary">{s.signal}</Text>
               </Tooltip>
-              <Text style={{ color: s.delta >= 0 ? '#56d364' : '#f47067' }}>
+              <Text style={{ color: s.delta >= 0 ? token.colorSuccess : token.colorError }}>
                 {s.delta >= 0 ? '+' : ''}
                 {s.delta}
               </Text>
@@ -108,6 +109,8 @@ export default function CandidateCard({ candidate, selected, disabled, onSelect 
         size="small"
         block
         disabled={!selectable}
+        aria-pressed={selected}
+        aria-disabled={!selectable}
         icon={selected ? <CheckCircleOutlined /> : undefined}
         style={{ marginTop: 12 }}
         onClick={(e) => {
