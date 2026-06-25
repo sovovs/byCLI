@@ -1,9 +1,9 @@
-// 录制工作台主框架 —— 左 Steps 进度 + FlowGraph,中 当前 step 操作区,右 StatePanel。
+// 录制工作台主框架 —— 全屏单页:标题 + 会话状态带、青色进度轨(StepRail)、当前 step 操作区。
 // 失败态切 ErrorRecovery;完成态显示 Result。数据/状态机走 useRecorderSession model。
 import { useModel } from '@umijs/max';
-import { Card, Col, Result, Row, Steps, Typography } from 'antd';
+import { Result } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
-import FlowGraph from './components/FlowGraph';
+import StepRail from './components/StepRail';
 import StatePanel from './components/StatePanel';
 import ErrorRecovery from './components/ErrorRecovery';
 import HealthStep from './steps/HealthStep';
@@ -13,8 +13,6 @@ import RankStep from './steps/RankStep';
 import InitStep from './steps/InitStep';
 import VerifyStep from './steps/VerifyStep';
 import { FLOW_STEPS, STATE_ORDER, isFailed } from '@/constants/recorder';
-
-const { Title, Paragraph } = Typography;
 
 export default function Workbench() {
   const { state, stateVersion, data, loading, error, actions } = useModel('useRecorderSession');
@@ -148,25 +146,16 @@ export default function Workbench() {
   const inlineError = error && !failed ? error : null;
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-      <Title level={2} style={{ marginBottom: 4 }}>录制工作台</Title>
-      <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        按 8 步状态机录制并生成 adapter:健康检查 → 绑定 → 导航 → 采集 A/B → 排序 → 草稿 → Verify。
-      </Paragraph>
+    <div className="wb">
+      <div className="wb-shell">
+        <header className="wb-head">
+          <h1 className="wb-title">录制工作台</h1>
+          <StatePanel state={state} stateVersion={stateVersion} sessionId={data.sessionId} targetUrl={data.targetUrl} />
+        </header>
 
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <FlowGraph state={state} />
-      </Card>
+        <StepRail steps={FLOW_STEPS} current={currentStep} failed={failed} />
 
-      <Row gutter={16}>
-        <Col xs={24} lg={18}>
-          <Steps
-            size="small"
-            current={currentStep}
-            status={failed ? 'error' : undefined}
-            items={FLOW_STEPS.map((s) => ({ title: s.title }))}
-            style={{ marginBottom: 16 }}
-          />
+        <div className="wb-stage">
           {inlineError && (
             <ErrorRecovery
               error={inlineError}
@@ -178,11 +167,8 @@ export default function Workbench() {
             />
           )}
           {renderByStage()}
-        </Col>
-        <Col xs={24} lg={6}>
-          <StatePanel state={state} stateVersion={stateVersion} sessionId={data.sessionId} targetUrl={data.targetUrl} />
-        </Col>
-      </Row>
+        </div>
+      </div>
     </div>
   );
 }

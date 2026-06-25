@@ -6,18 +6,19 @@ export default defineConfig({
     // 暗色主题:对齐 V1.1 设计稿的配色
     theme: {
       token: {
+        // 青色主题:teal 为主导强调色,背景偏冷的深青黑。
         colorPrimary: '#2dd4bf',
-        colorInfo: '#58a6ff',
-        colorBgBase: '#0d1117',
-        colorBgContainer: '#161b22',
-        colorBgElevated: '#1c2330',
-        colorBorder: '#2d3744',
-        colorText: '#e6edf3',
-        colorTextSecondary: '#9da7b3',
-        colorSuccess: '#56d364',
+        colorInfo: '#2dd4bf',
+        colorBgBase: '#080d10',
+        colorBgContainer: '#0e171b',
+        colorBgElevated: '#14222a',
+        colorBorder: '#1f3138',
+        colorText: '#e6f4f1',
+        colorTextSecondary: '#8ba3a3',
+        colorSuccess: '#34d399',
         colorWarning: '#f0a868',
         colorError: '#f47067',
-        borderRadius: 8,
+        borderRadius: 10,
         fontSize: 14,
         fontFamily: "'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         fontFamilyCode: "'Fira Code', 'SFMono-Regular', Menlo, monospace",
@@ -30,21 +31,15 @@ export default defineConfig({
   model: {},
   initialState: {},
   request: {},
-  layout: {
-    title: 'byCLI · Adapter Recorder',
-  },
+  // 单页录制工作台:不挂 ProLayout(无 header / 无 sider),页面自渲全屏布局。
   routes: [
     {
       path: '/',
       redirect: '/workbench',
     },
     {
-      name: '录制工作台',
       path: '/workbench',
-      icon: 'Experiment',
       component: './Workbench',
-      // 单页应用:顶栏只保留品牌标识,不展示导航项(与页面 H1 重复)。
-      hideInMenu: true,
     },
   ],
   npmClient: 'pnpm',

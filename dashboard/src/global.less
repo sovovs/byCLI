@@ -1,11 +1,28 @@
-// 全局样式 —— Fira 字体引入、等宽 .code class、prefers-reduced-motion 兜底。
+// 全局样式 —— Fira 字体、等宽 .code、青色(teal)主题外壳 + antd 组件重塑、a11y。
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
 
+// ── 青色主题色板 ────────────────────────────────
+@cyan: #2dd4bf;
+@cyan-bright: #5eead4;
+@cyan-dim: #14b8a6;
+@glow: rgba(45, 212, 191, 0.5);
+@line: #1f3138;
+@line-cyan: rgba(45, 212, 191, 0.16);
+@bg: #080d10;
+@bg-soft: #0d1519;
+@panel: #101e23;
+@panel-2: #0b161a;
+@text: #e6f4f1;
+@text-dim: #8ba3a3;
+@text-faint: #5d7370;
+
 body {
+  margin: 0;
   font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: @bg;
+  color: @text;
 }
 
-// 等宽语义:trace / selector / JSON payload / URL / 命令
 .code,
 code,
 pre {
@@ -13,7 +30,238 @@ pre {
   font-variant-ligatures: none;
 }
 
-// 可访问性:尊重系统的减少动效偏好(MASTER.md 自检项)
+// ── 全屏画布 ────────────────────────────────────
+.wb {
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 48px) clamp(16px, 5vw, 72px);
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(45, 212, 191, 0.08), transparent 60%),
+    @bg;
+}
+.wb-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+// ── 头部:标题 + 会话状态带 ──────────────────────
+.wb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.wb-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: @text;
+}
+.wb-title::before {
+  content: '';
+  width: 4px;
+  height: 1.1em;
+  border-radius: 2px;
+  background: linear-gradient(180deg, @cyan-bright, @cyan-dim);
+  box-shadow: 0 0 12px @glow;
+}
+
+// 会话状态:细 chip 带
+.wb-statebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: @bg-soft;
+  border: 1px solid @line;
+  font-size: 12px;
+  line-height: 1;
+  max-width: 320px;
+}
+.wb-chip__k {
+  color: @text-faint;
+}
+.wb-chip__v {
+  color: @text;
+  font-family: 'Fira Code', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-chip__v--muted {
+  color: @text-faint;
+}
+.wb-chip--state {
+  border-color: @line-cyan;
+}
+.wb-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: @cyan;
+  box-shadow: 0 0 8px @glow;
+}
+.wb-chip--err {
+  border-color: rgba(244, 112, 103, 0.4);
+}
+.wb-chip--err .wb-chip__dot {
+  background: #f47067;
+  box-shadow: 0 0 8px rgba(244, 112, 103, 0.5);
+}
+
+// ── 进度轨(替代 FlowGraph + Steps 的重复)──────────
+.wb-rail {
+  display: flex;
+  margin: 0;
+  padding: 4px 0 2px;
+  list-style: none;
+}
+.wb-step {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  position: relative;
+  min-width: 0;
+}
+// 连接线(指向前一节点)
+.wb-step::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: @line;
+  z-index: 0;
+}
+.wb-step:first-child::before {
+  display: none;
+}
+.wb-step--done::before,
+.wb-step--active::before {
+  background: linear-gradient(90deg, @cyan-dim, @cyan);
+}
+.wb-step__dot {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: @bg-soft;
+  border: 1.5px solid @line;
+  color: @text-faint;
+  transition: all 0.25s ease;
+}
+.wb-step__label {
+  font-size: 12px;
+  color: @text-faint;
+  text-align: center;
+  transition: color 0.25s ease;
+}
+.wb-step--done .wb-step__dot {
+  background: rgba(45, 212, 191, 0.14);
+  border-color: @cyan;
+  color: @cyan-bright;
+}
+.wb-step--done .wb-step__label {
+  color: @text-dim;
+}
+.wb-step--active .wb-step__dot {
+  background: linear-gradient(180deg, @cyan-bright, @cyan);
+  border-color: @cyan-bright;
+  color: #062b27;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.16), 0 0 18px -2px @glow;
+}
+.wb-step--active .wb-step__label {
+  color: @cyan-bright;
+  font-weight: 600;
+}
+.wb-step--failed .wb-step__dot {
+  background: rgba(244, 112, 103, 0.16);
+  border-color: #f47067;
+  color: #f47067;
+}
+.wb-step--failed .wb-step__label {
+  color: #f47067;
+}
+
+// ── 当前步骤面板:重塑 antd Card 外观 ───────────────
+.wb-stage .ant-card {
+  position: relative;
+  background: linear-gradient(180deg, @panel 0%, @panel-2 100%);
+  border: 1px solid @line-cyan;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px -30px #000, inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+.wb-stage .ant-card + .ant-card,
+.wb-stage > div + div {
+  margin-top: 16px;
+}
+.wb-stage .ant-card::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, @cyan, transparent);
+  opacity: 0.45;
+}
+.wb-stage .ant-card-head {
+  border-bottom: 1px solid @line-cyan;
+  min-height: auto;
+  padding: 16px 22px;
+}
+.wb-stage .ant-card-head-title {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+.wb-stage .ant-card-body {
+  padding: 22px;
+}
+
+// ── antd 组件青色化 ─────────────────────────────
+.ant-btn-primary {
+  background: linear-gradient(180deg, @cyan-bright, @cyan);
+  border: none;
+  color: #062b27;
+  font-weight: 600;
+  box-shadow: 0 6px 18px -8px @glow;
+  &:hover {
+    background: @cyan-bright !important;
+    color: #052320 !important;
+  }
+}
+.ant-progress-circle .ant-progress-text {
+  color: @text;
+}
+
+// ── 可访问性 ───────────────────────────────────
+:focus-visible {
+  outline: 2px solid @cyan;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -22,5 +270,16 @@ pre {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+// ── 窄屏:进度轨标签收起 ─────────────────────────
+@media (max-width: 720px) {
+  .wb-step__label {
+    display: none;
+  }
+  .wb-step__dot {
+    width: 26px;
+    height: 26px;
   }
 }

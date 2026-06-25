@@ -1,16 +1,6 @@
-// 右侧会话状态面板 —— sessionId / state / stateVersion / 目标 URL。
-// 等宽字段用 Fira Code(.code)。
-import { Badge, Card, Descriptions, Typography } from 'antd';
-import { isFailed, isTerminal } from '@/constants/recorder';
+// 会话状态 —— 细 chip 带(state / sessionId / 目标 URL)。极简,只留对当前步骤有用的信息。
+import { isFailed } from '@/constants/recorder';
 import type { SessionState } from '@/types/recorder';
-
-const { Text } = Typography;
-
-const STATE_BADGE: Record<string, 'processing' | 'success' | 'error' | 'default'> = {
-  done: 'success',
-  failed: 'error',
-  cancelled: 'default',
-};
 
 interface Props {
   state: SessionState;
@@ -19,37 +9,24 @@ interface Props {
   targetUrl?: string;
 }
 
-export default function StatePanel({ state, stateVersion, sessionId, targetUrl }: Props) {
-  const badge = STATE_BADGE[state] ?? (isTerminal(state) ? 'default' : 'processing');
+export default function StatePanel({ state, sessionId, targetUrl }: Props) {
+  const failed = isFailed(state);
   return (
-    <Card size="small" title="会话状态" style={{ position: 'sticky', top: 16 }}>
-      <Descriptions size="small" column={1} colon={false} styles={{ label: { width: 88 } }}>
-        <Descriptions.Item label="当前状态">
-          <Badge status={badge} text={<Text strong className="code">{state}</Text>} />
-        </Descriptions.Item>
-        <Descriptions.Item label="stateVersion">
-          <Text className="code">{stateVersion}</Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="sessionId">
-          <Text className="code" type={sessionId ? undefined : 'secondary'}>
-            {sessionId ?? '—'}
-          </Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="目标 URL">
-          {targetUrl ? (
-            <Text className="code" style={{ fontSize: 12 }} ellipsis={{ tooltip: targetUrl }}>
-              {targetUrl}
-            </Text>
-          ) : (
-            <Text type="secondary">—</Text>
-          )}
-        </Descriptions.Item>
-      </Descriptions>
-      {isFailed(state) && (
-        <Text type="danger" style={{ fontSize: 12 }}>
-          会话已终止,租约与采集窗口已释放。需重新绑定新会话。
-        </Text>
+    <div className="wb-statebar" aria-label="会话状态">
+      <span className={`wb-chip wb-chip--state${failed ? ' wb-chip--err' : ''}`}>
+        <span className="wb-chip__dot" aria-hidden />
+        <span className="wb-chip__v">{state}</span>
+      </span>
+      <span className="wb-chip">
+        <span className="wb-chip__k">session</span>
+        <span className={`wb-chip__v${sessionId ? '' : ' wb-chip__v--muted'}`}>{sessionId ?? '—'}</span>
+      </span>
+      {targetUrl && (
+        <span className="wb-chip" title={targetUrl}>
+          <span className="wb-chip__k">url</span>
+          <span className="wb-chip__v">{targetUrl}</span>
+        </span>
       )}
-    </Card>
+    </div>
   );
 }

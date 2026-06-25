@@ -10,9 +10,3 @@ export const antd: RuntimeAntdConfig = (memo) => {
   };
   return memo;
 };
-
-// 单页应用(仅录制工作台):品牌走顶部 header,去掉左侧导航 sider。
-// 菜单项由路由 hideInMenu 隐藏(.umirc.ts),顶栏仅余品牌标识。
-export const layout = () => ({
-  layout: 'top' as const,
-});
