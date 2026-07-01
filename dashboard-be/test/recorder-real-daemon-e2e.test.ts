@@ -120,6 +120,7 @@ const distMissing = !fs.existsSync(DAEMON_JS);
 
 let daemonProc: ChildProcess | null = null;
 let daemonLog = '';
+let daemonPort = 0; // hoisted so the LLM-synthesis test can spin a 2nd be app against the same daemon
 let tmpHome = '';
 let fakeExt: { close: () => Promise<void> } | null = null;
 let server: ReturnType<typeof createApp>['server'] | null = null;
@@ -127,7 +128,7 @@ let client: ReturnType<typeof createHttpRecorderClient>;
 
 beforeAll(async () => {
   if (distMissing) return; // it() 会 skip 并给出明确原因
-  const daemonPort = await getFreePort();
+  daemonPort = await getFreePort();
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-recorder-e2e-'));
 
   // 渲染出的适配器 `import '@sovovs/bycli/registry'`,但被写到 tmpHome 下、从那里向上走 node_modules
@@ -221,6 +222,8 @@ describe('Tier A 端到端:真 client → 真 be → 真 daemon 子进程 → �
     const capA = await client.captureRead('A');
     expect(capA.ok, JSON.stringify(capA.error)).toBe(true);
     expect(capA.data?.entries.length).toBeGreaterThan(0);
+    // B 录制:先重新 navigate 开页面 b(B 每次新开全新页面;capture_a→page_ready),再 start+read
+    expect((await client.navigate('https://x.com')).ok, 'navigate B').toBe(true);
     expect((await client.captureStart('B')).ok, 'captureStart B').toBe(true);
     expect((await client.captureRead('B')).ok).toBe(true);
 
@@ -262,5 +265,74 @@ describe('Tier A 端到端:真 client → 真 be → 真 daemon 子进程 → �
     expect(verify.data?.ok).toBe(true);
     expect(verify.data?.stage).toBe('execute');
     expect(verify.data?.rows).toBe(0);
+  }, 60_000);
+
+  // LLM 合成 on(注入 fake 合成器,返回静态 return 的 func):验证「funcBody → 真 daemon 渲染 →
+  // 真 adapter 文件含 func → 真 verify-runner 执行 → rows>0」整条端到端。与上面的空模板用例互不干扰
+  // (第二个 be app 启用 LLM;适配器名相同 x-com/search,write 覆盖上面的——上面断言已先跑完)。
+  it('LLM 合成 on → dry-run 出含 func 的 generatedSource、write 写入真 func、verify 真执行得 rows>0', async () => {
+    if (distMissing) {
+      const msg = `dist 未构建(缺 ${DAEMON_JS});先 npm run build`;
+      if (process.env.CI) throw new Error(msg);
+      console.warn(`skipped — ${msg}`);
+      return;
+    }
+    // 第二个 be app:启用 LLM,指向同一个真 daemon;注入 fake 合成器(verify 能真执行的静态 func)。
+    const llmCfg = loadConfig({
+      RECORDER_TOKEN: 'e2e-token-llm-1234567890ab',
+      LOG_LEVEL: 'error',
+      RECORDER_ALLOWED_ORIGINS: 'http://127.0.0.1:8000',
+      BYCLI_DAEMON_PORT: '19825',
+      RECORDER_MAX_ACTIVE_SESSIONS: '10',
+      FEATURE_LLM_SYNTHESIS: '1',
+      RECORDER_LLM_API_KEY: 'test-key',
+    });
+    const app2 = createApp({ ...llmCfg, DAEMON_PORT: daemonPort });
+    app2.ctx.synthesizer = {
+      async synthesize() {
+        return {
+          funcBody: '    return [{ title: "x", url: "u" }];',
+          columns: [{ name: 'title', path: '$[].title', type: 'string' }],
+          description: 'gen', access: 'read',
+        };
+      },
+    };
+    await new Promise<void>((r) => app2.server.listen(0, '127.0.0.1', () => r()));
+    const port2 = (app2.server.address() as AddressInfo).port;
+    const client2 = createHttpRecorderClient({ enabled: true, baseUrl: `http://127.0.0.1:${port2}`, token: llmCfg.TOKEN, csrfToken: app2.ctx.vault.csrfToken });
+    try {
+      await client2.bind('existing');
+      await client2.navigate('https://x.com');
+      await client2.captureStart('A'); await client2.captureRead('A');
+      await client2.navigate('https://x.com');
+      await client2.captureStart('B'); await client2.captureRead('B');
+      const rank = await client2.rank();
+      const cand = rank.data![0];
+      const name = deriveAdapterName(cand);
+      const [site, command] = name.split('/');
+
+      // dry-run 带 egress 同意(P0-2):generatedSource 含 LLM provenance + 生成的 func
+      const preview = await client2.init(name, cand.id, 'dry-run', undefined, Date.now());
+      expect(preview.ok, JSON.stringify(preview.error)).toBe(true);
+      expect(preview.data?.generatedSource).toContain('@generated-by adapter-recorder-llm');
+      expect(preview.data?.generatedSource).toContain('return [{ title: "x", url: "u" }];');
+
+      // write:真 adapter 文件含 func(非空骨架);复用已同意的合成
+      const write = await client2.init(name, cand.id, 'write', Date.now(), Date.now());
+      expect(write.ok, JSON.stringify(write.error)).toBe(true);
+      const adapterFile = path.join(tmpHome, '.bycli', 'clis', site, `${command}.js`);
+      const src = fs.readFileSync(adapterFile, 'utf-8');
+      expect(src).toContain('@generated-by adapter-recorder-llm');
+      expect(src).toContain('return [{ title: "x", url: "u" }];');
+      expect(src).not.toContain('// TODO: implement data fetching');
+
+      // verify:真 spawn runner 执行 LLM func → rows>0(证明生成的代码真能跑)
+      const verify = await client2.verify(name);
+      expect(verify.ok, JSON.stringify(verify.error)).toBe(true);
+      expect(verify.data?.stage).toBe('execute');
+      expect(verify.data?.rows).toBeGreaterThan(0);
+    } finally {
+      await new Promise<void>((r) => app2.server.close(() => r()));
+    }
   }, 60_000);
 });

@@ -32,6 +32,7 @@
         "fixture_mismatch",
         "output_truncated",
         "feature_disabled",
+        "ambiguous_iframe_target",
         "config_invalid"
       ]
     },
@@ -123,7 +124,7 @@
       "type": "object",
       "required": ["url", "method"],
       "properties": {
-        "kind": { "const": "cdp" },
+        "kind": { "enum": ["cdp", "cdp-websocket"], "description": "cdp = HTTP(Fetch/XHR);cdp-websocket = WebSocket 连接(数据帧累积在 webSocketFrames,打分排除)。" },
         "url": { "type": "string" },
         "method": { "type": "string" },
         "requestHeaders": { "type": "object", "additionalProperties": { "type": "string" } },
@@ -137,7 +138,12 @@
         "responsePreview": { "type": "string" },
         "responseBodyFullSize": { "type": "integer" },
         "responseBodyTruncated": { "type": "boolean" },
-        "timestamp": { "type": "integer" }
+        "timestamp": { "type": "integer" },
+        "resourceType": { "type": "string", "description": "CDP ResourceType(XHR/Fetch/WebSocket…)。诊断 + 喂 LLM 用。" },
+        "initiatorType": { "type": "string", "description": "CDP initiator 类型(script/parser/preload/other);因果对齐权重信号(timeline.ts)。" },
+        "frameId": { "type": "string", "description": "发起请求的 CDP frameId(M-UI-3 因果对齐用)。" },
+        "frameSessionId": { "type": "string", "description": "OOPIF:请求来自的跨源 iframe 子 session(顶层请求无此字段)。timeline 用 frameSessionId ?? 'top' 强相等约束,防 iframe 内操作错关联到顶层请求。" },
+        "frameUrl": { "type": "string", "description": "OOPIF:请求来自的 iframe 文档 URL(已脱敏,取自 CDP Target.attachedToTarget 的 targetInfo.url);顶层请求无此字段。" }
       }
     },
     "CaptureSample": {
@@ -227,6 +233,42 @@
       },
       "additionalProperties": false
     },
+    "ParamObservation": {
+      "type": "object",
+      "title": "Deterministic per-param observation across an aggregated endpoint group",
+      "description": "recorder-core (pure-domain) FACTS ONLY about one request param across the member calls of an aggregated endpoint (method+host+pathname). NEVER carries semantic verdicts (paramRole/exposeAsArg/inferredMeaning) — those are the LLM layer's job. See 14-candidate-aggregation-scoring-plan.md · 核心架构原则.",
+      "required": ["name", "in", "observedCount", "totalCalls", "observedSamples", "observedAlways", "observedVariation", "valueKinds", "dynamicLike", "cursorLike"],
+      "properties": {
+        "name": { "type": "string" },
+        "in": { "enum": ["query", "body"] },
+        "observedCount": { "type": "integer" },
+        "totalCalls": { "type": "integer" },
+        "observedSamples": { "type": "array", "items": { "enum": ["A", "B"] } },
+        "observedAlways": { "type": "boolean" },
+        "observedVariation": { "oneOf": [{ "type": "boolean" }, { "const": "unknown" }] },
+        "valueKinds": { "type": "array", "items": { "type": "string" } },
+        "dynamicLike": { "type": "boolean" },
+        "cursorLike": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ParamUnionItem": {
+      "type": "object",
+      "title": "LLM semantic verdict for one request param of an aggregated endpoint",
+      "description": "LLM-inferred semantic role for one param, layered ON TOP OF the recorder-core ParamObservation facts. Carries the judgements core must NOT make (paramRole/exposeAsArg/inferredMeaning). Emitted by dashboard-be/src/llm/score.ts (ScoredCandidate.paramUnion, PROMPT_A output) and merged onto RankCandidate by be's /recorder/rank. See 14-candidate-aggregation-scoring-plan.md · 第2/5步.",
+      "required": ["name", "in"],
+      "properties": {
+        "name": { "type": "string" },
+        "in": { "enum": ["query", "body", "path", "header"] },
+        "requiredness": { "enum": ["always", "optional"] },
+        "observedVariation": { "type": "boolean" },
+        "paramRole": { "type": "string" },
+        "exposeAsArg": { "enum": ["yes", "optional_candidate", "no"] },
+        "inferredMeaning": { "type": "string" },
+        "why": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "RankCandidate": {
       "type": "object",
       "required": ["id", "endpoint", "score", "confidence", "reviewRequired"],
@@ -245,7 +287,39 @@
           "items": { "$ref": "#/$defs/ScoreExplanationItem" }
         },
         "risks": { "type": "array", "items": { "type": "string" } },
-        "evidenceIds": { "type": "array", "items": { "type": "string" } }
+        "evidenceIds": { "type": "array", "items": { "type": "string" } },
+        "paramObservations": {
+          "description": "14-plan 第1步: union of observed request params across all member calls of the aggregated endpoint group (FACTS ONLY). Optional/additive — LLM-off and older candidates omit it.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ParamObservation" }
+        },
+        "responseShapeVariants": {
+          "description": "Distinct response bodyShape.kind seen across member calls (e.g. [\"array\",\"object\"]). Optional/additive.",
+          "type": "array",
+          "items": { "enum": ["array", "object", "scalar", "html", "unknown"] }
+        },
+        "mergedRequestIds": {
+          "description": "requestIds of every member entry aggregated into this candidate (debug/provenance). Optional/additive.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "scoredBy": {
+          "description": "'llm' = LLM judged signals then be summed by profile delta; absent = rule heuristic only (LLM no-key/failure fallback). Added by be on /recorder/rank merge.",
+          "enum": ["llm"]
+        },
+        "llmUtilityScore": {
+          "description": "LLM self-reported utility score (0-100, auxiliary, NOT authoritative — be recomputes the dual-track score). Added by be when an LLM score is merged.",
+          "type": "integer"
+        },
+        "inferredFunction": {
+          "description": "LLM one-line plain-language description of what this endpoint does / returns (for the user). 14-plan 第2/5步. Optional/additive — absent on the LLM-off path. Added by be on /recorder/rank merge.",
+          "type": "string"
+        },
+        "paramUnion": {
+          "description": "LLM per-param semantic verdicts (role/exposeAsArg/inferredMeaning) layered on top of paramObservations facts. 14-plan 第2/5步. Optional/additive — absent on the LLM-off path. Added by be on /recorder/rank merge.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ParamUnionItem" }
+        }
       },
       "additionalProperties": false
     },

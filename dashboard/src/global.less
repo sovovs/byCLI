@@ -39,11 +39,28 @@ pre {
     @bg;
 }
 .wb-shell {
-  max-width: 1100px;
+  max-width: 1480px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 22px;
+}
+
+// 进度轨(左) + 操作区(右)横向布局,给投屏/iframe 让出更大面积。
+.wb-body {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+.wb-body > .wb-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+// 窄屏回落:纵向堆叠,进度轨横排在上。
+@media (max-width: 900px) {
+  .wb-body {
+    flex-direction: column;
+  }
 }
 
 // ── 头部:标题 + 会话状态带 ──────────────────────
@@ -129,6 +146,35 @@ pre {
   margin: 0;
   padding: 4px 0 2px;
   list-style: none;
+}
+// 左侧竖排布局(在 wb-body 内):固定窄列,步骤纵向排列、连接线竖向。
+.wb-body > .wb-rail {
+  flex: 0 0 168px;
+  width: 168px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  position: sticky;
+  top: 16px;
+}
+.wb-body > .wb-rail .wb-step {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 0;
+}
+// 竖排:连接线改成上下方向(连到上一节点)。
+.wb-body > .wb-rail .wb-step::before {
+  top: auto;
+  bottom: 50%;
+  right: auto;
+  left: 14px;
+  width: 2px;
+  height: 100%;
+}
+.wb-body > .wb-rail .wb-step__label {
+  text-align: left;
 }
 .wb-step {
   flex: 1 1 0;

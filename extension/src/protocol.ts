@@ -18,6 +18,8 @@ export type Action =
   | 'bind'
   | 'network-capture-start'
   | 'network-capture-read'
+  | 'ui-capture-start'
+  | 'ui-capture-read'
   | 'wait-download'
   | 'cdp'
   | 'frames';
@@ -77,6 +79,9 @@ export interface Command {
   frameIndex?: number;
   /** Browser profile/context selected by the CLI. Used by the daemon for routing. */
   contextId?: string;
+  /** embedded_iframe 录制模式:目标 iframe 的 URL。capture read 时据此把噪音过滤到该 iframe(+descendants)子 session,
+   *  丢顶层 dashboard 自己的请求/操作。be 在 embedded_iframe 会话的 captureRead 时下发;tab_projection 不带。 */
+  targetFrameUrl?: string;
 }
 
 export interface Result {
@@ -98,7 +103,9 @@ export interface Result {
 
 /** Default daemon port */
 export const DAEMON_PORT = 19825;
-export const DAEMON_HOST = 'localhost';
+// 写死 IPv4 回环(不用 'localhost'):容器内 localhost 可能解析到 ::1,而 daemon bind 127.0.0.1,
+// 会导致扩展 WS + /ping 探针 + /status 同时连不上且故障极隐蔽(表现像 daemon 没起)。本机形态 127.0.0.1 同样通。
+export const DAEMON_HOST = '127.0.0.1';
 export const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
 /** Lightweight health-check endpoint — probed before each WebSocket attempt. */
 export const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;

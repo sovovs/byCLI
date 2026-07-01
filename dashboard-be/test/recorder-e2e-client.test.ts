@@ -59,6 +59,9 @@ ctx.daemon.command = async (cmd: DaemonCommandInput) => {
   switch (cmd.action) {
     case 'navigate':
       return { ok: true, data: { page: 'page-1', url: cmd.url, title: 'X' } };
+    case 'tabs':
+      // 首次打开:`tabs op:new` 开新 byCLI tab 并回 page lease(真扩展把 page 放结果顶层,be 优先读顶层)。
+      return { ok: true, page: 'page-1', data: { url: cmd.url, title: 'X' } };
     case 'network-capture-start':
       return { ok: true, data: {} };
     case 'network-capture-read':
@@ -109,7 +112,8 @@ describe('端到端:真 httpRecorderClient → 真 be → 桩 daemon(8 步全链
     expect(capA.ok).toBe(true);
     expect(capA.data?.entries.length).toBeGreaterThan(0);
 
-    // capture B
+    // capture B:先重新 navigate 开页面 b(B 录制每次新开全新页面;capture_a→page_ready),再 start+read
+    expect((await client.navigate('https://x.com')).ok).toBe(true);
     expect((await client.captureStart('B')).ok).toBe(true);
     expect((await client.captureRead('B')).ok).toBe(true);
 

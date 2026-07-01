@@ -35,6 +35,17 @@ export function resolveScoringProfile(
 
 // ── Feature flags (09 · local config flags, schema-validated, default fail-closed) ──────────────
 
+/** 产品录制形态(应用层策略,与底层 BindMode 区分):
+ *  - tab_projection:扩展拥有的真 tab + 投屏画面进 dashboard + Input 回传(对所有站通用,默认)。
+ *  - embedded_iframe:dashboard 嵌跨源目标 iframe + attach dashboard tab 录 iframe 内请求
+ *    (仅适用不反嵌的公开站,受 FEATURE_EMBEDDED_IFRAME_RECORDING gate)。
+ *  - vnc:浏览器+扩展+daemon 全在 podman 容器内,dashboard 用 noVNC 投容器画面、用户操作容器 Chromium 录制
+ *    (be 同机起容器,命令经容器网关反代到容器内 daemon;受 FEATURE_VNC_RECORDING gate)。 */
+export type RecordingMode = 'tab_projection' | 'embedded_iframe' | 'vnc';
+export const RECORDING_MODES: readonly RecordingMode[] = ['tab_projection', 'embedded_iframe', 'vnc'] as const;
+/** 缺省录制形态;契约 recordingMode 缺省即此(向后兼容:老客户端不传 → 投屏)。 */
+export const DEFAULT_RECORDING_MODE: RecordingMode = 'tab_projection';
+
 export interface FeatureFlags {
   /**
    * restart-only — RESERVED. Would expose a direct-CDP capture surface, but that capability does
@@ -50,6 +61,14 @@ export interface FeatureFlags {
   /** restart-only — gates the loopback admin log-level endpoint POST /recorder/admin/log-level
    *  (dashboard-be server.ts; off → endpoint absent / request_not_found) (#5b). */
   FEATURE_ADMIN_LOG_LEVEL_TOGGLE: boolean;
+  /** restart-only — gates the embedded-iframe recording mode (dashboard 嵌跨源目标 iframe + attach
+   *  dashboard tab,录 iframe 内请求,适用不反嵌的公开站)。off → bind 请求 embedded_iframe 回 feature_disabled,
+   *  且 CSP frame-src 不放宽(保持 default-src 'self')。默认 false。投屏模式(tab_projection)不受此 flag 影响。 */
+  FEATURE_EMBEDDED_IFRAME_RECORDING: boolean;
+  /** restart-only — gates the VNC recording mode (浏览器+扩展+daemon 全在 podman 容器内,dashboard 用
+   *  noVNC 投容器画面、用户操作容器 Chromium 录制;be 同机起容器,命令经容器网关反代到容器内 daemon)。
+   *  off → bind 请求 vnc 回 feature_disabled。默认 false。tab_projection/embedded_iframe 不受此 flag 影响。 */
+  FEATURE_VNC_RECORDING: boolean;
   /** hot — gates whether a candidate/preview ScoringProfile may be applied (default profile is always externalized) */
   FEATURE_PREVIEW_SCORING_PROFILE: boolean;
   /** hot — new sessions / rank jobs only */
@@ -62,6 +81,8 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   FEATURE_DIRECT_CDP_CAPTURE: false,
   FEATURE_LOCALHOST_HTTP_UI: false,
   FEATURE_ADMIN_LOG_LEVEL_TOGGLE: false,
+  FEATURE_EMBEDDED_IFRAME_RECORDING: false,
+  FEATURE_VNC_RECORDING: false,
   FEATURE_PREVIEW_SCORING_PROFILE: false,
   RELEASE_CHANNEL: 'stable',
   LOCAL_EXPERIMENT_PROFILE: 'off',
@@ -69,7 +90,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 
 const BOOL_FLAG_KEYS = [
   'FEATURE_DIRECT_CDP_CAPTURE', 'FEATURE_LOCALHOST_HTTP_UI',
-  'FEATURE_ADMIN_LOG_LEVEL_TOGGLE', 'FEATURE_PREVIEW_SCORING_PROFILE',
+  'FEATURE_ADMIN_LOG_LEVEL_TOGGLE', 'FEATURE_EMBEDDED_IFRAME_RECORDING', 'FEATURE_VNC_RECORDING', 'FEATURE_PREVIEW_SCORING_PROFILE',
 ] as const;
 const RELEASE_CHANNELS = ['stable', 'preview'] as const;
 const EXPERIMENT_PROFILES = ['off', 'control', 'candidate'] as const;

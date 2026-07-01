@@ -12,27 +12,43 @@ export const FLOW_STEPS: Array<{
 }> = [
   { key: 'health', title: '健康检查', enterState: 'idle', doneState: 'health_checked' },
   { key: 'bind', title: '绑定会话', enterState: 'health_checked', doneState: 'session_bound' },
-  { key: 'navigate', title: '导航 / 登录', enterState: 'session_bound', doneState: 'page_ready' },
-  { key: 'capture', title: '采集 A/B', enterState: 'page_ready', doneState: 'capture_b' },
+  // 采集拆成 A、B 两个独立向导步骤(用户要求):先走完 A 录制(session_bound→capture_a),
+  // 再进 B 录制(capture_a→capture_b)。点「开始录制」才新建标签页导航。
+  { key: 'captureA', title: '录制 A', enterState: 'session_bound', doneState: 'capture_a' },
+  { key: 'captureB', title: '录制 B', enterState: 'capture_a', doneState: 'capture_b' },
   { key: 'rank', title: '排序候选', enterState: 'capture_b', doneState: 'ranked' },
-  { key: 'init', title: '生成草稿', enterState: 'ranked', doneState: 'draft_created' },
-  { key: 'verify', title: '执行 Verify', enterState: 'draft_created', doneState: 'done' },
+  // N5 verify-then-save:ranked 起 LLM 评分→多脚本→verify→保存(原 init/verify 两步合一)。
+  { key: 'generate', title: '生成并保存', enterState: 'ranked', doneState: 'done' },
 ];
 
-/** 状态在主流程中的序号(用于 Steps current 计算);终态/分支态返回特殊值 */
+/**
+ * LLM 路径的步骤栏:rank 已不再是用户手动步(候选提取自动跑、纯本地不外发),并入「生成并保存」。
+ * 故去掉「排序候选」单列,generate 步从 capture_b 起。LLM-off 兜底仍用完整 FLOW_STEPS(手动选候选)。
+ */
+export function flowStepsFor(llmSynthesis: boolean | undefined): typeof FLOW_STEPS {
+  if (!llmSynthesis) return FLOW_STEPS;
+  return FLOW_STEPS.filter((s) => s.key !== 'rank').map((s) =>
+    s.key === 'generate' ? { ...s, enterState: 'capture_b' as SessionState } : s,
+  );
+}
+
+/** 状态在主流程中的序号(= 当前活动 step 索引,用于 StepRail current 计算);终态/分支态返回特殊值 */
 export const STATE_ORDER: Record<SessionState, number> = {
   idle: 0,
   health_checked: 1,
+  // 录制 A 步(索引2):session_bound 待录 A、page_ready A 录制窗口已开。
+  // ⚠️ page_ready 在 A/B 两段都会出现(静态 map 无法区分),index.tsx 按 sampleA 是否存在把 B 段的
+  // page_ready 调到录制 B 步(索引3)。这里按 A 段给 2。
   session_bound: 2,
   awaiting_user_login: 2,
   auth_confirmed: 2,
-  page_ready: 3,
-  capture_a: 3,
-  capture_b: 4,
-  ranked: 5,
-  draft_created: 6,
-  verifying: 6, // verify 步(索引6)进行中:rail 高亮该步为 active,失败时也定位到此步(非越界 7)
-  done: 7,
+  page_ready: 2,
+  capture_a: 3, // A 完成 → 录制 B 步(索引3)active
+  capture_b: 4, // 采集完成 → 排序步(索引4)active
+  ranked: 5, // 生成并保存步(索引5)active
+  draft_created: 5,
+  verifying: 5,
+  done: 6, // 全完成(6 步,索引 0..5)
   failed: -1,
   cancelled: -1,
 };

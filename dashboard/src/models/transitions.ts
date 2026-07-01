@@ -7,15 +7,22 @@ export const ALLOWED_FROM = {
   health: ['idle', 'health_checked'],
   bind: ['health_checked'],
   confirmAuth: ['awaiting_user_login'],
-  navigate: ['session_bound', 'auth_confirmed', 'page_ready'],
-  // 每个样本两步:captureStart(开窗)可从 page_ready/capture_a;captureA/B(读窗冻结)各自来源态。
-  captureStart: ['page_ready', 'capture_a'],
+  // 「开始录制」才导航开 byCLI tab:A 从 session_bound 开页面 a;B 从 capture_a 重新开页面 b。
+  navigate: ['session_bound', 'auth_confirmed', 'page_ready', 'capture_a'],
+  // 「开始/结束」两步录制:开始=navigate→page_ready 后 captureStart(开窗);
+  // 结束=captureRead 读窗冻结。A、B 都先导航回 page_ready 再开窗,故读窗均自 page_ready。
+  captureStart: ['page_ready'],
   captureA: ['page_ready'],
-  captureB: ['capture_a'],
+  captureB: ['page_ready'],
   rank: ['capture_b'],
   // init 拆两动作:dry-run 预览(不推进)与 write 写入(推进 ranked→draft_created),均自 ranked。
   previewInit: ['ranked'],
   writeInit: ['ranked'],
+  // N4/N5 verify-then-save:pipeline 自 ranked 不推进(产草稿);saveAdapter 自 ranked 推进 →done。
+  pipeline: ['ranked'],
+  // 外发前预览提示词:自 ranked,不外发不推进。
+  pipelinePreview: ['ranked'],
+  saveAdapter: ['ranked'],
   verify: ['draft_created'],
 } satisfies Record<string, SessionState[]>;
 

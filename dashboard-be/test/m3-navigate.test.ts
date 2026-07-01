@@ -67,8 +67,8 @@ describe('M3 · navigate (page ownership)', () => {
     expect(body.data.page).toBe('page-42');
     // page ownership 写回 session
     expect(ctx.registry.getSession(sid)?.targetId).toBe('page-42');
-    // 确实经 daemon navigate
-    expect(calls[0]).toMatchObject({ action: 'navigate', url: 'https://example.com', contextId: 'ctx-a' });
+    // 确实经 daemon navigate;投屏一体化:录制命令带 windowMode:'background'(不抢焦点)
+    expect(calls[0]).toMatchObject({ action: 'navigate', url: 'https://example.com', contextId: 'ctx-a', windowMode: 'background' });
   });
 
   it('stale page → fail-fast:page_lost 使会话 failed,不重试', async () => {
@@ -99,6 +99,29 @@ describe('M3 · navigate (page ownership)', () => {
     const res = await post('/recorder/navigate', { sessionId: sid });
     expect((await res.json()).error.code).toBe('validation_failed');
   });
+
+  it('首次 navigate(无 page lease)→ tabs op:new 开**新标签页** + 绑定新 tab 的 targetId', async () => {
+    // 真实前端 client.bind 不传 targetId → 会话无 page lease
+    const sid = (await (await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-new' })).json()).data.sessionId;
+    expect(ctx.registry.getSession(sid)?.targetId).toBeNull();
+    nextResult = { ok: true, data: { url: 'https://example.com/' }, page: 'tab-new-1' };
+    const body = await (await post('/recorder/navigate', { sessionId: sid, url: 'https://example.com' })).json();
+    expect(body.data.state).toBe('page_ready');
+    // 关键:开新 tab(tabs op:new),不是导航当前页(navigate);带 windowMode:'background'(投屏不抢焦点)
+    expect(calls[0]).toMatchObject({ action: 'tabs', op: 'new', url: 'https://example.com', contextId: 'ctx-new', windowMode: 'background' });
+    expect(calls[0].page).toBeUndefined(); // 新建不带既有 page
+    // 新 tab 的 targetId 绑为 page lease(供后续 capture 复用)
+    expect(body.data.page).toBe('tab-new-1');
+    expect(ctx.registry.getSession(sid)?.targetId).toBe('tab-new-1');
+  });
+
+  it('已有 page lease → 复用 navigate(在该 tab 内跳转,不再开新 tab)', async () => {
+    const sid = await boundSession(); // 已带 targetId='page-0'
+    nextResult = { ok: true, data: { page: 'page-0', url: 'https://e.com/' } };
+    await post('/recorder/navigate', { sessionId: sid, url: 'https://e.com' });
+    expect(calls[0]).toMatchObject({ action: 'navigate', page: 'page-0' });
+    expect(calls[0].action).not.toBe('tabs');
+  });
 });
 
 describe('M3 · capture (复用 page lease)', () => {
@@ -109,16 +132,19 @@ describe('M3 · capture (复用 page lease)', () => {
     return sid;
   }
 
-  it('capture/start 复用 page,态 capture_a', async () => {
+  it('capture/start 开窗但**不推进**状态(停在 page_ready,等用户操作)', async () => {
     const sid = await navigatedSession();
     nextResult = { ok: true, data: {} };
     const res = await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     const body = await res.json();
-    expect(body.data.state).toBe('capture_a');
-    expect(calls.at(-1)).toMatchObject({ action: 'network-capture-start', page: 'page-7' });
+    expect(body.data.state).toBe('page_ready'); // start 不再立即推进 capture_a
+    expect(ctx.registry.getSession(sid)?.state).toBe('page_ready');
+    // network-capture-start 发出(其后还跟一发 best-effort ui-capture-start,故不是 calls.at(-1))
+    expect(calls.some((c) => c.action === 'network-capture-start' && c.page === 'page-7')).toBe(true);
+    expect(calls.some((c) => c.action === 'ui-capture-start' && c.page === 'page-7')).toBe(true);
   });
 
-  it('capture/read 返回 entries', async () => {
+  it('capture/read 冻结样本并**推进** page_ready→capture_a(「结束录制」)', async () => {
     const sid = await navigatedSession();
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     nextResult = { ok: true, data: [{ url: 'https://api.example.com/x', method: 'GET' }] };
@@ -126,7 +152,29 @@ describe('M3 · capture (复用 page lease)', () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.data.entries).toHaveLength(1);
-    expect(calls.at(-1)).toMatchObject({ action: 'network-capture-read', page: 'page-7' });
+    expect(body.data.state).toBe('capture_a'); // read 才推进
+    // network-capture-read 发出(其后还有 best-effort screenshot,故不是 calls.at(-1))
+    expect(calls.some((c) => c.action === 'network-capture-read' && c.page === 'page-7')).toBe(true);
+  });
+
+  it('B 录制:从 capture_a 重新 navigate 开**新标签页 b**(每次新开全新页面)', async () => {
+    const sid = await navigatedSession(); // page-7
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    nextResult = { ok: true, data: [{ url: 'https://api.example.com/x', method: 'GET' }] };
+    await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' }); // → capture_a
+    // 开始 B:navigate from capture_a → tabs op:new 开页面 b,绑新 lease
+    calls.length = 0;
+    nextResult = { ok: true, data: { url: 'https://example.com/' }, page: 'tab-b' };
+    const nav = await (await post('/recorder/navigate', { sessionId: sid, url: 'https://example.com' })).json();
+    expect(nav.data.state).toBe('page_ready');
+    expect(calls[0]).toMatchObject({ action: 'tabs', op: 'new' }); // 新开 tab,不是原地 navigate
+    expect(ctx.registry.getSession(sid)?.targetId).toBe('tab-b');
+    // 结束 B:read 推进 → capture_b
+    nextResult = { ok: true, data: {} };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'B', trigger: 'user_manual' });
+    nextResult = { ok: true, data: [{ url: 'https://api.example.com/y', method: 'GET' }] };
+    const readB = await (await post('/recorder/capture/read', { sessionId: sid, sampleName: 'B' })).json();
+    expect(readB.data.state).toBe('capture_b');
   });
 
   it('无 page lease(未 navigate)→ page_lost', async () => {
@@ -136,6 +184,264 @@ describe('M3 · capture (复用 page lease)', () => {
     const res = await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     expect((await res.json()).error.code).toBe('page_lost');
   });
+
+  it('capture/read 顺带抓页面截图存进样本(best-effort,base64)', async () => {
+    const sid = await navigatedSession(); // page-7
+    // per-action stub:network-capture-read 回 entries,screenshot 回 base64
+    ctx.daemon.command = async (cmd) => {
+      calls.push(cmd);
+      if (cmd.action === 'screenshot') return { ok: true, data: 'BASE64JPEGDATA' };
+      return { ok: true, data: [{ url: 'https://api.example.com/x', method: 'GET' }] };
+    };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' });
+    expect(calls.some((c) => c.action === 'screenshot' && c.page === 'page-7')).toBe(true);
+    expect(ctx.registry.getSamples(sid)?.A?.screenshot).toBe('BASE64JPEGDATA');
+    expect(ctx.registry.getSamples(sid)?.A?.entries).toHaveLength(1);
+  });
+
+  it('capture/read 读回 UI 操作事件存进样本 actions 轨(M-UI-2)', async () => {
+    const sid = await navigatedSession();
+    ctx.daemon.command = async (cmd) => {
+      calls.push(cmd);
+      if (cmd.action === 'network-capture-read') return { ok: true, data: [{ url: 'https://api.example.com/x', method: 'GET' }] };
+      if (cmd.action === 'ui-capture-read') return { ok: true, data: { events: [{ type: 'click', selector: '#go', tag: 'button' }], dropped: 2 } };
+      return { ok: true, data: {} };
+    };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    const body = await (await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' })).json();
+    expect(body.ok).toBe(true);
+    expect(body.data.actionsCount).toBe(1);
+    expect(body.data.actionsDropped).toBe(2);
+    expect(calls.some((c) => c.action === 'ui-capture-read' && c.page === 'page-7')).toBe(true);
+    const actions = ctx.registry.getSamples(sid)?.A?.actions as Array<{ type: string }>;
+    expect(actions?.[0]?.type).toBe('click');
+  });
+
+  it('截图失败不阻断录制(样本仍冻结,screenshot 缺省)', async () => {
+    const sid = await navigatedSession();
+    ctx.daemon.command = async (cmd) => {
+      calls.push(cmd);
+      if (cmd.action === 'screenshot') return { ok: false, errorCode: 'unsupported', error: 'no screenshot' };
+      return { ok: true, data: [{ url: 'https://api.example.com/x', method: 'GET' }] };
+    };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    const body = await (await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' })).json();
+    expect(body.ok).toBe(true); // 录制不受截图失败影响
+    expect(body.data.entries).toHaveLength(1);
+    expect(ctx.registry.getSamples(sid)?.A?.screenshot).toBeUndefined();
+  });
+
+  it('seed 输入:命中 query 值 → 存 HMAC seedEvidence(raw seed 绝不落盘);rank 据此给 +20 seed→param', async () => {
+    const sid = await navigatedSession();
+    // 抓回的 entry 带 q=apple(seed 命中 q 参数);响应是 JSON array(+25 shape)。
+    ctx.daemon.command = async (cmd) => {
+      calls.push(cmd);
+      if (cmd.action === 'network-capture-read') {
+        return { ok: true, data: [{
+          requestId: 'rq1', url: 'https://api.example.com/search?q=apple', method: 'GET',
+          queryParams: { q: 'apple' }, response: { status: 200, mime: 'application/json', bodyShape: { kind: 'array', itemKeys: ['id', 'title'] } },
+          sourceCompleteness: { responseBody: 'present' },
+        }] };
+      }
+      return { ok: true, data: {} };
+    };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A', seed: 'apple' });
+    const sampleA = ctx.registry.getSamples(sid)?.A;
+    // seedEvidence 以参数名 q 为 key,只含 HMAC/placeholder/length,绝无 raw "apple"。
+    const ev = sampleA?.seedEvidence as Record<string, { hmac?: string; placeholder?: string }> | undefined;
+    expect(ev && Object.keys(ev)).toContain('q');
+    expect(ev?.q?.hmac).toBeTruthy();
+    // raw seed 不进 seedEvidence(M7c);entries 里有 q=apple 是真实流量、用户本就可见,不在脱敏范围。
+    expect(JSON.stringify(ev)).not.toContain('apple');
+    // network-capture-read 命令本身不带 raw seed(只 be 内存用一瞬)。
+    expect(JSON.stringify(calls)).not.toContain('apple');
+  });
+
+  it('seed 未命中任何 query 值 → 不构造 evidence(回退现状),raw seed 不落盘', async () => {
+    const sid = await navigatedSession();
+    ctx.daemon.command = async (cmd) => {
+      calls.push(cmd);
+      if (cmd.action === 'network-capture-read') {
+        return { ok: true, data: [{ requestId: 'rq1', url: 'https://api.example.com/x', method: 'GET', queryParams: { page: '1' }, sourceCompleteness: { responseBody: 'present' } }] };
+      }
+      return { ok: true, data: {} };
+    };
+    await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
+    await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A', seed: 'mysecretquery' });
+    const sampleA = ctx.registry.getSamples(sid)?.A;
+    expect(sampleA?.seedEvidence).toBeUndefined();
+    expect(JSON.stringify(sampleA)).not.toContain('mysecretquery');
+    expect(JSON.stringify(calls)).not.toContain('mysecretquery');
+  });
+});
+
+describe('一体化录制 · screenshot 投屏 + input 回传', () => {
+  const sids: string[] = [];
+  afterEach(() => { for (const s of sids) ctx.registry.cancelSession(s); sids.length = 0; });
+  async function navigatedSession(): Promise<string> {
+    const sid = await boundSession();
+    sids.push(sid);
+    nextResult = { ok: true, data: { page: 'page-9' } };
+    await post('/recorder/navigate', { sessionId: sid, url: 'https://example.com' });
+    return sid;
+  }
+
+  it('screenshot:转发 daemon screenshot(jpeg)→ 返回 base64 data', async () => {
+    const sid = await navigatedSession();
+    nextResult = { ok: true, data: 'BASE64JPEGDATA' };
+    const res = await post('/recorder/screenshot', { sessionId: sid });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data.data).toBe('BASE64JPEGDATA');
+    expect(body.data.format).toBe('jpeg');
+    const shot = calls.find((c) => c.action === 'screenshot');
+    expect(shot?.format).toBe('jpeg');
+    expect(shot?.page).toBe('page-9'); // 复用 page lease
+  });
+
+  it('screenshot:无 page lease → page_lost', async () => {
+    const sid = (await (await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-shot' })).json()).data.sessionId;
+    sids.push(sid);
+    const res = await post('/recorder/screenshot', { sessionId: sid });
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe('page_lost');
+  });
+
+  it('input:Input.dispatchMouseEvent 转发 cdp passthrough(复用 page lease)', async () => {
+    const sid = await navigatedSession();
+    nextResult = { ok: true, data: {} };
+    const res = await post('/recorder/input', {
+      sessionId: sid, cdpMethod: 'Input.dispatchMouseEvent',
+      cdpParams: { type: 'mousePressed', x: 100, y: 200, button: 'left', clickCount: 1 },
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.data.dispatched).toBe(true);
+    const cdp = calls.find((c) => c.action === 'cdp');
+    expect(cdp?.cdpMethod).toBe('Input.dispatchMouseEvent');
+    expect(cdp?.page).toBe('page-9');
+  });
+
+  it('input:非白名单 CDP 方法 → validation_failed(不触 daemon)', async () => {
+    const sid = await navigatedSession();
+    calls = [];
+    const res = await post('/recorder/input', { sessionId: sid, cdpMethod: 'Page.navigate', cdpParams: { url: 'https://evil.example' } });
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe('validation_failed');
+    expect(calls.find((c) => c.action === 'cdp')).toBeUndefined(); // 未转发
+  });
+
+  it('input:无 page lease → page_lost', async () => {
+    const sid = (await (await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-inp' })).json()).data.sessionId;
+    sids.push(sid);
+    const res = await post('/recorder/input', { sessionId: sid, cdpMethod: 'Input.dispatchKeyEvent', cdpParams: { type: 'keyDown', key: 'a' } });
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe('page_lost');
+  });
+});
+
+describe('录制模式 · recordingMode 策略 + flag gate', () => {
+  const sids: string[] = [];
+  afterEach(() => { for (const s of sids) ctx.registry.cancelSession(s); sids.length = 0; });
+
+  it('默认(不传 recordingMode)→ tab_projection / owned_tab(向后兼容)', async () => {
+    const sid = (await (await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-rm1' })).json()).data.sessionId;
+    sids.push(sid);
+    const s = ctx.registry.getSession(sid)!;
+    expect(s.recordingMode).toBe('tab_projection');
+    expect(s.leaseKind).toBe('owned_tab');
+  });
+
+  it('embedded_iframe + flag off(默认)→ feature_disabled,不建会话', async () => {
+    const before = [...(ctx.registry as unknown as { sessions: Map<string, unknown> }).sessions.keys()].length;
+    const res = await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-rm2', recordingMode: 'embedded_iframe' });
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe('feature_disabled');
+    const after = [...(ctx.registry as unknown as { sessions: Map<string, unknown> }).sessions.keys()].length;
+    expect(after).toBe(before); // 未建会话
+  });
+
+  it('非法 recordingMode → validation_failed', async () => {
+    const res = await post('/recorder/session/bind', { mode: 'bind_existing_page', contextId: 'ctx-rm3', recordingMode: 'bogus' });
+    expect((await res.json()).error.code).toBe('validation_failed');
+  });
+});
+
+describe('录制模式 · embedded_iframe(flag on)', () => {
+  // 独立 app 实例,显式开 flag(模块级 ctx 的 cfg flag off,无法在用例内改)。
+  const sids: string[] = [];
+  let app2: ReturnType<typeof createApp>;
+  let base2 = '';
+  const auth2 = () => ({ 'X-Recorder': '1', 'X-byCLI-Token': cfg2.TOKEN, 'X-CSRF-Token': app2.ctx.vault.csrfToken, 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:8000' });
+  const cfg2 = loadConfig({
+    RECORDER_TOKEN: 'test-token-iframe-1234567890', LOG_LEVEL: 'error',
+    RECORDER_ALLOWED_ORIGINS: 'http://127.0.0.1:8000', BYCLI_DAEMON_PORT: '6554',
+    RECORDER_MAX_ACTIVE_SESSIONS: '10', FEATURE_EMBEDDED_IFRAME_RECORDING: '1',
+  });
+  beforeAll(async () => {
+    app2 = createApp(cfg2);
+    app2.ctx.daemon.command = async () => ({ ok: true, data: {} });
+    await new Promise<void>((r) => app2.server.listen(0, '127.0.0.1', r));
+    base2 = `http://127.0.0.1:${(app2.server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((r) => app2.server.close(() => r())));
+  afterEach(() => { for (const s of sids) app2.ctx.registry.cancelSession(s); sids.length = 0; });
+
+  it('flag on → embedded_iframe 建会话(bound_dashboard_tab)', async () => {
+    const res = await fetch(`${base2}/recorder/session/bind`, { method: 'POST', headers: auth2(), body: JSON.stringify({ mode: 'bind_existing_page', contextId: 'ctx-if', targetId: 'dashtab-1', recordingMode: 'embedded_iframe' }) });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    const s = app2.ctx.registry.getSession(body.data.sessionId)!;
+    sids.push(body.data.sessionId);
+    expect(s.recordingMode).toBe('embedded_iframe');
+    expect(s.leaseKind).toBe('bound_dashboard_tab');
+  });
+
+  it('iframe 模式 navigate 是状态推进 no-op(→ page_ready,不开 tab)——页面由前端 iframe src 加载', async () => {
+    const sid = (await (await fetch(`${base2}/recorder/session/bind`, { method: 'POST', headers: auth2(), body: JSON.stringify({ mode: 'bind_existing_page', contextId: 'ctx-if2', targetId: 'dashtab-2', recordingMode: 'embedded_iframe' }) })).json()).data.sessionId;
+    sids.push(sid);
+    const res = await fetch(`${base2}/recorder/navigate`, { method: 'POST', headers: auth2(), body: JSON.stringify({ sessionId: sid, url: 'https://juejin.cn' }) });
+    const body = await res.json();
+    // 推进到 page_ready(让 captureStart 可开窗),但不发任何 daemon tab/navigate 命令(bound dashboard tab)。
+    expect(body.ok).toBe(true);
+    expect(body.data.state).toBe('page_ready');
+    expect(body.data.page).toBe('dashtab-2'); // page lease 仍是 bind 时绑的 dashboard tab,未变
+  });
+
+  it('embedded bind 发 daemon `bind` 绑 dashboard tab + 存目标 URL;captureRead 下发 targetFrameUrl 过滤噪音', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const orig = app2.ctx.daemon.command;
+    app2.ctx.daemon.command = async (cmd: any) => {
+      calls.push(cmd);
+      if (cmd.action === 'bind') return { ok: true, page: 'dash-tab-99', data: {} };
+      if (cmd.action === 'network-capture-read') return { ok: true, data: [] };
+      return { ok: true, data: {} };
+    };
+    try {
+      const sid = (await (await fetch(`${base2}/recorder/session/bind`, { method: 'POST', headers: auth2(), body: JSON.stringify({ mode: 'bind_existing_page', contextId: 'ctx-if3', url: 'https://juejin.cn/search', recordingMode: 'embedded_iframe' }) })).json()).data.sessionId;
+      sids.push(sid);
+      // bind 发了 daemon bind 命令,且 page lease = 返回的 dashboard tab
+      expect(calls.some((c) => c.action === 'bind')).toBe(true);
+      const s = app2.ctx.registry.getSession(sid)!;
+      expect(s.targetId).toBe('dash-tab-99');
+      expect(s.targetUrl).toBe('https://juejin.cn/search');
+      // navigate(no-op)→ page_ready，再 captureStart 开窗
+      await fetch(`${base2}/recorder/navigate`, { method: 'POST', headers: auth2(), body: JSON.stringify({ sessionId: sid, url: 'https://juejin.cn/search' }) });
+      await fetch(`${base2}/recorder/capture/start`, { method: 'POST', headers: auth2(), body: JSON.stringify({ sessionId: sid, sampleName: 'A', trigger: 'user_manual' }) });
+      calls.length = 0;
+      await fetch(`${base2}/recorder/capture/read`, { method: 'POST', headers: auth2(), body: JSON.stringify({ sessionId: sid, sampleName: 'A' }) });
+      const readCmd = calls.find((c) => c.action === 'network-capture-read')!;
+      expect(readCmd.targetFrameUrl).toBe('https://juejin.cn/search');
+    } finally {
+      app2.ctx.daemon.command = orig;
+    }
+  });
 });
 
 describe('M4 · rank (frozen A/B samples via shared core engine)', () => {
@@ -144,12 +450,14 @@ describe('M4 · rank (frozen A/B samples via shared core engine)', () => {
     const sid = await boundSession();
     nextResult = { ok: true, data: { page: 'page-9' } };
     await post('/recorder/navigate', { sessionId: sid, url: 'https://x.com' });
-    // sample A: start (page_ready→capture_a) + read (stores frozen sample A)
+    // sample A: start(开窗,停 page_ready)+ read(冻结样本 A,推进 page_ready→capture_a)
     nextResult = { ok: true, data: {} };
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     nextResult = { ok: true, data: [jsonListEntry('cat')] };
     await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' });
-    // sample B: start (capture_a→capture_b) + read (stores frozen sample B)
+    // sample B:先重新 navigate 开页面 b(capture_a→page_ready),再 start(开窗)+ read(冻结 B,推进 capture_b)
+    nextResult = { ok: true, data: { page: 'page-9b' } };
+    await post('/recorder/navigate', { sessionId: sid, url: 'https://x.com' });
     nextResult = { ok: true, data: {} };
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'B', trigger: 'user_manual' });
     nextResult = { ok: true, data: [jsonListEntry('dog')] };
@@ -262,6 +570,9 @@ describe('M5b · init (select-only,接 rank 候选 → daemon /v1/init)', () => 
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     nextResult = { ok: true, data: [entry('cat')] };
     await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' });
+    // B 录制:先重新 navigate 开页面 b(capture_a→page_ready),再 start+read
+    nextResult = { ok: true, data: { page: 'page-init-b' } };
+    await post('/recorder/navigate', { sessionId: sid, url: 'https://x.com' });
     nextResult = { ok: true, data: {} };
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'B', trigger: 'user_manual' });
     nextResult = { ok: true, data: [entry('dog')] };
@@ -341,6 +652,9 @@ describe('M6 · verify (202 + request lifecycle + canonical requestId)', () => {
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'A', trigger: 'user_manual' });
     nextResult = { ok: true, data: [entry('cat')] };
     await post('/recorder/capture/read', { sessionId: sid, sampleName: 'A' });
+    // B 录制:先重新 navigate 开页面 b(capture_a→page_ready),再 start+read
+    nextResult = { ok: true, data: { page: 'page-v-b' } };
+    await post('/recorder/navigate', { sessionId: sid, url: 'https://x.com' });
     nextResult = { ok: true, data: {} };
     await post('/recorder/capture/start', { sessionId: sid, sampleName: 'B', trigger: 'user_manual' });
     nextResult = { ok: true, data: [entry('dog')] };

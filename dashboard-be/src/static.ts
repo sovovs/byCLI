@@ -16,7 +16,7 @@ import type { ServerResponse } from 'node:http';
  * (style injection cannot run JS). frame-ancestors 'none' + X-Frame-Options block clickjacking of
  * authorized actions; object-src/base-uri/form-action are locked down.
  */
-function buildCsp(nonce: string): string {
+function buildCsp(nonce: string, frameSrc?: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
@@ -28,7 +28,23 @@ function buildCsp(nonce: string): string {
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "form-action 'self'",
+    // embedded_iframe 录制模式才放开(privileged/local mode);默认不含此行 → 回落 default-src 'self' 拦跨源 iframe。
+    ...(frameSrc ? [`frame-src ${frameSrc}`] : []),
   ].join('; ');
+}
+
+/** embedded_iframe 录制模式的 frame-src 值(B+A 混合,Codex 2026-06-29 裁定):
+ *  flag 关 → undefined(无 frame-src,现状零变化);
+ *  flag 开 + 未配置 override → 'https:'(填 URL 即录,无需预配置任意公开站);
+ *  flag 开 + 配置了 override → 只放这些 https origin(CI/企业 hardened)。
+ *  只放 https:,绝不放 http:/data:/blob:/*。
+ *  vnc 模式额外放行 loopback http(noVNC iframe 从 http://127.0.0.1:<容器映射端口> 加载;
+ *  端口动态,故放 127.0.0.1:* 整段——仅本机回环,不扩到公网)。 */
+export function resolveFrameSrc(enabled: boolean, override?: readonly string[], vncEnabled = false): string | undefined {
+  const parts: string[] = [];
+  if (enabled) parts.push(override && override.length ? override.join(' ') : 'https:');
+  if (vncEnabled) parts.push('http://127.0.0.1:* http://localhost:*');
+  return parts.length ? parts.join(' ') : undefined;
 }
 
 const MIME: Record<string, string> = {
@@ -50,6 +66,10 @@ export interface UiBootstrap {
   baseUrl: string;
   token: string;
   csrfToken: string;
+  /** embedded_iframe 录制模式是否可用(FEATURE_EMBEDDED_IFRAME_RECORDING);前端据此显示「页内嵌入」选项。 */
+  embeddedIframeRecording?: boolean;
+  /** vnc 录制模式是否可用(FEATURE_VNC_RECORDING);前端据此显示「VNC 容器」选项。 */
+  vncRecording?: boolean;
 }
 
 /** 注入脚本:在 umi.js 之前把 bootstrap 写入 sessionStorage(前端 readBootstrap 据此切 HTTP)。
@@ -66,7 +86,7 @@ export interface StaticServer {
   handle(pathname: string, res: ServerResponse, bootstrap: UiBootstrap): Promise<boolean>;
 }
 
-export function createStaticServer(uiDist: string): StaticServer {
+export function createStaticServer(uiDist: string, frameSrc?: string): StaticServer {
   const root = resolve(uiDist);
 
   async function sendFile(res: ServerResponse, filePath: string, bootstrap?: UiBootstrap): Promise<void> {
@@ -81,7 +101,7 @@ export function createStaticServer(uiDist: string): StaticServer {
     // 入口 HTML:每响应一枚 nonce,串起 CSP 与注入的 bootstrap script(04 章 XSS-in-UI,M7d)
     if (ext === '.html') {
       const nonce = randomBytes(16).toString('base64');
-      headers['Content-Security-Policy'] = buildCsp(nonce);
+      headers['Content-Security-Policy'] = buildCsp(nonce, frameSrc);
       headers['X-Frame-Options'] = 'DENY';
       headers['Referrer-Policy'] = 'no-referrer';
       if (bootstrap) body = injectBootstrap(body.toString('utf8'), bootstrap, nonce);

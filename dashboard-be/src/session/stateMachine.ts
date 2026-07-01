@@ -24,6 +24,7 @@ export type SessionAction =
   | 'captureRead'
   | 'rank'
   | 'init'
+  | 'saveAdapter'
   | 'verify'
   | 'completeVerify'
   | 'failVerify'
@@ -33,11 +34,17 @@ export type SessionAction =
 const ALLOWED_FROM: Record<SessionAction, SessionState[]> = {
   bind: ['idle', 'health_checked'],
   confirmAuth: ['awaiting_user_login'],
-  navigate: ['session_bound', 'auth_confirmed', 'page_ready'],
-  captureStart: ['page_ready', 'capture_a'],
-  captureRead: ['page_ready', 'capture_a', 'capture_b'],
+  // 「开始录制」才导航开 byCLI tab:A 从 session_bound 开页面 a;B 从 capture_a 重新开页面 b。
+  navigate: ['session_bound', 'auth_confirmed', 'page_ready', 'capture_a'],
+  // 「开始/结束」两步录制:captureStart 仅从 page_ready 开窗、**不推进状态**(录制窗口打开,等用户操作);
+  // captureRead 读窗冻结**才推进**(按 sampleName:A→capture_a、B→capture_b)。A、B 都先 navigate 回
+  // page_ready 再开窗,故二者读窗均自 page_ready。治旧「start 立即推进、read 不推进」下 B 重导航后 A/B 误判。
+  captureStart: ['page_ready'],
+  captureRead: ['page_ready'],
   rank: ['capture_b'],
   init: ['ranked'],
+  // N4 verify-then-save 流程:pipeline 不推进(停 ranked,产草稿);saveAdapter 保存已审阅草稿后 ranked→done。
+  saveAdapter: ['ranked'],
   verify: ['draft_created'],
   // verify 终态:verifying → done|failed(由轮询到的 runner 终态驱动,05:63)
   completeVerify: ['verifying'],

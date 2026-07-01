@@ -211,7 +211,10 @@ paths:
           # init is a SHORT synchronous FS write (atomic adapter-draft write), not a long
           # operation — unlike verify (spawns a runner) / analyze (drives the browser), which are
           # 202 + poll GET /recorder/requests/{id}. init returns its result inline, no request record.
-          description: draft written (or dry-run previewed) synchronously; data carries { report, dryRun }
+          description: >-
+            draft written (or dry-run previewed) synchronously; data carries { report, dryRun,
+            generatedSource? }. generatedSource = rendered adapter source for dry-run review (LLM
+            合成时含生成的 func/columns;feature-gated FEATURE_LLM_SYNTHESIS,否则空骨架)。
           content:
             application/json:
               schema:
@@ -386,6 +389,14 @@ components:
         mode:
           type: string
           enum: [bind_existing_page, create_page_await_user_login, bind_existing_context]
+        recordingMode:
+          description: >-
+            产品录制形态(应用层策略,与底层 mode 区分)。缺省 tab_projection(投屏,向后兼容:
+            老客户端不传即投屏)。embedded_iframe(dashboard 嵌跨源 iframe 录制)受
+            FEATURE_EMBEDDED_IFRAME_RECORDING gate,flag off 时请求它返回 feature_disabled。
+          type: string
+          enum: [tab_projection, embedded_iframe]
+          default: tab_projection
         authCheck:
           type: [object, "null"]
           properties:
@@ -456,6 +467,12 @@ components:
         sampleName:
           type: string
           enum: [A, B]
+        seed:
+          type: string
+          description: >-
+            可选。本样本声明的搜索关键词(dashboard seed 输入)。be 用它反推携带该值的 query 参数名
+            (value→param),再派生**仅 HMAC** 的 seedArgsEvidence 喂给 rank 识别 seed→param(+评分)。
+            raw 值仅在 be 处理本请求时内存中使用、用完即弃,**绝不持久化/落盘/出日志**(M7c)。
         clientRequestId:
           type: [string, "null"]
     RankRequest:

@@ -1,18 +1,197 @@
 const DAEMON_PORT = 19825;
-const DAEMON_HOST = "localhost";
+const DAEMON_HOST = "127.0.0.1";
 const DAEMON_WS_URL = `ws://${DAEMON_HOST}:${DAEMON_PORT}/ext`;
 const DAEMON_PING_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}/ping`;
 const WS_RECONNECT_BASE_DELAY = 2e3;
 const WS_RECONNECT_MAX_DELAY = 5e3;
+
+const AUTH_PARAM_SEGMENTS = /* @__PURE__ */ new Set([
+  "token",
+  "tokens",
+  "jwt",
+  "secret",
+  "signature",
+  "sig",
+  "sign",
+  "csrf",
+  "xsrf",
+  "session",
+  "sessionid",
+  "sid",
+  "password",
+  "passwd",
+  "pwd",
+  "auth",
+  "authorization",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "apikey",
+  "appkey",
+  "bearer",
+  "credential",
+  "credentials"
+]);
+const JWT_VALUE_RE = /^ey[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]+$/;
+const MASKED = "***";
+function paramNameLooksAuth(name) {
+  return name.toLowerCase().split(/[-_.]/).some((seg) => AUTH_PARAM_SEGMENTS.has(seg));
+}
+function maskUrlAuthTokens(url) {
+  if (!url) return url ?? "";
+  try {
+    const u = new URL(url);
+    let changed = false;
+    for (const [k, v] of [...u.searchParams.entries()]) {
+      if (paramNameLooksAuth(k) || JWT_VALUE_RE.test(v)) {
+        u.searchParams.set(k, MASKED);
+        changed = true;
+      }
+    }
+    return changed ? u.toString() : url;
+  } catch {
+    return url;
+  }
+}
+
+const UI_BINDING_NAME = "__bycli_ui";
+const MAX_UI_EVENTS = 2e3;
+const ALLOWED_TYPES = ["click", "input", "submit", "keydown", "navigate"];
+const clampStr = (v, max) => typeof v === "string" && v.length ? v.slice(0, max) : void 0;
+function parseUiEvent(payload) {
+  let raw;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const type = raw.type;
+  if (!ALLOWED_TYPES.includes(type)) return null;
+  const ts = typeof raw.ts === "number" && Number.isFinite(raw.ts) ? raw.ts : Date.now();
+  if (type === "navigate") {
+    const rawUrl = clampStr(raw.url, 2048);
+    if (!rawUrl) return null;
+    return { type, ts, selector: "", tag: "document", url: maskUrlAuthTokens(rawUrl).slice(0, 2048) };
+  }
+  const selector = clampStr(raw.selector, 300);
+  if (!selector) return null;
+  const ev = { type, ts, selector, tag: clampStr(raw.tag, 24) ?? "unknown" };
+  const role = clampStr(raw.role, 40);
+  if (role) ev.role = role;
+  const text = clampStr(raw.text, 80);
+  if (text) ev.text = text;
+  const key = clampStr(raw.key, 24);
+  if (key) ev.key = key;
+  const vs = raw.valueShape;
+  if (vs && typeof vs.len === "number" && Number.isFinite(vs.len)) {
+    const kind = vs.kind;
+    const k = kind === "email" || kind === "url" || kind === "number" ? kind : "text";
+    ev.valueShape = { len: Math.max(0, Math.min(1e5, Math.floor(vs.len))), kind: k };
+  }
+  return ev;
+}
+const UI_LISTENER_SOURCE = `(function(){
+  if (window.__bycli_ui_installed) return; window.__bycli_ui_installed = true;
+  var B = ${JSON.stringify(UI_BINDING_NAME)};
+  function esc(s){ try { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g,'\\\\$&'); } catch(e){ return String(s); } }
+  function sel(el){
+    if(!el||el.nodeType!==1) return '';
+    if(el.id) return '#'+esc(el.id);
+    var dt = el.getAttribute && el.getAttribute('data-testid'); if(dt) return '[data-testid="'+dt+'"]';
+    var parts=[], n=el, depth=0;
+    while(n && n.nodeType===1 && depth<5){
+      if(n.id){ parts.unshift('#'+esc(n.id)); break; }
+      var part=n.tagName.toLowerCase(), p=n.parentElement;
+      if(p){ var same=[]; for(var i=0;i<p.children.length;i++){ if(p.children[i].tagName===n.tagName) same.push(p.children[i]); }
+        if(same.length>1) part+=':nth-of-type('+(same.indexOf(n)+1)+')'; }
+      parts.unshift(part); n=n.parentElement; depth++;
+    }
+    return parts.join(' > ');
+  }
+  function tag(el){ return el && el.tagName ? el.tagName.toLowerCase() : 'unknown'; }
+  function txt(el){ try { var t=(el.innerText||el.textContent||'').trim(); return t ? t.slice(0,80) : undefined; } catch(e){ return undefined; } }
+  function shape(v){ v=String(v==null?'':v); var kind='text';
+    if(/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v)) kind='email';
+    else if(/^https?:\\/\\//.test(v)) kind='url';
+    else if(v!=='' && !isNaN(Number(v))) kind='number';
+    return { len: v.length, kind: kind }; }
+  function emit(o){ try { o.ts=Date.now(); if(typeof window[B]==='function') window[B](JSON.stringify(o)); } catch(e){} }
+  document.addEventListener('click', function(e){ var t=e.target; emit({ type:'click', selector:sel(t), tag:tag(t), role:(t.getAttribute&&t.getAttribute('role'))||undefined, text:txt(t) }); }, { capture:true, passive:true });
+  document.addEventListener('change', function(e){ var t=e.target; if(!t||!('value' in t)) return;
+    if(t.type==='password'){ emit({ type:'input', selector:sel(t), tag:tag(t) }); return; }
+    emit({ type:'input', selector:sel(t), tag:tag(t), valueShape:shape(t.value) }); }, { capture:true, passive:true });
+  document.addEventListener('submit', function(e){ emit({ type:'submit', selector:sel(e.target), tag:'form' }); }, { capture:true, passive:true });
+  document.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key==='Escape'){ emit({ type:'keydown', selector:sel(e.target), tag:tag(e.target), key:e.key }); } }, { capture:true, passive:true });
+  // 导航录制:整页导航(脚本随新文档重注入,init 即发当前 URL)+ SPA 路由(history/popstate/hashchange)。
+  // dedupe 连续相同 URL,避免 replaceState 刷参噪音;脱敏在扩展 parse 侧再做一道,这里只发原始 location.href。
+  var lastUrl='';
+  function navEmit(){ try { var u=location.href; if(u&&u!==lastUrl){ lastUrl=u; emit({ type:'navigate', url:u }); } } catch(e){} }
+  navEmit();
+  try { var _ps=history.pushState; history.pushState=function(){ var r=_ps.apply(this,arguments); navEmit(); return r; }; } catch(e){}
+  try { var _rs=history.replaceState; history.replaceState=function(){ var r=_rs.apply(this,arguments); navEmit(); return r; }; } catch(e){}
+  window.addEventListener('popstate', navEmit, { passive:true });
+  window.addEventListener('hashchange', navEmit, { passive:true });
+})();`;
 
 const attached = /* @__PURE__ */ new Set();
 const tabFrameContexts = /* @__PURE__ */ new Map();
 const frameTargets = /* @__PURE__ */ new Map();
 const frameTargetKeys = /* @__PURE__ */ new Map();
 let frameTargetCleanupRegistered = false;
+const sessionToTab = /* @__PURE__ */ new Map();
+const sessionToFrameUrl = /* @__PURE__ */ new Map();
+const sessionToParent = /* @__PURE__ */ new Map();
+const armedChildSessions = /* @__PURE__ */ new Map();
+const MAX_CHILD_SESSIONS_PER_TAB = 50;
+const tabCaptureGeneration = /* @__PURE__ */ new Map();
+function childStateMap(tabId) {
+  let m = armedChildSessions.get(tabId);
+  if (!m) {
+    m = /* @__PURE__ */ new Map();
+    armedChildSessions.set(tabId, m);
+  }
+  return m;
+}
+function childDebuggee(tabId, sessionId) {
+  return { tabId, sessionId };
+}
+function sessionIdOf(source) {
+  return source.sessionId;
+}
+async function sendSafe(target, method, params = {}) {
+  try {
+    await chrome.debugger.sendCommand(target, method, params);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function reqKey(sessionId, requestId) {
+  return `${sessionId ?? "top"}:${requestId}`;
+}
+const AUTO_ATTACH_IFRAME_PARAMS = {
+  autoAttach: true,
+  waitForDebuggerOnStart: true,
+  flatten: true,
+  filter: [{ type: "iframe", exclude: false }]
+};
 const CDP_RESPONSE_BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
 const CDP_REQUEST_BODY_CAPTURE_LIMIT = 1 * 1024 * 1024;
+const CDP_WS_FRAME_CAPTURE_LIMIT = 256 * 1024;
+const MAX_WS_FRAMES_PER_CONN = 500;
 const networkCaptures = /* @__PURE__ */ new Map();
+const CAPTURE_RESOURCE_TYPES = /* @__PURE__ */ new Set(["XHR", "Fetch"]);
+function isApiResourceType(type) {
+  return typeof type === "string" && CAPTURE_RESOURCE_TYPES.has(type);
+}
+function isStaticAssetContentType(ct) {
+  if (!ct) return false;
+  const t = ct.toLowerCase().split(";")[0].trim();
+  if (t.startsWith("image/") || t.startsWith("font/") || t.startsWith("audio/") || t.startsWith("video/")) return true;
+  return t === "text/css" || t === "text/javascript" || t === "application/javascript" || t === "application/x-javascript" || t === "application/ecmascript" || t === "application/font-woff" || t === "application/font-woff2" || t === "application/x-font-ttf" || t === "application/vnd.ms-fontobject";
+}
+const uiCaptures = /* @__PURE__ */ new Map();
 function isDebuggableUrl$1(url) {
   if (!url) return true;
   return url.startsWith("http://") || url.startsWith("https://") || url === "about:blank" || url.startsWith("data:");
@@ -306,9 +485,10 @@ async function ensureFrameTarget(tabId, frameId, aggressiveRetry = false, target
   if (existing) return existing;
   await chrome.debugger.sendCommand({ tabId }, "Target.setDiscoverTargets", { discover: true }).catch(() => {
   });
+  const captureActive = networkCaptures.has(tabId) || uiCaptures.has(tabId);
   await chrome.debugger.sendCommand({ tabId }, "Target.setAutoAttach", {
     autoAttach: true,
-    waitForDebuggerOnStart: false,
+    waitForDebuggerOnStart: captureActive,
     flatten: true,
     filter: [{ type: "iframe", exclude: false }]
   }).catch(() => {
@@ -350,6 +530,7 @@ function registerFrameTracking() {
   chrome.debugger.onEvent.addListener((source, method, params) => {
     const tabId = source.tabId;
     if (!tabId) return;
+    if (sessionIdOf(source)) return;
     if (method === "Runtime.executionContextCreated") {
       const context = params.context;
       if (!context?.auxData?.frameId || context.auxData.isDefault !== true) return;
@@ -430,25 +611,72 @@ function normalizeHeaders(headers) {
   }
   return out;
 }
-function getOrCreateNetworkCaptureEntry(tabId, requestId, fallback) {
+function getOrCreateNetworkCaptureEntry(tabId, key, fallback, kind = "cdp") {
   const state = networkCaptures.get(tabId);
   if (!state) return null;
-  const existingIndex = state.requestToIndex.get(requestId);
+  const existingIndex = state.requestToIndex.get(key);
   if (existingIndex !== void 0) {
     return state.entries[existingIndex] || null;
   }
   const url = fallback?.url || "";
   if (!shouldCaptureUrl(url, state.patterns)) return null;
   const entry = {
-    kind: "cdp",
+    kind,
     url,
     method: fallback?.method || "GET",
     requestHeaders: fallback?.requestHeaders || {},
     timestamp: Date.now()
   };
   state.entries.push(entry);
-  state.requestToIndex.set(requestId, state.entries.length - 1);
+  state.requestToIndex.set(key, state.entries.length - 1);
   return entry;
+}
+async function armChildSession(tabId, sessionId) {
+  const states = childStateMap(tabId);
+  let st = states.get(sessionId);
+  const isNew = st === void 0;
+  if (isNew && states.size >= MAX_CHILD_SESSIONS_PER_TAB) {
+    states.set(sessionId, { autoAttach: false, network: false, ui: false, overCap: true });
+    sessionToTab.set(sessionId, tabId);
+    await sendSafe(childDebuggee(tabId, sessionId), "Runtime.runIfWaitingForDebugger", {});
+    return;
+  }
+  if (!st) {
+    st = { autoAttach: false, network: false, ui: false, overCap: false };
+    states.set(sessionId, st);
+  }
+  if (st.overCap) return;
+  sessionToTab.set(sessionId, tabId);
+  const child = childDebuggee(tabId, sessionId);
+  try {
+    if (!st.autoAttach) {
+      if (await sendSafe(child, "Target.setAutoAttach", { ...AUTO_ATTACH_IFRAME_PARAMS })) st.autoAttach = true;
+    }
+    if (networkCaptures.has(tabId) && !st.network) {
+      if (await sendSafe(child, "Network.enable", {})) st.network = true;
+    }
+    if (uiCaptures.has(tabId) && !st.ui) {
+      const ok = await sendSafe(child, "Runtime.enable", {}) && await sendSafe(child, "Page.enable", {}) && await sendSafe(child, "Runtime.addBinding", { name: UI_BINDING_NAME }) && await sendSafe(child, "Page.addScriptToEvaluateOnNewDocument", { source: UI_LISTENER_SOURCE });
+      await sendSafe(child, "Runtime.evaluate", { expression: UI_LISTENER_SOURCE });
+      if (ok) st.ui = true;
+    }
+  } finally {
+    if (isNew) await sendSafe(child, "Runtime.runIfWaitingForDebugger", {});
+  }
+}
+async function rearmChildSessions(tabId) {
+  const states = armedChildSessions.get(tabId);
+  if (!states) return;
+  const gen = tabCaptureGeneration.get(tabId) ?? 0;
+  for (const sessionId of [...states.keys()]) {
+    if ((tabCaptureGeneration.get(tabId) ?? 0) !== gen) return;
+    if (armedChildSessions.get(tabId) !== states) return;
+    if (!states.has(sessionId)) continue;
+    await armChildSession(tabId, sessionId);
+  }
+}
+async function enableIframeAutoAttach(tabId) {
+  await sendSafe({ tabId }, "Target.setAutoAttach", { ...AUTO_ATTACH_IFRAME_PARAMS });
 }
 async function startNetworkCapture(tabId, pattern) {
   await ensureAttached(tabId);
@@ -458,17 +686,118 @@ async function startNetworkCapture(tabId, pattern) {
     entries: [],
     requestToIndex: /* @__PURE__ */ new Map()
   });
+  await enableIframeAutoAttach(tabId);
+  await rearmChildSessions(tabId);
 }
-async function readNetworkCapture(tabId) {
+async function readNetworkCapture(tabId, filter) {
   const state = networkCaptures.get(tabId);
   if (!state) return [];
-  const entries = state.entries.slice();
+  let entries = state.entries.filter(
+    (e) => e.kind === "cdp-websocket" || !isStaticAssetContentType(e.responseContentType)
+  );
+  if (filter) {
+    const r = applyFrameFilter(tabId, entries, filter);
+    if (r.resolve.kind === "ambiguous") throw new AmbiguousIframeTargetError(r.resolve.candidates.length);
+    entries = r.items;
+  }
   state.entries = [];
   state.requestToIndex.clear();
   return entries;
 }
+class AmbiguousIframeTargetError extends Error {
+  code = "ambiguous_iframe_target";
+  constructor(count) {
+    super(`ambiguous iframe target: ${count} candidate frames matched`);
+  }
+}
+function normalizeUrlForMatch(raw) {
+  try {
+    const u = new URL(raw);
+    const pathname = u.pathname.replace(/\/+$/, "") || "/";
+    return { href: `${u.origin}${pathname}${u.search}`, origin: u.origin, pathname };
+  } catch {
+    return null;
+  }
+}
+function resolveTargetFrameSessions(tabId, targetFrameUrl) {
+  const target = normalizeUrlForMatch(maskUrlAuthTokens(targetFrameUrl));
+  if (!target) return { kind: "none" };
+  const states = armedChildSessions.get(tabId);
+  if (!states || states.size === 0) return { kind: "none" };
+  const candidates = [];
+  for (const sid of states.keys()) {
+    const frameUrl = sessionToFrameUrl.get(sid);
+    if (!frameUrl) continue;
+    candidates.push({ sid, norm: normalizeUrlForMatch(frameUrl) });
+  }
+  const exact = candidates.filter((c) => c.norm && c.norm.href === target.href);
+  if (exact.length === 1) return { kind: "ok", sessionIds: collectDescendants(tabId, exact[0].sid) };
+  if (exact.length > 1) return { kind: "ambiguous", candidates: exact.map((c) => c.sid) };
+  const loose = candidates.filter((c) => c.norm && c.norm.origin === target.origin && c.norm.pathname === target.pathname);
+  if (loose.length === 1) return { kind: "ok", sessionIds: collectDescendants(tabId, loose[0].sid) };
+  if (loose.length > 1) return { kind: "ambiguous", candidates: loose.map((c) => c.sid) };
+  const sameOrigin = candidates.filter((c) => c.norm && c.norm.origin === target.origin);
+  if (sameOrigin.length === 1) return { kind: "ok", sessionIds: collectDescendants(tabId, sameOrigin[0].sid) };
+  if (sameOrigin.length > 1) return { kind: "ambiguous", candidates: sameOrigin.map((c) => c.sid) };
+  const all = /* @__PURE__ */ new Set();
+  for (const sid of states.keys()) for (const d of collectDescendants(tabId, sid)) all.add(d);
+  if (all.size > 0) return { kind: "ok", sessionIds: all };
+  return { kind: "none" };
+}
+function collectDescendants(tabId, rootSid) {
+  const out = /* @__PURE__ */ new Set([rootSid]);
+  const states = armedChildSessions.get(tabId);
+  if (!states) return out;
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const sid of states.keys()) {
+      if (out.has(sid)) continue;
+      const parent = sessionToParent.get(sid);
+      if (parent !== void 0 && out.has(parent)) {
+        out.add(sid);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+function applyFrameFilter(tabId, items, filter) {
+  const resolve = resolveTargetFrameSessions(tabId, filter.targetFrameUrl);
+  if (resolve.kind !== "ok") return { items: [], resolve };
+  const allow = resolve.sessionIds;
+  return { items: items.filter((it) => it.frameSessionId !== void 0 && allow.has(it.frameSessionId)), resolve };
+}
 function hasActiveNetworkCapture(tabId) {
   return networkCaptures.has(tabId);
+}
+async function startUiCapture(tabId) {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+  await chrome.debugger.sendCommand({ tabId }, "Page.enable");
+  await chrome.debugger.sendCommand({ tabId }, "Runtime.addBinding", { name: UI_BINDING_NAME });
+  await chrome.debugger.sendCommand({ tabId }, "Page.addScriptToEvaluateOnNewDocument", { source: UI_LISTENER_SOURCE });
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", { expression: UI_LISTENER_SOURCE });
+  } catch {
+  }
+  uiCaptures.set(tabId, { events: [], dropped: 0 });
+  await enableIframeAutoAttach(tabId);
+  await rearmChildSessions(tabId);
+}
+async function readUiCapture(tabId, filter) {
+  const state = uiCaptures.get(tabId);
+  if (!state) return { events: [], dropped: 0 };
+  let events = state.events.slice();
+  if (filter) {
+    const r = applyFrameFilter(tabId, events, filter);
+    if (r.resolve.kind === "ambiguous") throw new AmbiguousIframeTargetError(r.resolve.candidates.length);
+    events = r.items;
+  }
+  const out = { events, dropped: state.dropped };
+  state.events = [];
+  state.dropped = 0;
+  return out;
 }
 const fetchGuards = /* @__PURE__ */ new Map();
 let fetchListenerRegistered = false;
@@ -532,13 +861,27 @@ function clearFrameTargetsForTab(tabId) {
     });
   }
 }
+function clearChildSessionsForTab(tabId) {
+  tabCaptureGeneration.set(tabId, (tabCaptureGeneration.get(tabId) ?? 0) + 1);
+  const states = armedChildSessions.get(tabId);
+  if (states) {
+    for (const sid of states.keys()) {
+      sessionToTab.delete(sid);
+      sessionToFrameUrl.delete(sid);
+      sessionToParent.delete(sid);
+    }
+    armedChildSessions.delete(tabId);
+  }
+}
 async function detach(tabId) {
   clearFrameTargetsForTab(tabId);
-  if (!attached.has(tabId)) return;
-  attached.delete(tabId);
+  clearChildSessionsForTab(tabId);
   networkCaptures.delete(tabId);
+  uiCaptures.delete(tabId);
   fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
+  if (!attached.has(tabId)) return;
+  attached.delete(tabId);
   try {
     await chrome.debugger.detach({ tabId });
   } catch {
@@ -548,17 +891,21 @@ function registerListeners() {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    uiCaptures.delete(tabId);
     fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
     clearFrameTargetsForTab(tabId);
+    clearChildSessionsForTab(tabId);
   });
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      uiCaptures.delete(source.tabId);
       fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
       clearFrameTargetsForTab(source.tabId);
+      clearChildSessionsForTab(source.tabId);
       return;
     }
     if (source.targetId) clearFrameTarget(source.targetId);
@@ -569,20 +916,89 @@ function registerListeners() {
     }
   });
   chrome.debugger.onEvent.addListener(async (source, method, params) => {
-    const tabId = source.tabId;
+    if (method === "Target.attachedToTarget") {
+      const ap = params;
+      const childSessionId = ap?.sessionId;
+      const parentTabId = source.tabId;
+      if (!childSessionId || !parentTabId) return;
+      if (ap?.targetInfo?.type !== "iframe") {
+        await sendSafe(childDebuggee(parentTabId, childSessionId), "Runtime.runIfWaitingForDebugger", {});
+        return;
+      }
+      if (typeof ap.targetInfo.url === "string") {
+        sessionToFrameUrl.set(childSessionId, maskUrlAuthTokens(ap.targetInfo.url));
+      }
+      sessionToParent.set(childSessionId, sessionIdOf(source) ?? "");
+      await armChildSession(parentTabId, childSessionId);
+      return;
+    }
+    if (method === "Target.detachedFromTarget") {
+      const dp = params;
+      const sid = dp?.sessionId;
+      if (sid) {
+        const owner = sessionToTab.get(sid);
+        sessionToTab.delete(sid);
+        sessionToFrameUrl.delete(sid);
+        sessionToParent.delete(sid);
+        if (owner !== void 0) armedChildSessions.get(owner)?.delete(sid);
+      }
+      return;
+    }
+    if (method === "Target.targetInfoChanged") {
+      const cp = params;
+      const ti = cp?.targetInfo;
+      const sid = sessionIdOf(source);
+      if (sid && ti?.type === "iframe" && typeof ti.url === "string" && ti.url) {
+        sessionToFrameUrl.set(sid, maskUrlAuthTokens(ti.url));
+      }
+      return;
+    }
+    const eventSessionId = sessionIdOf(source);
+    const tabId = source.tabId ?? (eventSessionId ? sessionToTab.get(eventSessionId) : void 0);
     if (!tabId) return;
+    const sessionId = eventSessionId;
+    if (method === "Runtime.bindingCalled") {
+      const bp = params;
+      if (bp?.name === UI_BINDING_NAME) {
+        const ui = uiCaptures.get(tabId);
+        if (ui) {
+          const ev = parseUiEvent(String(bp.payload ?? ""));
+          if (ev) {
+            if (sessionId) {
+              ev.frameSessionId = sessionId;
+              const fu = sessionToFrameUrl.get(sessionId);
+              if (fu) ev.frameUrl = fu;
+            }
+            if (ui.events.length < MAX_UI_EVENTS) ui.events.push(ev);
+            else ui.dropped++;
+          }
+        }
+      }
+      return;
+    }
     const state = networkCaptures.get(tabId);
     if (!state) return;
     const eventParams = params;
     if (method === "Network.requestWillBeSent") {
+      if (!isApiResourceType(eventParams?.type)) return;
       const requestId = String(eventParams?.requestId || "");
       const request = eventParams?.request;
-      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
-        url: request?.url,
+      const entry = getOrCreateNetworkCaptureEntry(tabId, reqKey(sessionId, requestId), {
+        url: maskUrlAuthTokens(request?.url),
         method: request?.method,
         requestHeaders: normalizeHeaders(request?.headers)
       });
       if (!entry) return;
+      if (typeof eventParams?.type === "string") entry.resourceType = eventParams.type;
+      const initiator = eventParams?.initiator;
+      if (initiator?.type) entry.initiatorType = initiator.type;
+      const frameId = eventParams?.frameId;
+      if (typeof frameId === "string") entry.frameId = frameId;
+      if (sessionId) entry.frameSessionId = sessionId;
+      if (sessionId) {
+        const fu = sessionToFrameUrl.get(sessionId);
+        if (fu) entry.frameUrl = fu;
+      }
       entry.requestBodyKind = request?.hasPostData ? "string" : "empty";
       {
         const raw = String(request?.postData || "");
@@ -593,7 +1009,7 @@ function registerListeners() {
         entry.requestBodyTruncated = truncated;
       }
       try {
-        const postData = await chrome.debugger.sendCommand({ tabId }, "Network.getRequestPostData", { requestId });
+        const postData = await chrome.debugger.sendCommand(source, "Network.getRequestPostData", { requestId });
         if (postData?.postData) {
           const raw = postData.postData;
           const fullSize = raw.length;
@@ -610,9 +1026,9 @@ function registerListeners() {
     if (method === "Network.responseReceived") {
       const requestId = String(eventParams?.requestId || "");
       const response = eventParams?.response;
-      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
-        url: response?.url
-      });
+      const stateEntryIndex = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (stateEntryIndex === void 0) return;
+      const entry = state.entries[stateEntryIndex];
       if (!entry) return;
       entry.responseStatus = response?.status;
       entry.responseContentType = response?.mimeType || "";
@@ -621,12 +1037,12 @@ function registerListeners() {
     }
     if (method === "Network.loadingFinished") {
       const requestId = String(eventParams?.requestId || "");
-      const stateEntryIndex = state.requestToIndex.get(requestId);
+      const stateEntryIndex = state.requestToIndex.get(reqKey(sessionId, requestId));
       if (stateEntryIndex === void 0) return;
       const entry = state.entries[stateEntryIndex];
       if (!entry) return;
       try {
-        const body = await chrome.debugger.sendCommand({ tabId }, "Network.getResponseBody", { requestId });
+        const body = await chrome.debugger.sendCommand(source, "Network.getResponseBody", { requestId });
         if (typeof body?.body === "string") {
           const fullSize = body.body.length;
           const truncated = fullSize > CDP_RESPONSE_BODY_CAPTURE_LIMIT;
@@ -637,6 +1053,62 @@ function registerListeners() {
         }
       } catch {
       }
+      return;
+    }
+    if (method === "Network.webSocketCreated") {
+      const requestId = String(eventParams?.requestId || "");
+      const wsEntry = getOrCreateNetworkCaptureEntry(
+        tabId,
+        reqKey(sessionId, requestId),
+        { url: maskUrlAuthTokens(eventParams?.url), method: "GET" },
+        "cdp-websocket"
+      );
+      if (wsEntry) wsEntry.resourceType = "WebSocket";
+      if (wsEntry && sessionId) {
+        wsEntry.frameSessionId = sessionId;
+        const fu = sessionToFrameUrl.get(sessionId);
+        if (fu) wsEntry.frameUrl = fu;
+      }
+      return;
+    }
+    if (method === "Network.webSocketHandshakeResponseReceived") {
+      const requestId = String(eventParams?.requestId || "");
+      const idx = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (idx === void 0) return;
+      const entry = state.entries[idx];
+      if (!entry) return;
+      const response = eventParams?.response;
+      entry.responseStatus = response?.status ?? 101;
+      entry.responseHeaders = normalizeHeaders(response?.headers);
+      return;
+    }
+    if (method === "Network.webSocketFrameSent" || method === "Network.webSocketFrameReceived") {
+      const requestId = String(eventParams?.requestId || "");
+      const idx = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (idx === void 0) return;
+      const entry = state.entries[idx];
+      if (!entry) return;
+      const frame = eventParams?.response;
+      const opcode = typeof frame?.opcode === "number" ? frame.opcode : -1;
+      if (opcode !== 1 && opcode !== 2) return;
+      if (!entry.webSocketFrames) entry.webSocketFrames = [];
+      if (entry.webSocketFrames.length >= MAX_WS_FRAMES_PER_CONN) {
+        entry.webSocketFramesDropped = (entry.webSocketFramesDropped ?? 0) + 1;
+        return;
+      }
+      const raw = String(frame?.payloadData ?? "");
+      const fullSize = raw.length;
+      const truncated = fullSize > CDP_WS_FRAME_CAPTURE_LIMIT;
+      const stored = truncated ? raw.slice(0, CDP_WS_FRAME_CAPTURE_LIMIT) : raw;
+      entry.webSocketFrames.push({
+        direction: method === "Network.webSocketFrameSent" ? "sent" : "received",
+        opcode,
+        payloadPreview: opcode === 2 ? `base64:${stored}` : stored,
+        payloadFullSize: fullSize,
+        payloadTruncated: truncated,
+        timestamp: Date.now()
+      });
+      return;
     }
   });
 }
@@ -1263,7 +1735,7 @@ async function focusOwnedWindowIfRequested(windowId, mode) {
 async function toOwnedContainerDiscoveryCandidate(group) {
   try {
     const chromeWindow = await chrome.windows.get(group.windowId);
-    const reusableTabId = await findReusableOwnedContainerTab(group.windowId);
+    const reusableTabId = await findReusableOwnedContainerTab(group.windowId, group.id);
     return {
       windowId: group.windowId,
       groupId: group.id,
@@ -1355,7 +1827,7 @@ async function ensureOwnedContainerWindowUnlocked(role, initialUrl, mode = "back
     try {
       await chrome.windows.get(container.windowId);
       await focusOwnedWindowIfRequested(container.windowId, mode);
-      const initialTabId2 = await findReusableOwnedContainerTab(container.windowId);
+      const initialTabId2 = await findReusableOwnedContainerTab(container.windowId, await getOwnedContainerGroupId(role, container.windowId));
       await ensureOwnedContainerTabGroup(role, container.windowId, [initialTabId2]);
       return {
         windowId: container.windowId,
@@ -1369,7 +1841,7 @@ async function ensureOwnedContainerWindowUnlocked(role, initialUrl, mode = "back
   const discovered = await discoverOwnedContainerFromTabGroup(role);
   if (discovered) {
     await focusOwnedWindowIfRequested(discovered.windowId, mode);
-    const initialTabId2 = await findReusableOwnedContainerTab(discovered.windowId);
+    const initialTabId2 = await findReusableOwnedContainerTab(discovered.windowId, discovered.groupId);
     await ensureOwnedContainerTabGroup(role, discovered.windowId, [initialTabId2]);
     await persistRuntimeState();
     return {
@@ -1411,9 +1883,10 @@ async function ensureOwnedContainerWindowUnlocked(role, initialUrl, mode = "back
   await persistRuntimeState();
   return { windowId: container.windowId, initialTabId };
 }
-async function findReusableOwnedContainerTab(windowId) {
+async function findReusableOwnedContainerTab(windowId, groupId) {
+  if (groupId === null) return void 0;
   try {
-    const tabs = await chrome.tabs.query({ windowId });
+    const tabs = await chrome.tabs.query({ windowId, groupId });
     const reusable = tabs.find(
       (tab) => tab.id !== void 0 && initialTabIsAvailable(tab.id) && isDebuggableUrl(tab.url)
     );
@@ -1445,7 +1918,8 @@ async function createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst = fa
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    tab = await chrome.tabs.create({ windowId, url: createUrl, active: true });
+    const activateTab = getWindowMode(leaseKey) === "foreground";
+    tab = await chrome.tabs.create({ windowId, url: createUrl, active: activateTab });
   }
   if (!tab.id) throw new Error("Failed to create tab lease in automation container");
   await ensureOwnedContainerTabGroup(role, windowId, [tab.id]);
@@ -1623,6 +2097,10 @@ async function handleCommand(cmd) {
         return await handleNetworkCaptureStart(cmd, leaseKey);
       case "network-capture-read":
         return await handleNetworkCaptureRead(cmd, leaseKey);
+      case "ui-capture-start":
+        return await handleUiCaptureStart(cmd, leaseKey);
+      case "ui-capture-read":
+        return await handleUiCaptureRead(cmd, leaseKey);
       case "wait-download":
         return await handleWaitDownload(cmd);
       case "frames":
@@ -1967,6 +2445,12 @@ async function handleNavigate(cmd, leaseKey) {
       console.warn(`[bycli] Failed to recover drifted tab: ${moveErr}`);
     }
   }
+  const navWindowMode = getWindowMode(leaseKey);
+  await focusOwnedWindowIfRequested(tab.windowId, navWindowMode);
+  if (navWindowMode === "foreground") {
+    await chrome.tabs.update(tabId, { active: true }).catch(() => {
+    });
+  }
   return pageScopedResult(cmd.id, tabId, {
     title: tab.title,
     url: tab.url,
@@ -2014,7 +2498,8 @@ async function handleTabs(cmd, leaseKey) {
         return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
       }
       const windowId = await getAutomationWindow(leaseKey);
-      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: true });
+      const activateNewTab = getWindowMode(leaseKey) === "foreground";
+      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
       if (!tab.id) return { id: cmd.id, ok: false, error: "Failed to create tab" };
       await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
       setLeaseSession(leaseKey, {
@@ -2135,6 +2620,8 @@ const CDP_ALLOWLIST = /* @__PURE__ */ new Set([
   "Input.dispatchMouseEvent",
   "Input.dispatchKeyEvent",
   "Input.insertText",
+  // 投屏滚动:synthesizeScrollGesture 真正驱动合成器滚动(dispatchMouseEvent mouseWheel 只发事件、很多页面不滚)。
+  "Input.synthesizeScrollGesture",
   // Page metrics & screenshots
   "Page.getLayoutMetrics",
   "Page.captureScreenshot",
@@ -2215,14 +2702,38 @@ async function handleNetworkCaptureStart(cmd, leaseKey) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+function errorCodeOf(err) {
+  const c = err?.code;
+  return typeof c === "string" ? c : void 0;
+}
 async function handleNetworkCaptureRead(cmd, leaseKey) {
   const cmdTabId = await resolveCommandTabId(cmd);
   const tabId = await resolveTabId(cmdTabId, leaseKey);
   try {
-    const data = await readNetworkCapture(tabId);
+    const data = await readNetworkCapture(tabId, cmd.targetFrameUrl ? { targetFrameUrl: cmd.targetFrameUrl } : void 0);
     return pageScopedResult(cmd.id, tabId, data);
   } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
+  }
+}
+async function handleUiCaptureStart(cmd, leaseKey) {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    await startUiCapture(tabId);
+    return pageScopedResult(cmd.id, tabId, { started: true });
+  } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+async function handleUiCaptureRead(cmd, leaseKey) {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    const data = await readUiCapture(tabId, cmd.targetFrameUrl ? { targetFrameUrl: cmd.targetFrameUrl } : void 0);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
   }
 }
 async function handleWaitDownload(cmd) {

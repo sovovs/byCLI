@@ -1,7 +1,7 @@
 // Step 5 · 生成草稿 —— select-only init,契约三态:dry-run 预览 → ADR-0005 责任声明 → 确认写入。
 // 预览不推进会话;写入(带 responsibleUseAcknowledgedAt)推进 ranked→draft_created。
 import { useState } from 'react';
-import { FileTextOutlined, EyeOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { FileTextOutlined, EyeOutlined, SafetyCertificateOutlined, RobotOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Checkbox, Descriptions, Space, Tag, Typography, theme } from 'antd';
 import type { InitResult, RankCandidate } from '@/types/recorder';
 
@@ -14,7 +14,8 @@ interface Props {
   adapterName?: string;
   /** dry-run 预览结果({report,dryRun});未预览时为空 */
   preview?: InitResult;
-  onPreview: () => void;
+  /** egressConsent=true 时携带 LLM 外发同意(点「用 AI 生成」才传),不传则不外发、空骨架预览。 */
+  onPreview: (egressConsent?: boolean) => void;
   onWrite: () => void;
 }
 
@@ -46,7 +47,7 @@ export default function InitStep({ loading, selectedCandidate, adapterName, prev
         <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="请先在上方选择一个候选 endpoint" />
       )}
 
-      <Button icon={<EyeOutlined />} loading={loading} disabled={!selectedCandidate} onClick={onPreview}>
+      <Button icon={<EyeOutlined />} loading={loading} disabled={!selectedCandidate} onClick={() => onPreview()}>
         {preview ? '重新预览 (dry-run)' : '预览草稿 (dry-run)'}
       </Button>
 
@@ -77,6 +78,48 @@ export default function InitStep({ loading, selectedCandidate, adapterName, prev
 
           {!!preview.report.warnings?.length && (
             <Alert type="warning" showIcon style={{ marginTop: 12 }} message={preview.report.warnings.join(';')} />
+          )}
+
+          {/* P0-2 外发前置同意:AI 可用但尚未外发 → 显式同意后才把痕迹发模型 */}
+          {preview.llmSynthesisOffered && (
+            <Alert
+              type="warning"
+              showIcon
+              icon={<RobotOutlined />}
+              style={{ marginTop: 12 }}
+              message="用 AI 生成 adapter(实验功能)"
+              description="点击后会把本次录制的页面截图 + 抓到的真实请求/响应发送给 Anthropic 分析,生成 func/columns。数据可能含登录态站点信息,仅在你接受该外发时继续。当前预览为空骨架,未发送任何数据。"
+              action={
+                <Button danger type="primary" icon={<RobotOutlined />} loading={loading} onClick={() => onPreview(true)}>
+                  用 AI 生成(发送痕迹)
+                </Button>
+              }
+            />
+          )}
+
+          {preview.generatedSource && (
+            <div style={{ marginTop: 16 }}>
+              {preview.generatedSource.includes('@generated-by adapter-recorder-llm') && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  icon={<RobotOutlined />}
+                  style={{ marginBottom: 8 }}
+                  message="此 adapter 由 AI 基于你的录制痕迹生成"
+                  description="你的页面截图与抓到的真实请求/响应已发送给模型分析。写盘前请逐行审阅下方代码,确认逻辑正确且不含敏感信息。"
+                />
+              )}
+              <Text type="secondary">生成的 adapter 源码(写盘前审阅):</Text>
+              <pre
+                className="code"
+                style={{
+                  maxHeight: 320, overflow: 'auto', marginTop: 6, padding: 12, fontSize: 12, lineHeight: 1.5,
+                  background: token.colorFillTertiary, borderRadius: token.borderRadius, border: `1px solid ${token.colorBorderSecondary}`,
+                }}
+              >
+                {preview.generatedSource}
+              </pre>
+            </div>
           )}
 
           <div style={{ marginTop: 16 }}>

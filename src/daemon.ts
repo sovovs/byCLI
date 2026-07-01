@@ -27,7 +27,7 @@ import { EXIT_CODES } from './errors.js';
 import { log } from './logger.js';
 import { PKG_VERSION } from './version.js';
 import { DEFAULT_CONTEXT_ID } from './browser/profile.js';
-import { createAdapterDraft, recoverInitTransactions, type InitInput } from './recorder/highlevel/init.js';
+import { createAdapterDraft, saveAdapterSource, recoverInitTransactions, type InitInput, type SaveAdapterInput } from './recorder/highlevel/init.js';
 import { verifyAdapter, type VerifyInput } from './recorder/highlevel/verify.js';
 import { defaultRunnerPort, setDefaultRunnerDaemonPort, setDefaultRunnerObservability, setDefaultRunnerTempGuard } from './recorder/runner/runner-port.js';
 import { createMetrics } from '@sovovs/bycli-recorder-core';
@@ -303,7 +303,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         jsonResponse(res, 400, { ok: false, errorCode: result.errorCode, error: result.reason });
         return;
       }
-      jsonResponse(res, 200, { ok: true, data: { report: result.report, dryRun: result.dryRun } });
+      jsonResponse(res, 200, { ok: true, data: { report: result.report, dryRun: result.dryRun, generatedSource: result.generatedSource } });
+    } catch (err) {
+      jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // N4: save a reviewed, full LLM-generated adapter source to clis/ (verify-then-save flow).
+  if (req.method === 'POST' && pathname === '/v1/save-adapter') {
+    try {
+      const body = JSON.parse(await readBody(req)) as Partial<SaveAdapterInput>;
+      if (typeof body.name !== 'string' || !body.name || typeof body.source !== 'string' || !body.source) {
+        jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: 'name and source required' });
+        return;
+      }
+      const result = saveAdapterSource(body as SaveAdapterInput);
+      if (!result.ok) { jsonResponse(res, 400, { ok: false, errorCode: result.errorCode, error: result.reason }); return; }
+      jsonResponse(res, 200, { ok: true, data: { adapterPath: result.adapterPath, reportPath: result.reportPath } });
     } catch (err) {
       jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });
     }

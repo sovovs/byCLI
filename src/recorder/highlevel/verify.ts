@@ -13,6 +13,8 @@
  * they never enter the returned summary, report, status, or logs.
  */
 
+import { homedir } from 'node:os';
+import { resolve, sep } from 'node:path';
 import {
   validateAdapterName, deriveEvidenceSeedArgs,
   type SeedArgEvidence, type VerifySummary,
@@ -33,6 +35,8 @@ export interface VerifyInput {
   executionSeedArgs?: Record<string, unknown>;
   fixture?: 'ignore' | 'match' | 'update';
   trace?: 'off' | 'retain-on-failure' | 'always';
+  /** N3:显式 adapter 路径 override —— verify 录制器 LLM 生成的临时草稿(不在 clis/),缺省按 name 派生。 */
+  adapterPath?: string;
 }
 
 /** The runner boundary (08). M6 provides the real child-process implementation. */
@@ -45,6 +49,8 @@ export interface RunnerPort {
     rawSeedArgs: Record<string, unknown>;
     fixture: string;
     trace: string;
+    /** N3: explicit adapter path override (recorder draft verify); default = name→clis path. */
+    adapterPath?: string;
   }): Promise<{ requestId: string }>;
   getVerifyStatus(requestId: string): Promise<VerifySummary | null>;
   cancelVerify(requestId: string): Promise<{ cancelled: boolean }>;
@@ -81,6 +87,17 @@ export async function verifyAdapter(
   const v = validateAdapterName(input.name);
   if (!v.ok) return { ok: false, errorCode: 'validation_failed', reason: v.reason };
 
+  // N3 安全:adapterPath override 必须是 ~/.bycli 下的绝对路径(草稿/正式 clis),防越权读任意文件。
+  let adapterPath = input.adapterPath;
+  if (adapterPath !== undefined) {
+    const abs = resolve(adapterPath);
+    const root = resolve(homedir(), '.bycli') + sep;
+    if (!abs.startsWith(root)) {
+      return { ok: false, errorCode: 'validation_failed', reason: 'adapterPath must be under ~/.bycli' };
+    }
+    adapterPath = abs;
+  }
+
   const port = runner ?? defaultRunnerPort();
   const rawSeedArgs = input.executionSeedArgs ?? {};
   const evidenceSeedArgs = deriveEvidenceSeedArgs(rawSeedArgs, sessionHmacKey);
@@ -93,6 +110,7 @@ export async function verifyAdapter(
       rawSeedArgs, // memory→input.json only, runner's responsibility; never returned
       fixture: input.fixture ?? 'ignore',
       trace: input.trace ?? 'retain-on-failure',
+      adapterPath, // N3: validated draft path override (undefined → name→clis)
     });
     return { ok: true, requestId };
   } catch (e) {

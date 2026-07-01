@@ -41,6 +41,7 @@ const HEALTH_OK: HealthReport = {
   daemon: 'ok',
   extension: 'ok',
   highLevel: 'ok',
+  llmSynthesis: true, // mock 模拟 LLM 可用 → 走新 pipeline 流程
 };
 
 const makeEntries = (sample: 'A' | 'B'): NetworkEntry[] => {
@@ -73,6 +74,21 @@ const makeEntries = (sample: 'A' | 'B'): NetworkEntry[] => {
       response: { status: 204, mime: 'text/plain', bodyShape: { kind: 'unknown' } },
       timing: { startedAt: base + 80, durationMs: 312 },
     },
+    {
+      // WebSocket 连接(kind='cdp-websocket'):展示数据帧展开行(可观测,不进打分)。
+      requestId: `ws_${sample}_1`,
+      method: 'GET',
+      url: 'wss://example.com/realtime',
+      host: 'example.com',
+      kind: 'cdp-websocket',
+      responseStatus: 101,
+      webSocketFrames: [
+        { direction: 'sent', opcode: 1, payloadPreview: `{"sub":"prices","q":"${sample === 'A' ? 'shoes' : 'bags'}"}` },
+        { direction: 'received', opcode: 1, payloadPreview: '{"price":129,"ts":1710000000}' },
+        { direction: 'received', opcode: 1, payloadPreview: '{"price":131,"ts":1710000002}' },
+        { direction: 'received', opcode: 2, payloadPreview: 'base64:AAECAwQF', payloadTruncated: true },
+      ],
+    },
   ];
 };
 
@@ -98,6 +114,19 @@ const CANDIDATES: RankCandidate[] = [
       { argName: 'page', in: 'query', paramName: 'page', valueType: 'number' },
     ],
     responseShape: { kind: 'array', itemKeys: ['title', 'url', 'price'], count: 20, shapeConfidence: 0.95, echoesSeedArg: true },
+    responseShapeVariants: ['array'],
+    mergedRequestIds: ['req_a1', 'req_a2', 'req_b1'],
+    scoredBy: 'llm',
+    llmUtilityScore: 90,
+    inferredFunction: '按关键词搜索商品并返回结果列表(含标题、链接、价格)',
+    paramUnion: [
+      { name: 'q', in: 'query', requiredness: 'always', observedVariation: true, paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '搜索关键词', why: 'A/B 随用户输入变化' },
+      { name: 'page', in: 'query', requiredness: 'optional', observedVariation: true, paramRole: 'pagination', exposeAsArg: 'optional_candidate', inferredMeaning: '结果分页页码', why: 'page 命中翻页参数模式' },
+    ],
+    paramObservations: [
+      { name: 'q', in: 'query', observedCount: 3, totalCalls: 3, observedSamples: ['A', 'B'], observedAlways: true, observedVariation: true, valueKinds: ['string'], dynamicLike: false, cursorLike: false },
+      { name: 'page', in: 'query', observedCount: 3, totalCalls: 3, observedSamples: ['A', 'B'], observedAlways: true, observedVariation: true, valueKinds: ['number'], dynamicLike: false, cursorLike: true },
+    ],
     columns: [
       { name: 'title', path: '$[].title', type: 'string' },
       { name: 'url', path: '$[].url', type: 'string' },
@@ -114,7 +143,7 @@ const CANDIDATES: RankCandidate[] = [
   },
   {
     id: 'cand_2',
-    score: 61,
+    score: 65,
     confidence: 'medium',
     reviewRequired: true,
     endpoint: {
@@ -130,6 +159,20 @@ const CANDIDATES: RankCandidate[] = [
     },
     args: [{ argName: 'keyword', in: 'query', paramName: 'term', valueType: 'string' }],
     responseShape: { kind: 'array', itemKeys: ['text'], count: 8, shapeConfidence: 0.7 },
+    responseShapeVariants: ['array', 'object'],
+    mergedRequestIds: ['req_s1', 'req_s2'],
+    scoredBy: 'llm',
+    // 演示「两数不一致」:权威 rank=65/medium,但 LLM 自报效用 84/high(仅供参考,不改排序)。
+    llmUtilityScore: 84,
+    inferredFunction: '按输入词返回搜索建议词列表(输入联想)',
+    paramUnion: [
+      { name: 'term', in: 'query', requiredness: 'always', observedVariation: true, paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '联想输入词', why: 'A/B 随用户输入变化' },
+      { name: '_t', in: 'query', requiredness: 'optional', observedVariation: true, paramRole: 'dynamic', exposeAsArg: 'no', inferredMeaning: '时间戳缓存破坏', why: '命中动态参数模式 _t,不应暴露' },
+    ],
+    paramObservations: [
+      { name: 'term', in: 'query', observedCount: 2, totalCalls: 2, observedSamples: ['A', 'B'], observedAlways: true, observedVariation: true, valueKinds: ['string'], dynamicLike: false, cursorLike: false },
+      { name: '_t', in: 'query', observedCount: 2, totalCalls: 2, observedSamples: ['A', 'B'], observedAlways: true, observedVariation: true, valueKinds: ['number'], dynamicLike: true, cursorLike: false },
+    ],
     columns: [{ name: 'text', path: '$[].text', type: 'string' }],
     scoreExplanation: [
       { signal: 'response_is_list', delta: 30, detail: '响应是字符串建议列表' },
@@ -162,8 +205,46 @@ const CANDIDATES: RankCandidate[] = [
   },
 ];
 
+// mock 里模拟「AI 可用」:无 egress 同意时只回空骨架 + llmSynthesisOffered:true(演示同意 CTA),
+// 带 egress 同意(llmAcked)才回 LLM 合成源码,模拟 P0-2 外发前置同意。
+const LLM_SOURCE = [
+  '// @generated-by adapter-recorder-llm',
+  '// @model claude-opus-4-8',
+  "import { cli, Strategy } from '@sovovs/bycli/registry';",
+  '',
+  'cli({',
+  '  site: "example-com",',
+  '  name: "search",',
+  '  description: "Search example.com listings by keyword",',
+  "  access: 'read',",
+  '  domain: "example.com",',
+  '  strategy: Strategy.PUBLIC,',
+  '  args: [{ name: "keyword", type: "string", help: "Search keyword" }],',
+  '  columns: ["title","url","price"],',
+  '  func: async (kwargs) => {',
+  '    const r = await fetch(`https://example.com/api/search?q=${encodeURIComponent(kwargs.keyword)}&page=1`);',
+  '    const data = await r.json();',
+  '    return data.map((x) => ({ title: x.title, url: x.url, price: x.price }));',
+  '  },',
+  '});',
+].join('\n');
+const EMPTY_SOURCE = [
+  '// @generated-by adapter-recorder',
+  "import { cli, Strategy } from '@sovovs/bycli/registry';",
+  '',
+  'cli({',
+  '  site: "example-com",',
+  '  name: "search",',
+  "  columns: [], // TODO: field names for table output",
+  '  func: async (kwargs) => {',
+  '    // TODO: implement data fetching (prefer fetch over browser automation)',
+  '    return [];',
+  '  },',
+  '});',
+].join('\n');
+
 // init 结果(契约形状 {report,dryRun});dry-run 预览时 responsibleUseAcknowledgedAt=0,write 时回填。
-const initResult = (writePolicy: WritePolicy, ack?: number): InitResult => ({
+const initResult = (writePolicy: WritePolicy, ack?: number, llmAcked?: boolean): InitResult => ({
   report: {
     adapterPath: '~/.bycli/clis/example-com/search.js',
     reportPath: '~/.bycli/sites/example-com/recorder/search-report.json',
@@ -174,6 +255,8 @@ const initResult = (writePolicy: WritePolicy, ack?: number): InitResult => ({
     configSnapshotVersion: 1,
   },
   dryRun: { exists: false, changedLines: 12 },
+  generatedSource: llmAcked ? LLM_SOURCE : EMPTY_SOURCE,
+  llmSynthesisOffered: !llmAcked, // 未外发同意 → 提示「用 AI 生成」
 });
 
 // verify 摘要(契约 VerifySummary):仅脱敏 shape —— 行数 + 字段数(非列名),无原始行数据。
@@ -201,8 +284,10 @@ export const mockRecorder: RecorderClient = {
   // mode 对应 05 章 Authentication Session Binding:
   // 'existing' = bind_existing_page(已登录标签页,直接就绪)
   // 'await_login' = create_page_await_user_login(新建页面,等用户手动登录后 confirm-auth)
-  async bind(mode: 'existing' | 'await_login' = 'existing') {
+  async bind(mode: 'existing' | 'await_login' = 'existing', _url?: string, _recordingMode?: 'tab_projection' | 'embedded_iframe') {
     await delay(380);
+    // _url:await_login 真实模式下 be 用它开登录 tab;mock 隐式单会话,已带 targetId,忽略即可。
+    // _recordingMode:mock 不区分形态(无真投屏/iframe),忽略。
     return ok({
       sessionId: 'rec_demo_01',
       contextId: 'default',
@@ -211,9 +296,10 @@ export const mockRecorder: RecorderClient = {
     });
   },
 
+  // 登录确认后直接进 page_ready(复用登录 tab,不重新导航),对齐 be handleConfirmAuth。
   async confirmAuth() {
     await delay(300);
-    return ok({ sessionId: 'mock-session', state: 'auth_confirmed' as const, stateVersion: 1 });
+    return ok({ sessionId: 'mock-session', state: 'page_ready' as const, stateVersion: 1 });
   },
 
   async navigate(url: string): Promise<RequestEnvelope<{ url: string }>> {
@@ -239,9 +325,26 @@ export const mockRecorder: RecorderClient = {
     });
   },
 
-  async captureRead(sample: 'A' | 'B'): Promise<RequestEnvelope<CaptureSample>> {
+  async captureRead(sample: 'A' | 'B', _seed?: string): Promise<RequestEnvelope<CaptureSample>> {
     await delay(640);
-    return ok({ sampleName: sample, entries: makeEntries(sample) });
+    // 模拟录到的用户操作(input 仅 valueShape,无原始值),供前端展示 user-action 轨。
+    const actions: CaptureSample['actions'] = [
+      { type: 'click', selector: '#search-box', tag: 'input', role: 'searchbox' },
+      { type: 'input', selector: '#search-box', tag: 'input', valueShape: { len: sample === 'A' ? 5 : 4, kind: 'text' } },
+      { type: 'keydown', selector: '#search-box', tag: 'input', key: 'Enter' },
+    ];
+    return ok({ sampleName: sample, entries: makeEntries(sample), actions, actionsDropped: 0 });
+  },
+
+  async screenshot(_quality?: number): Promise<RequestEnvelope<{ format: string; data: string }>> {
+    await delay(120);
+    // 1x1 透明 jpeg 占位(mock 无真画面);真 HTTP transport 才回目标页帧。
+    return ok({ format: 'jpeg', data: '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AfwAB/9k=' });
+  },
+
+  async sendInput(_cdpMethod: string, _cdpParams: Record<string, unknown>): Promise<RequestEnvelope<{ dispatched: boolean }>> {
+    await delay(20);
+    return ok({ dispatched: true });
   },
 
   async rank(): Promise<RequestEnvelope<RankCandidate[]>> {
@@ -254,6 +357,7 @@ export const mockRecorder: RecorderClient = {
     selectedCandidateId: string,
     writePolicy: WritePolicy,
     responsibleUseAcknowledgedAt?: number,
+    llmEgressAcknowledgedAt?: number,
   ): Promise<RequestEnvelope<InitResult>> {
     await delay(720);
     if (!name) return fail('validation_failed', 'adapter 名缺失');
@@ -265,13 +369,71 @@ export const mockRecorder: RecorderClient = {
     if (writePolicy === 'write' && responsibleUseAcknowledgedAt === undefined) {
       return fail('responsible_use_required', '写入前须确认责任声明', '请勾选 ADR-0005 责任声明后再写入。');
     }
-    return ok(initResult(writePolicy, responsibleUseAcknowledgedAt));
+    // P0-2:带 egress 同意才回 LLM 合成源码(模拟外发);否则空骨架 + 提示同意。
+    return ok(initResult(writePolicy, responsibleUseAcknowledgedAt, typeof llmEgressAcknowledgedAt === 'number'));
   },
 
   async verify(name: string): Promise<RequestEnvelope<VerifySummary>> {
     await delay(1100);
     if (!name) return fail('validation_failed', 'adapter 名缺失');
     return ok(VERIFY_SUMMARY);
+  },
+
+  // N4/N5:mock LLM 流水线——返回两个草稿(一个 usable、一个 verify 不达标),演示多脚本结果页。
+  async pipeline(_llmEgressAcknowledgedAt: number, _candidateIds?: string[], onProgress?: (phases: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>) => void) {
+    // mock 模拟阶段进度,让开发态也能看到 score→generate→verify 的实时推进。
+    onProgress?.([{ stage: 'score', status: 'running' }]);
+    await delay(500);
+    onProgress?.([{ stage: 'score', status: 'done', durationMs: 500 }, { stage: 'generate', status: 'running' }]);
+    await delay(500);
+    onProgress?.([{ stage: 'score', status: 'done', durationMs: 500 }, { stage: 'generate', status: 'done', durationMs: 500 }, { stage: 'verify', status: 'running' }]);
+    await delay(400);
+    return ok({
+      drafts: [
+        {
+          id: 'draft_0', candidateId: 'cand_1', site: 'example-com', name: 'search', score: 55, confidence: 'medium' as const,
+          reason: '搜索接口,响应是列表,关键词映射到 q 参数', risks: [], notes: ['page 固定为 1'],
+          staticOk: true, staticViolations: [], usable: true,
+          verify: { ok: true, rows: 20, fieldCount: 3, reasons: [] },
+          source: LLM_SOURCE,
+        },
+        {
+          id: 'draft_1', candidateId: 'cand_2', site: 'example-com', name: 'suggest', score: 35, confidence: 'low' as const,
+          reason: '建议词接口,信息量较低', risks: ['仅返回建议词'], notes: [],
+          staticOk: true, staticViolations: [], usable: false,
+          verify: { ok: true, rows: 0, fieldCount: 1, reasons: ['rows 0 < 期望 1'] },
+          source: LLM_SOURCE.replace('search', 'suggest'),
+        },
+      ],
+      rejected: [{ candidateId: 'cand_3', reason: 'mutation(埋点写操作)' }],
+      prompts: {
+        score: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]',
+        generate: '你是 adapter 代码生成助手。为下列高分接口生成完整 cli 脚本…\n[筛后候选 + 证据 JSON]',
+        screenshotCount: 2,
+      },
+    });
+  },
+  async pipelinePreview() {
+    await delay(200);
+    return ok({
+      prompts: {
+        score: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]',
+        generate: '',
+        screenshotCount: 2,
+      },
+      sentCandidateIds: ['cand_1', 'cand_2'], // mock:前若干候选传 LLM(cand_3 被截/junk)
+    });
+  },
+
+  async saveAdapter(_draftId: string, _source?: string) {
+    await delay(400);
+    return ok({ state: 'done', saved: [{ draftId: _draftId, site: 'example-com', name: 'search', adapterPath: '~/.bycli/clis/example-com/search.js' }], adapterPath: '~/.bycli/clis/example-com/search.js' });
+  },
+
+  async saveAdapters(drafts: Array<{ draftId: string; source?: string }>) {
+    await delay(500);
+    const saved = drafts.map((d, i) => ({ draftId: d.draftId, site: 'example-com', name: i === 0 ? 'search' : `cmd-${i}`, adapterPath: `~/.bycli/clis/example-com/${i === 0 ? 'search' : `cmd-${i}`}.js` }));
+    return ok({ state: 'done', saved, adapterPath: saved[0]?.adapterPath });
   },
 
   async cancel() {

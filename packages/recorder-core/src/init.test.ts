@@ -47,6 +47,28 @@ describe('init · renderAdapterTemplate', () => {
     expect(src.startsWith('// @generated-by adapter-recorder')).toBe(true);
     expect(src).toContain('// @txn t1');
   });
+  it('无 LLM 字段时保持 TODO 空骨架(func/columns/description 留白)', () => {
+    const src = renderAdapterTemplate({ site: 'a', command: 'b' });
+    expect(src).toContain("description: '', // TODO");
+    expect(src).toContain('columns: [], // TODO');
+    expect(src).toContain('// TODO: implement data fetching');
+    expect(src).toContain('return [];');
+  });
+  it('有 LLM funcBody/columns/description/access 时填进留白(funcBody 原样、其余 JSON 转义)', () => {
+    const src = renderAdapterTemplate({
+      site: 'x', command: 'search',
+      funcBody: '    const r = await fetch(`https://x.com/api/search?q=${kwargs.keyword}`);\n    return await r.json();',
+      columns: [{ name: 'title' }, { name: 'url' }],
+      description: 'Search x.com listings',
+      access: 'read',
+    });
+    expect(src).toContain('const r = await fetch('); // funcBody 原样插入
+    expect(src).not.toContain('// TODO: implement data fetching'); // 不再是空骨架
+    expect(src).not.toContain('return [];');
+    expect(src).toContain('columns: ["title","url"],');
+    expect(src).toContain('description: "Search x.com listings",');
+    expect(src).toContain("access: \"read\",");
+  });
 });
 
 describe('init · buildProvenanceHeader', () => {
@@ -55,6 +77,11 @@ describe('init · buildProvenanceHeader', () => {
     expect(h.split('\n')).toHaveLength(4);
     expect(h).toContain('@txn tx');
     expect(h).toContain('@report-sha256 deadbeef');
+  });
+  it('llmModel 标注 AI 生成 + @model(审计可区分)', () => {
+    const h = buildProvenanceHeader({ txnId: 'tx', reportPath: '/p.json', reportSha256: 'd', llmModel: 'claude-opus-4-8' });
+    expect(h.startsWith('// @generated-by adapter-recorder-llm')).toBe(true);
+    expect(h).toContain('// @model claude-opus-4-8');
   });
 });
 

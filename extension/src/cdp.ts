@@ -6,6 +6,9 @@
  * tabs (resolveTabId in background.ts filters them).
  */
 
+import { UI_BINDING_NAME, UI_LISTENER_SOURCE, MAX_UI_EVENTS, parseUiEvent, type UserActionEvent } from './ui-capture';
+import { maskUrlAuthTokens } from './url-redact';
+
 const attached = new Set<number>();
 
 const tabFrameContexts = new Map<number, Map<string, number>>();
@@ -13,14 +16,78 @@ const frameTargets = new Map<string, string>();
 const frameTargetKeys = new Map<string, string>();
 let frameTargetCleanupRegistered = false;
 
+// ── OOPIF(跨源 iframe)flat auto-attach 录制 ──────────────────────────────
+// 跨源 iframe 是独立 CDP target,经 flat autoAttach 后事件 source 带 sessionId
+// (source.tabId 仍是父 tab)。给子 session 发命令用 {tabId, sessionId}。
+// childSessionId → 归属 tabId;tabId → 该 tab 下各子 session 的已武装能力位。
+const sessionToTab = new Map<string, number>();
+// childSessionId → 该 iframe 文档 URL(已脱敏,取自 Target.attachedToTarget 的 targetInfo.url,
+// 100% 可靠、不依赖注入脚本)。给子 session 的 network entry / UI event 打 frameUrl 标来源。
+const sessionToFrameUrl = new Map<string, string>();
+// childSessionId → 父 session id(顶层 attach 的子 session 父为 undefined → 记 ''(top))。
+// embedded_iframe 噪音过滤要从目标 iframe 的 frameSessionId 沿父链收 descendants(嵌套 OOPIF 真实 API 不丢)。
+const sessionToParent = new Map<string, string>();
+type ChildArmState = { autoAttach: boolean; network: boolean; ui: boolean; overCap: boolean };
+const armedChildSessions = new Map<number, Map<string, ChildArmState>>();
+// 背压:广告站可能有几十个 iframe,每 tab 纳管的子 session 数设上限,超限只放行不武装。
+const MAX_CHILD_SESSIONS_PER_TAB = 50;
+// rearm/detach 并发守卫:detach 清状态时 bump 该 tab 的 generation,在飞的 rearm 循环据此停手。
+const tabCaptureGeneration = new Map<number, number>();
+
+function childStateMap(tabId: number): Map<string, ChildArmState> {
+  let m = armedChildSessions.get(tabId);
+  if (!m) { m = new Map(); armedChildSessions.set(tabId, m); }
+  return m;
+}
+
+/** 子 session debuggee。sessionId 在运行时受支持(flat sessions),类型上需 cast。 */
+function childDebuggee(tabId: number, sessionId: string): chrome.debugger.Debuggee {
+  return { tabId, sessionId } as chrome.debugger.Debuggee;
+}
+
+/** 读 Debuggee.sessionId(@types/chrome 未声明此字段,运行时由 flat sessions 提供)。 */
+function sessionIdOf(source: chrome.debugger.Debuggee): string | undefined {
+  return (source as { sessionId?: string }).sessionId;
+}
+
+/** try/catch 包装的 sendCommand;子 session 可能正在销毁,全 best-effort。
+ *  返回是否成功——调用方据此决定是否标记能力位为已武装(临时失败不应标 true,留待 rearm 重试)。 */
+async function sendSafe(target: chrome.debugger.Debuggee, method: string, params: Record<string, unknown> = {}): Promise<boolean> {
+  try { await chrome.debugger.sendCommand(target, method, params); return true; } catch { return false; }
+}
+
+/** capture buffer key:跨子 session 的 requestId 不保证唯一,以 sessionId 前缀防撞。 */
+function reqKey(sessionId: string | undefined, requestId: string): string {
+  return `${sessionId ?? 'top'}:${requestId}`;
+}
+
+const AUTO_ATTACH_IFRAME_PARAMS = {
+  autoAttach: true,
+  waitForDebuggerOnStart: true,
+  flatten: true,
+  filter: [{ type: 'iframe', exclude: false }],
+} as const;
+
 // Large cap so agents stop hitting silent JSON.parse failures on real API bodies.
 // See src/browser/cdp.ts CDP_RESPONSE_BODY_CAPTURE_LIMIT for the matching constant
 // on the direct-CDP path. Keep in sync.
 const CDP_RESPONSE_BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
 const CDP_REQUEST_BODY_CAPTURE_LIMIT = 1 * 1024 * 1024;
+// WebSocket(kind='cdp-websocket'):单帧 payload 截断上限 + 单连接帧数上限(背压)。
+const CDP_WS_FRAME_CAPTURE_LIMIT = 256 * 1024;
+const MAX_WS_FRAMES_PER_CONN = 500;
+
+type WebSocketFrame = {
+  direction: 'sent' | 'received';
+  opcode: number; // 1=text、2=binary(payloadPreview 为 base64);control 帧(8/9/10)不收
+  payloadPreview: string;
+  payloadFullSize: number;
+  payloadTruncated: boolean;
+  timestamp: number;
+};
 
 type NetworkCaptureEntry = {
-  kind: 'cdp';
+  kind: 'cdp' | 'cdp-websocket';
   url: string;
   method: string;
   requestHeaders?: Record<string, string>;
@@ -35,6 +102,19 @@ type NetworkCaptureEntry = {
   responseBodyFullSize?: number;
   responseBodyTruncated?: boolean;
   timestamp: number;
+  /** M-UI-3 因果对齐信号:CDP initiator 类型(script/parser/preload/other)+ 发起 frameId。
+   *  script=用户交互触发的 JS fetch(可关联到 user-action);parser/preload=旁路(降权)。 */
+  initiatorType?: string;
+  frameId?: string;
+  /** OOPIF:请求来自的跨源 iframe 子 session(顶层请求无此字段);供下游因果对齐区分 frame。 */
+  frameSessionId?: string;
+  /** OOPIF:请求来自的 iframe 文档 URL(已脱敏,取自 CDP targetInfo.url);顶层请求无此字段。 */
+  frameUrl?: string;
+  // CDP ResourceType(XHR/Fetch/WebSocket…)。诊断 + 喂 LLM 用;采集已按此过滤,正常只应见 XHR/Fetch/WebSocket。
+  resourceType?: string;
+  // WebSocket(kind==='cdp-websocket')专用:握手后累计的数据帧序列 + 背压丢弃计数。
+  webSocketFrames?: WebSocketFrame[];
+  webSocketFramesDropped?: number;
 };
 
 type NetworkCaptureState = {
@@ -58,6 +138,38 @@ export type DownloadWaitResult = {
 };
 
 const networkCaptures = new Map<number, NetworkCaptureState>();
+
+// 采集只录制 DevTools Network 面板「Fetch/XHR」过滤器对应的请求,
+// 排除 Document/Stylesheet/Script/Image/Font/Media 等静态资源(js/css/html…)。
+// CDP 在 requestWillBeSent / responseReceived 的 `type` 字段给出 ResourceType。
+const CAPTURE_RESOURCE_TYPES = new Set(['XHR', 'Fetch']);
+function isApiResourceType(type: unknown): boolean {
+  return typeof type === 'string' && CAPTURE_RESOURCE_TYPES.has(type);
+}
+
+// 二次过滤:有些站点用 fetch()/XHR 拉静态资源(CSS/JS/字体/图片),resourceType 会是 Fetch/XHR
+// 蒙混过关。按服务器声明的响应 Content-Type 再排除一道(只丢明确的静态资源类型;JSON/HTML/text
+// 等数据响应一律保留)。WS 无 contentType,由 readNetworkCapture 的 kind 守卫单独放行。
+function isStaticAssetContentType(ct: string | undefined): boolean {
+  if (!ct) return false;
+  const t = ct.toLowerCase().split(';')[0].trim();
+  if (t.startsWith('image/') || t.startsWith('font/') || t.startsWith('audio/') || t.startsWith('video/')) return true;
+  return (
+    t === 'text/css' ||
+    t === 'text/javascript' ||
+    t === 'application/javascript' ||
+    t === 'application/x-javascript' ||
+    t === 'application/ecmascript' ||
+    t === 'application/font-woff' ||
+    t === 'application/font-woff2' ||
+    t === 'application/x-font-ttf' ||
+    t === 'application/vnd.ms-fontobject'
+  );
+}
+
+// UI 节点录制(M-UI-1):per-tab 用户事件 ring-cap buffer + 累计 dropped 计数。
+interface UiCaptureState { events: UserActionEvent[]; dropped: number }
+const uiCaptures = new Map<number, UiCaptureState>();
 /** Check if a URL can be attached via CDP — only allow http(s) and blank pages. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
@@ -448,9 +560,13 @@ async function ensureFrameTarget(
   if (existing) return existing;
 
   await chrome.debugger.sendCommand({ tabId }, 'Target.setDiscoverTargets', { discover: true }).catch(() => {});
+  // 若该 tab 正在 capture,flat autoAttach 已用 waitForDebuggerOnStart:true 武装子 session;
+  // 这里不要 downgrade 成 false(会破坏 capture 的子 session 暂停/武装时序)。capture 不活跃时
+  // 维持旧行为(false:per-frame exec 不需要暂停子 target)。
+  const captureActive = networkCaptures.has(tabId) || uiCaptures.has(tabId);
   await chrome.debugger.sendCommand({ tabId }, 'Target.setAutoAttach', {
     autoAttach: true,
-    waitForDebuggerOnStart: false,
+    waitForDebuggerOnStart: captureActive,
     flatten: true,
     filter: [{ type: 'iframe', exclude: false }],
   }).catch(() => {});
@@ -515,6 +631,10 @@ export function registerFrameTracking(): void {
   chrome.debugger.onEvent.addListener((source, method, params: any) => {
     const tabId = source.tabId;
     if (!tabId) return;
+    // OOPIF:忽略带 sessionId 的子 session Runtime context 事件——子 session 的 executionContextId
+    // 与顶层不同域,若写进 tabFrameContexts 会让 evaluateInFrame 拿子 contextId 却向顶层 {tabId}
+    // 发 Runtime.evaluate(契约不符)。per-frame eval 走 sendCommandInFrameTarget 自己的路径。
+    if (sessionIdOf(source)) return;
 
     if (method === 'Runtime.executionContextCreated') {
       const context = params.context;
@@ -627,29 +747,96 @@ function normalizeHeaders(headers: unknown): Record<string, string> {
   return out;
 }
 
-function getOrCreateNetworkCaptureEntry(tabId: number, requestId: string, fallback?: {
+function getOrCreateNetworkCaptureEntry(tabId: number, key: string, fallback?: {
   url?: string;
   method?: string;
   requestHeaders?: Record<string, string>;
-}): NetworkCaptureEntry | null {
+}, kind: 'cdp' | 'cdp-websocket' = 'cdp'): NetworkCaptureEntry | null {
   const state = networkCaptures.get(tabId);
   if (!state) return null;
-  const existingIndex = state.requestToIndex.get(requestId);
+  const existingIndex = state.requestToIndex.get(key);
   if (existingIndex !== undefined) {
     return state.entries[existingIndex] || null;
   }
   const url = fallback?.url || '';
   if (!shouldCaptureUrl(url, state.patterns)) return null;
   const entry: NetworkCaptureEntry = {
-    kind: 'cdp',
+    kind,
     url,
     method: fallback?.method || 'GET',
     requestHeaders: fallback?.requestHeaders || {},
     timestamp: Date.now(),
   };
   state.entries.push(entry);
-  state.requestToIndex.set(requestId, state.entries.length - 1);
+  state.requestToIndex.set(key, state.entries.length - 1);
   return entry;
+}
+
+// ── OOPIF 子 session 武装 ────────────────────────────────────────────────
+// flat autoAttach 出来的 iframe 子 session,按当前激活的 capture 种类开 Network/UI 域。
+// 能力位幂等:同一 session 多次调用只补未武装的域(network-capture-start 与
+// ui-capture-start 是先后两条命令,iframe 可能在两者之间 attach,必须能后补)。
+// 能力位仅在 sendSafe 成功时才置 true(临时失败留待 rearm 重试)。
+// waitForDebuggerOnStart:true → 子 target 暂停在启动点,武装完(仅首次 attach)必须
+// runIfWaitingForDebugger 放行(异常路径也放),否则 iframe 永久卡加载。
+async function armChildSession(tabId: number, sessionId: string): Promise<void> {
+  const states = childStateMap(tabId);
+  let st = states.get(sessionId);
+  const isNew = st === undefined;
+  // 背压:超过 per-tab 上限的新 session 只登记 + 放行,不武装(不开域 → 不产生事件)。
+  // overCap 持久化:后续 rearm 据此短路,绝不补武装(否则破坏 cap)。
+  if (isNew && states.size >= MAX_CHILD_SESSIONS_PER_TAB) {
+    states.set(sessionId, { autoAttach: false, network: false, ui: false, overCap: true });
+    sessionToTab.set(sessionId, tabId);
+    await sendSafe(childDebuggee(tabId, sessionId), 'Runtime.runIfWaitingForDebugger', {});
+    return;
+  }
+  if (!st) { st = { autoAttach: false, network: false, ui: false, overCap: false }; states.set(sessionId, st); }
+  if (st.overCap) return; // over-cap session 永不武装(持久短路,堵 rearm 漏洞)
+  sessionToTab.set(sessionId, tabId);
+  const child = childDebuggee(tabId, sessionId);
+  try {
+    if (!st.autoAttach) {
+      // 级联:子 session 也自动 attach 它内部的 iframe(嵌套 OOPIF)。
+      if (await sendSafe(child, 'Target.setAutoAttach', { ...AUTO_ATTACH_IFRAME_PARAMS })) st.autoAttach = true;
+    }
+    if (networkCaptures.has(tabId) && !st.network) {
+      if (await sendSafe(child, 'Network.enable', {})) st.network = true;
+    }
+    if (uiCaptures.has(tabId) && !st.ui) {
+      // UI 注入是多步;全部成功才标 ui=true(任一失败 rearm 时整体重试,addBinding 等本就幂等)。
+      const ok = (await sendSafe(child, 'Runtime.enable', {}))
+        && (await sendSafe(child, 'Page.enable', {}))
+        && (await sendSafe(child, 'Runtime.addBinding', { name: UI_BINDING_NAME }))
+        && (await sendSafe(child, 'Page.addScriptToEvaluateOnNewDocument', { source: UI_LISTENER_SOURCE }));
+      // 当前已加载子文档立即注入一次(失败不阻断,后续导航会再注入)。
+      await sendSafe(child, 'Runtime.evaluate', { expression: UI_LISTENER_SOURCE });
+      if (ok) st.ui = true;
+    }
+  } finally {
+    // 关键:仅首次 attach 时放行,否则 waitForDebuggerOnStart 卡死该 iframe;rearm 不重复 resume。
+    if (isNew) await sendSafe(child, 'Runtime.runIfWaitingForDebugger', {});
+  }
+}
+
+/** 已纳管的子 session 在新 capture 种类启动时补武装缺失的域。
+ *  generation 守卫:若遍历途中 detach 清了该 tab 状态(generation 变),立即停手,
+ *  避免在清理后继续 arm 后续 session 造成状态复活。 */
+async function rearmChildSessions(tabId: number): Promise<void> {
+  const states = armedChildSessions.get(tabId);
+  if (!states) return;
+  const gen = tabCaptureGeneration.get(tabId) ?? 0;
+  for (const sessionId of [...states.keys()]) {
+    if ((tabCaptureGeneration.get(tabId) ?? 0) !== gen) return; // 被 detach 打断
+    if (armedChildSessions.get(tabId) !== states) return;        // 状态已被替换/清除
+    if (!states.has(sessionId)) continue; // 单个 child 在遍历途中 detach → 跳过,不重建
+    await armChildSession(tabId, sessionId);
+  }
+}
+
+/** capture 启动时对 tab 开启 iframe flat autoAttach,后续新建/导航的子 frame 会自动 attach。 */
+async function enableIframeAutoAttach(tabId: number): Promise<void> {
+  await sendSafe({ tabId }, 'Target.setAutoAttach', { ...AUTO_ATTACH_IFRAME_PARAMS });
 }
 
 export async function startNetworkCapture(
@@ -663,19 +850,157 @@ export async function startNetworkCapture(
     entries: [],
     requestToIndex: new Map(),
   });
+  // OOPIF:让后续新建/导航的跨源 iframe 子 session 自动 attach(armChildSession 开 Network)。
+  await enableIframeAutoAttach(tabId);
+  // 已纳管的子 session(如 UI capture 先开时 attach 的)补开 Network 域。
+  await rearmChildSessions(tabId);
 }
 
-export async function readNetworkCapture(tabId: number): Promise<NetworkCaptureEntry[]> {
+export async function readNetworkCapture(tabId: number, filter?: CaptureFrameFilter): Promise<NetworkCaptureEntry[]> {
   const state = networkCaptures.get(tabId);
   if (!state) return [];
-  const entries = state.entries.slice();
+  // WS 永远保留;HTTP 条目按响应 Content-Type 丢掉静态资源(CSS/JS/字体/图片/音视频)。
+  let entries = state.entries.filter(
+    (e) => e.kind === 'cdp-websocket' || !isStaticAssetContentType(e.responseContentType),
+  );
+  // embedded_iframe:只留目标 iframe(+descendants)的条目,丢顶层 dashboard 噪音。
+  if (filter) {
+    const r = applyFrameFilter(tabId, entries, filter);
+    if (r.resolve.kind === 'ambiguous') throw new AmbiguousIframeTargetError(r.resolve.candidates.length);
+    entries = r.items;
+  }
   state.entries = [];
   state.requestToIndex.clear();
   return entries;
 }
 
+/** embedded_iframe 目标 iframe 解析出多候选 → be 回 ambiguous_iframe_target 让 UI 提示用户澄清。 */
+export class AmbiguousIframeTargetError extends Error {
+  readonly code = 'ambiguous_iframe_target' as const;
+  constructor(count: number) { super(`ambiguous iframe target: ${count} candidate frames matched`); }
+}
+
+// ── embedded_iframe 噪音过滤(采集适配层)──────────────────────────────────
+// dashboard 自己的 tab 被 attach 后,顶层 dashboard 的 be API/截图轮询(frameSessionId 空)会混进 capture。
+// be 传目标 iframe 的 URL,这里解析出其 frameSessionId 并沿子链收 descendants,只留这些子 session 的条目、
+// 丢顶层(frameSessionId 空)。tab_projection(无 filter)路径完全不走这里。
+export type CaptureFrameFilter = { targetFrameUrl: string };
+
+/** 解析 ambiguous:返回结果区分「唯一命中」「无命中」「多候选歧义」,让 be 回 ambiguous_iframe_target。 */
+export type FrameResolveResult =
+  | { kind: 'ok'; sessionIds: Set<string> }
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; candidates: string[] };
+
+function normalizeUrlForMatch(raw: string): { href: string; origin: string; pathname: string } | null {
+  try {
+    const u = new URL(raw);
+    // 归一:去 hash、补默认 /、去尾斜杠(/ 保留根)。query 保留(SPA 常以 query 区分)。
+    const pathname = u.pathname.replace(/\/+$/, '') || '/';
+    return { href: `${u.origin}${pathname}${u.search}`, origin: u.origin, pathname };
+  } catch {
+    return null;
+  }
+}
+
+/** 把目标 URL 解析到一个或多个 iframe 子 session。匹配顺序(Codex 裁定,别只靠 exact):
+ *  normalizedUrl exact → same-origin+pathname → 多候选报 ambiguous。frameUrl 已脱敏,目标 URL 同样脱敏后比。 */
+function resolveTargetFrameSessions(tabId: number, targetFrameUrl: string): FrameResolveResult {
+  const target = normalizeUrlForMatch(maskUrlAuthTokens(targetFrameUrl));
+  if (!target) return { kind: 'none' };
+  const states = armedChildSessions.get(tabId);
+  if (!states || states.size === 0) return { kind: 'none' };
+  const candidates: Array<{ sid: string; norm: ReturnType<typeof normalizeUrlForMatch> }> = [];
+  for (const sid of states.keys()) {
+    const frameUrl = sessionToFrameUrl.get(sid);
+    if (!frameUrl) continue;
+    candidates.push({ sid, norm: normalizeUrlForMatch(frameUrl) });
+  }
+  // 第一层:normalizedUrl 完全相等。
+  const exact = candidates.filter((c) => c.norm && c.norm.href === target.href);
+  if (exact.length === 1) return { kind: 'ok', sessionIds: collectDescendants(tabId, exact[0].sid) };
+  if (exact.length > 1) return { kind: 'ambiguous', candidates: exact.map((c) => c.sid) };
+  // 第二层:same-origin + pathname(站会补 query/重定向/SPA shell)。
+  const loose = candidates.filter((c) => c.norm && c.norm.origin === target.origin && c.norm.pathname === target.pathname);
+  if (loose.length === 1) return { kind: 'ok', sessionIds: collectDescendants(tabId, loose[0].sid) };
+  if (loose.length > 1) return { kind: 'ambiguous', candidates: loose.map((c) => c.sid) };
+  // 第三层:same-origin(任意 path;SPA 站内跳转/重定向后 pathname 已变)。
+  const sameOrigin = candidates.filter((c) => c.norm && c.norm.origin === target.origin);
+  if (sameOrigin.length === 1) return { kind: 'ok', sessionIds: collectDescendants(tabId, sameOrigin[0].sid) };
+  if (sameOrigin.length > 1) return { kind: 'ambiguous', candidates: sameOrigin.map((c) => c.sid) };
+  // 兜底:URL 全程拿不到(OOPIF attach 时 targetInfo.url 为空、targetInfoChanged 也没来),但确实有 iframe 子 session。
+  // embedded 模式只嵌一个目标站 → 保留所有 iframe 子 session(+descendants),只丢顶层 dashboard 噪音(frameSessionId 空)。
+  // 这是 embedded 模式抓不到 entries 的真实根因兜底(真机 juejin:111 条全被空 URL 误滤)。
+  const all = new Set<string>();
+  for (const sid of states.keys()) for (const d of collectDescendants(tabId, sid)) all.add(d);
+  if (all.size > 0) return { kind: 'ok', sessionIds: all };
+  return { kind: 'none' };
+}
+
+/** 从目标 frameSessionId 沿父链收集所有后代子 session(嵌套 OOPIF 的真实 API 不能丢)。 */
+function collectDescendants(tabId: number, rootSid: string): Set<string> {
+  const out = new Set<string>([rootSid]);
+  const states = armedChildSessions.get(tabId);
+  if (!states) return out;
+  // 多趟传播:子的父在 out 中则纳入,直到不再增长(子 session 数有上限,趟数有界)。
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const sid of states.keys()) {
+      if (out.has(sid)) continue;
+      const parent = sessionToParent.get(sid);
+      if (parent !== undefined && out.has(parent)) { out.add(sid); grew = true; }
+    }
+  }
+  return out;
+}
+
+function applyFrameFilter<T extends { frameSessionId?: string }>(
+  tabId: number, items: T[], filter: CaptureFrameFilter,
+): { items: T[]; resolve: FrameResolveResult } {
+  const resolve = resolveTargetFrameSessions(tabId, filter.targetFrameUrl);
+  if (resolve.kind !== 'ok') return { items: [], resolve };
+  const allow = resolve.sessionIds;
+  return { items: items.filter((it) => it.frameSessionId !== undefined && allow.has(it.frameSessionId)), resolve };
+}
+
 export function hasActiveNetworkCapture(tabId: number): boolean {
   return networkCaptures.has(tabId);
+}
+
+// ── UI 节点录制(M-UI-1)────────────────────────────────────────────────────
+// 暴露 window.__bycli_ui binding + 注入只读监听脚本(future-doc via addScriptToEvaluateOnNewDocument
+// 覆盖后续导航,current-doc via Runtime.evaluate 覆盖已打开页)。事件经 Runtime.bindingCalled 回到
+// registerListeners 的 onEvent → ring-cap buffer。dedicated sendCommand,绕过 cdp 白名单(同 network-capture)。
+export async function startUiCapture(tabId: number): Promise<void> {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.enable');
+  await chrome.debugger.sendCommand({ tabId }, 'Page.enable');
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.addBinding', { name: UI_BINDING_NAME });
+  await chrome.debugger.sendCommand({ tabId }, 'Page.addScriptToEvaluateOnNewDocument', { source: UI_LISTENER_SOURCE });
+  // 当前已加载文档不会触发 addScriptToEvaluateOnNewDocument → 立即注入一次(脚本内有防重复装守卫)。
+  try { await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', { expression: UI_LISTENER_SOURCE }); } catch { /* CSP/timing：后续导航会再注入 */ }
+  uiCaptures.set(tabId, { events: [], dropped: 0 });
+  // OOPIF:让跨源 iframe 子 session 自动 attach(armChildSession 注入 UI binding/脚本)。
+  await enableIframeAutoAttach(tabId);
+  // 已纳管的子 session(如 network capture 先开时 attach 的)补注 UI binding/脚本。
+  await rearmChildSessions(tabId);
+}
+
+export async function readUiCapture(tabId: number, filter?: CaptureFrameFilter): Promise<{ events: UserActionEvent[]; dropped: number }> {
+  const state = uiCaptures.get(tabId);
+  if (!state) return { events: [], dropped: 0 };
+  let events = state.events.slice();
+  // embedded_iframe:UI actions 同样过滤(顶层 dashboard 的 click 不能混进 iframe 内操作时间线)。
+  if (filter) {
+    const r = applyFrameFilter(tabId, events, filter);
+    if (r.resolve.kind === 'ambiguous') throw new AmbiguousIframeTargetError(r.resolve.candidates.length);
+    events = r.items;
+  }
+  const out = { events, dropped: state.dropped };
+  state.events = [];
+  state.dropped = 0;
+  return out;
 }
 
 // ── Navigation Fetch guard (M1 P0-1) ────────────────────────────────────────
@@ -781,13 +1106,27 @@ function clearFrameTargetsForTab(tabId: number): void {
   }
 }
 
+// OOPIF:清掉某 tab 下所有子 session 内存状态(root detach 通常级联释放子 session,
+// 但状态不靠浏览器回调兜底,显式清)。bump generation 让在飞的 rearm 循环停手。
+function clearChildSessionsForTab(tabId: number): void {
+  tabCaptureGeneration.set(tabId, (tabCaptureGeneration.get(tabId) ?? 0) + 1);
+  const states = armedChildSessions.get(tabId);
+  if (states) {
+    for (const sid of states.keys()) { sessionToTab.delete(sid); sessionToFrameUrl.delete(sid); sessionToParent.delete(sid); }
+    armedChildSessions.delete(tabId);
+  }
+}
+
 export async function detach(tabId: number): Promise<void> {
+  // 无条件清所有内存状态(即便 attached 缓存已失效,也不能留 capture/frame/child 残留)。
   clearFrameTargetsForTab(tabId);
-  if (!attached.has(tabId)) return;
-  attached.delete(tabId);
+  clearChildSessionsForTab(tabId);
   networkCaptures.delete(tabId);
+  uiCaptures.delete(tabId);
   fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
+  if (!attached.has(tabId)) return;
+  attached.delete(tabId);
   try { await chrome.debugger.detach({ tabId }); } catch { /* ignore */ }
 }
 
@@ -795,17 +1134,21 @@ export function registerListeners(): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+  uiCaptures.delete(tabId);
     fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
     clearFrameTargetsForTab(tabId);
+    clearChildSessionsForTab(tabId);
   });
   chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      uiCaptures.delete(source.tabId);
       fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
       clearFrameTargetsForTab(source.tabId);
+      clearChildSessionsForTab(source.tabId);
       return;
     }
     if (source.targetId) clearFrameTarget(source.targetId);
@@ -817,13 +1160,84 @@ export function registerListeners(): void {
     }
   });
   chrome.debugger.onEvent.addListener(async (source, method, params) => {
-    const tabId = source.tabId;
+    // OOPIF:flat autoAttach 出来的 iframe 子 session 纳管(source 是父 session)。
+    if (method === 'Target.attachedToTarget') {
+      const ap = params as { sessionId?: string; targetInfo?: { type?: string; url?: string } } | undefined;
+      const childSessionId = ap?.sessionId;
+      const parentTabId = source.tabId;
+      if (!childSessionId || !parentTabId) return;
+      if (ap?.targetInfo?.type !== 'iframe') {
+        // 非 iframe 子 target 也要放行,否则 waitForDebuggerOnStart 卡住它。
+        await sendSafe(childDebuggee(parentTabId, childSessionId), 'Runtime.runIfWaitingForDebugger', {});
+        return;
+      }
+      // iframe 文档 URL:从 targetInfo 显式记录(脱敏),供 network entry / UI event 标来源。
+      if (typeof ap.targetInfo.url === 'string') {
+        sessionToFrameUrl.set(childSessionId, maskUrlAuthTokens(ap.targetInfo.url));
+      }
+      // 父 session:顶层 attach 的 iframe 父为 undefined(记 ''=top);嵌套 OOPIF 父为外层 iframe 的 session。
+      sessionToParent.set(childSessionId, sessionIdOf(source) ?? '');
+      await armChildSession(parentTabId, childSessionId);
+      return;
+    }
+    if (method === 'Target.detachedFromTarget') {
+      const dp = params as { sessionId?: string } | undefined;
+      const sid = dp?.sessionId; // 主字段是 sessionId(targetId 已 deprecated)
+      if (sid) {
+        const owner = sessionToTab.get(sid);
+        sessionToTab.delete(sid);
+        sessionToFrameUrl.delete(sid);
+        sessionToParent.delete(sid);
+        if (owner !== undefined) armedChildSessions.get(owner)?.delete(sid);
+      }
+      return;
+    }
+    // OOPIF 在文档导航完成前就 attach,attachedToTarget 那刻 targetInfo.url 常为空。
+    // 文档落地后 Chrome 发 targetInfoChanged 带真实 URL → 回填 sessionToFrameUrl,让目标 frame 精确匹配/ambiguous 可用。
+    if (method === 'Target.targetInfoChanged') {
+      const cp = params as { targetInfo?: { type?: string; url?: string } } | undefined;
+      const ti = cp?.targetInfo;
+      // flat 模型下该事件的子 session id 在 source 上(顶层 targetInfoChanged 无 sessionId,跳过)。
+      const sid = sessionIdOf(source);
+      if (sid && ti?.type === 'iframe' && typeof ti.url === 'string' && ti.url) {
+        sessionToFrameUrl.set(sid, maskUrlAuthTokens(ti.url));
+      }
+      return;
+    }
+
+    // flat 模型下子 session 事件 source.tabId 仍是父 tab;销毁竞态缺 tabId 时用 sessionToTab 兜底。
+    const eventSessionId = sessionIdOf(source);
+    const tabId = source.tabId
+      ?? (eventSessionId ? sessionToTab.get(eventSessionId) : undefined);
     if (!tabId) return;
+    const sessionId = eventSessionId;
+    // UI 录制(M-UI-1):注入脚本调 window.__bycli_ui → Runtime.bindingCalled。先于 network 守卫处理。
+    if (method === 'Runtime.bindingCalled') {
+      const bp = params as { name?: string; payload?: string } | undefined;
+      if (bp?.name === UI_BINDING_NAME) {
+        const ui = uiCaptures.get(tabId);
+        if (ui) {
+          const ev = parseUiEvent(String(bp.payload ?? ''));
+          if (ev) {
+            // OOPIF:标注事件来源子 session(顶层事件无 sessionId),供下游区分 iframe 内操作。
+            if (sessionId) {
+              ev.frameSessionId = sessionId;
+              const fu = sessionToFrameUrl.get(sessionId); if (fu) ev.frameUrl = fu;
+            }
+            if (ui.events.length < MAX_UI_EVENTS) ui.events.push(ev);
+            else ui.dropped++; // ring-cap 满 → 丢弃 + 计数(背压,Codex F3)
+          }
+        }
+      }
+      return;
+    }
     const state = networkCaptures.get(tabId);
     if (!state) return;
     const eventParams = params as Record<string, any> | undefined;
 
     if (method === 'Network.requestWillBeSent') {
+      // 只收 Fetch/XHR(DevTools Network「Fetch/XHR」同款过滤);静态资源直接丢弃。
+      if (!isApiResourceType(eventParams?.type)) return;
       const requestId = String(eventParams?.requestId || '');
       const request = eventParams?.request as {
         url?: string;
@@ -832,12 +1246,21 @@ export function registerListeners(): void {
         postData?: string;
         hasPostData?: boolean;
       } | undefined;
-      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
-        url: request?.url,
+      const entry = getOrCreateNetworkCaptureEntry(tabId, reqKey(sessionId, requestId), {
+        url: maskUrlAuthTokens(request?.url),
         method: request?.method,
         requestHeaders: normalizeHeaders(request?.headers),
       });
       if (!entry) return;
+      if (typeof eventParams?.type === 'string') entry.resourceType = eventParams.type;
+      // M-UI-3:记 initiator 类型 + frameId(因果对齐用;只取 type,不取 JS stack——避免体积/隐私)。
+      const initiator = eventParams?.initiator as { type?: string } | undefined;
+      if (initiator?.type) entry.initiatorType = initiator.type;
+      const frameId = eventParams?.frameId;
+      if (typeof frameId === 'string') entry.frameId = frameId;
+      // OOPIF:标注来源子 session(顶层无),供因果对齐强约束区分 iframe↔顶层。
+      if (sessionId) entry.frameSessionId = sessionId;
+      if (sessionId) { const fu = sessionToFrameUrl.get(sessionId); if (fu) entry.frameUrl = fu; }
       entry.requestBodyKind = request?.hasPostData ? 'string' : 'empty';
       {
         const raw = String(request?.postData || '');
@@ -848,7 +1271,8 @@ export function registerListeners(): void {
         entry.requestBodyTruncated = truncated;
       }
       try {
-        const postData = await chrome.debugger.sendCommand({ tabId }, 'Network.getRequestPostData', { requestId }) as { postData?: string };
+        // follow-up 必须发给产生该 requestId 的同一 session(子 frame 用 {tabId,sessionId})。
+        const postData = await chrome.debugger.sendCommand(source, 'Network.getRequestPostData', { requestId }) as { postData?: string };
         if (postData?.postData) {
           const raw = postData.postData;
           const fullSize = raw.length;
@@ -872,9 +1296,10 @@ export function registerListeners(): void {
         status?: number;
         headers?: Record<string, unknown>;
       } | undefined;
-      const entry = getOrCreateNetworkCaptureEntry(tabId, requestId, {
-        url: response?.url,
-      });
+      // 只富化 requestWillBeSent 已建的 Fetch/XHR entry;静态资源无 entry → 跳过(不补建)。
+      const stateEntryIndex = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (stateEntryIndex === undefined) return;
+      const entry = state.entries[stateEntryIndex];
       if (!entry) return;
       entry.responseStatus = response?.status;
       entry.responseContentType = response?.mimeType || '';
@@ -884,12 +1309,13 @@ export function registerListeners(): void {
 
     if (method === 'Network.loadingFinished') {
       const requestId = String(eventParams?.requestId || '');
-      const stateEntryIndex = state.requestToIndex.get(requestId);
+      const stateEntryIndex = state.requestToIndex.get(reqKey(sessionId, requestId));
       if (stateEntryIndex === undefined) return;
       const entry = state.entries[stateEntryIndex];
       if (!entry) return;
       try {
-        const body = await chrome.debugger.sendCommand({ tabId }, 'Network.getResponseBody', { requestId }) as {
+        // follow-up body 必须发给同一 session(子 frame 用 {tabId,sessionId})。
+        const body = await chrome.debugger.sendCommand(source, 'Network.getResponseBody', { requestId }) as {
           body?: string;
           base64Encoded?: boolean;
         };
@@ -904,6 +1330,68 @@ export function registerListeners(): void {
       } catch {
         // Optional; bodies are unavailable for some requests (e.g. uploads).
       }
+      return;
+    }
+
+    // ── WebSocket(kind='cdp-websocket'):握手 + 数据帧 ───────────────────────
+    // WS 走专用 Network.webSocket* 事件(不发 requestWillBeSent/responseReceived),
+    // 故上面的 Fetch/XHR 过滤不影响它;每个连接一条 entry,帧累积到 webSocketFrames。
+    if (method === 'Network.webSocketCreated') {
+      const requestId = String(eventParams?.requestId || '');
+      const wsEntry = getOrCreateNetworkCaptureEntry(
+        tabId,
+        reqKey(sessionId, requestId),
+        { url: maskUrlAuthTokens(eventParams?.url as string | undefined), method: 'GET' },
+        'cdp-websocket',
+      );
+      if (wsEntry) wsEntry.resourceType = 'WebSocket';
+      if (wsEntry && sessionId) {
+        wsEntry.frameSessionId = sessionId; // OOPIF 来源标注
+        const fu = sessionToFrameUrl.get(sessionId); if (fu) wsEntry.frameUrl = fu;
+      }
+      return;
+    }
+
+    if (method === 'Network.webSocketHandshakeResponseReceived') {
+      const requestId = String(eventParams?.requestId || '');
+      const idx = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (idx === undefined) return;
+      const entry = state.entries[idx];
+      if (!entry) return;
+      const response = eventParams?.response as { status?: number; headers?: Record<string, unknown> } | undefined;
+      entry.responseStatus = response?.status ?? 101;
+      entry.responseHeaders = normalizeHeaders(response?.headers);
+      return;
+    }
+
+    if (method === 'Network.webSocketFrameSent' || method === 'Network.webSocketFrameReceived') {
+      const requestId = String(eventParams?.requestId || '');
+      const idx = state.requestToIndex.get(reqKey(sessionId, requestId));
+      if (idx === undefined) return;
+      const entry = state.entries[idx];
+      if (!entry) return;
+      const frame = eventParams?.response as { opcode?: number; payloadData?: string } | undefined;
+      const opcode = typeof frame?.opcode === 'number' ? frame.opcode : -1;
+      // 只收数据帧(1=text、2=binary);丢弃 control 帧(8 close / 9 ping / 10 pong)。
+      if (opcode !== 1 && opcode !== 2) return;
+      if (!entry.webSocketFrames) entry.webSocketFrames = [];
+      if (entry.webSocketFrames.length >= MAX_WS_FRAMES_PER_CONN) {
+        entry.webSocketFramesDropped = (entry.webSocketFramesDropped ?? 0) + 1;
+        return;
+      }
+      const raw = String(frame?.payloadData ?? '');
+      const fullSize = raw.length;
+      const truncated = fullSize > CDP_WS_FRAME_CAPTURE_LIMIT;
+      const stored = truncated ? raw.slice(0, CDP_WS_FRAME_CAPTURE_LIMIT) : raw;
+      entry.webSocketFrames.push({
+        direction: method === 'Network.webSocketFrameSent' ? 'sent' : 'received',
+        opcode,
+        payloadPreview: opcode === 2 ? `base64:${stored}` : stored,
+        payloadFullSize: fullSize,
+        payloadTruncated: truncated,
+        timestamp: Date.now(),
+      });
+      return;
     }
   });
 }

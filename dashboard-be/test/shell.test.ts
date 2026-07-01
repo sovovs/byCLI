@@ -89,7 +89,7 @@ describe('health 降级', () => {
 });
 
 describe('bind + 状态机 + confirm-auth', () => {
-  it('await_login bind → awaiting_user_login,可 confirm 到 auth_confirmed', async () => {
+  it('await_login bind → awaiting_user_login,confirm 直接到 page_ready(复用登录 tab,不重新导航)', async () => {
     const bindRes = await fetch(`${base}/recorder/session/bind`, {
       method: 'POST', headers: auth,
       body: JSON.stringify({ mode: 'create_page_await_user_login', contextId: 'default' }),
@@ -103,7 +103,7 @@ describe('bind + 状态机 + confirm-auth', () => {
       body: JSON.stringify({ sessionId: bind.sessionId }),
     });
     expect(confirmRes.status).toBe(200);
-    expect((await confirmRes.json()).data.state).toBe('auth_confirmed');
+    expect((await confirmRes.json()).data.state).toBe('page_ready');
   });
 
   it('existing bind → session_bound,confirm-auth 非法转移 → 400 invalid_state', async () => {

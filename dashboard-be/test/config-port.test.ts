@@ -29,7 +29,7 @@ describe('ConfigPort hot reload (M8d · 09)', () => {
     const r = port.reload({ RECORDER_TOKEN: TOKEN, RANK_SCORE_HIGH_MIN: '9999' }); // out of range → config_invalid
     expect(r.ok).toBe(false);
     expect(port.version()).toBe(1);                                  // unchanged
-    expect(port.current().scoringProfile.RANK_SCORE_HIGH_MIN).toBe(75); // default kept
+    expect(port.current().scoringProfile.RANK_SCORE_HIGH_MIN).toBe(70); // default kept (14-plan 第4步: 75→70)
   });
 
   it('pins security + restart fields — token / origins / restart-only flags never hot-change', () => {

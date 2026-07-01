@@ -17,6 +17,10 @@ docs/.vitepress/cache
 *.crx
 *.zip
 .envrc
+.env
+.env.local
+*/.env
+*/.env.local
 .windsurf
 .claude
 .cortex
@@ -27,3 +31,7 @@ autoresearch/results/
 autoresearch-results.tsv
 
 private/
+.gstack/
+
+# recorder 三端管理脚本运行态
+.recorder-run/

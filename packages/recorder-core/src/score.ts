@@ -7,6 +7,19 @@
  * OVERRIDE the profile and force `rejected`, independent of the numeric score.
  *
  * Produces a stable scoreExplanation[] whose `signal` keys are stable for UI i18n.
+ *
+ * 14-plan · 第4步 reachability note: the default bands are now 70/45/20 (was 75/50/20).
+ * This pure-core path computes ONLY the deterministic rule deltas (positive cap
+ * stable30+seed20+echo10+session5 = 65), so on its own `high` (≥70) remains unreachable
+ * and `medium` (≥45) is the realistic top band. `high` becomes reachable only via the
+ * BE dual-track path (dashboard-be/src/llm/score.ts): deterministicRuleScore + the
+ * LLM-judged semanticBonus (cap 40) → up to 105. Semantic richness lives in the BE-internal
+ * SEMANTIC_BONUS_TABLE, NOT this profile (Codex High 5 ②: core can't compute semantics, so
+ * adding them to the profile would be config that core never reads).
+ *
+ * The `dynamic_field` delta is now 0 in DEFAULT_SCORING_PROFILE (14-plan 校准): the flat -10
+ * over-penalized read-endpoint cache-busters (_t/uuid). The graded dynamic penalty (signed -15 /
+ * unknown -5 / cacheBuster 0) is applied in be from ParamObservation facts, which core lacks here.
  */
 
 import type {

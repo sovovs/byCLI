@@ -558,7 +558,7 @@ async function focusOwnedWindowIfRequested(windowId: number, mode: WindowMode): 
 async function toOwnedContainerDiscoveryCandidate(group: chrome.tabGroups.TabGroup): Promise<OwnedContainerDiscoveryCandidate | null> {
   try {
     const chromeWindow = await chrome.windows.get(group.windowId);
-    const reusableTabId = await findReusableOwnedContainerTab(group.windowId);
+    const reusableTabId = await findReusableOwnedContainerTab(group.windowId, group.id);
     return {
       windowId: group.windowId,
       groupId: group.id,
@@ -684,7 +684,7 @@ async function ensureOwnedContainerWindowUnlocked(
     try {
       await chrome.windows.get(container.windowId);
       await focusOwnedWindowIfRequested(container.windowId, mode);
-      const initialTabId = await findReusableOwnedContainerTab(container.windowId);
+      const initialTabId = await findReusableOwnedContainerTab(container.windowId, await getOwnedContainerGroupId(role, container.windowId));
       await ensureOwnedContainerTabGroup(role, container.windowId, [initialTabId]);
       return {
         windowId: container.windowId,
@@ -699,7 +699,7 @@ async function ensureOwnedContainerWindowUnlocked(
   const discovered = await discoverOwnedContainerFromTabGroup(role);
   if (discovered) {
     await focusOwnedWindowIfRequested(discovered.windowId, mode);
-    const initialTabId = await findReusableOwnedContainerTab(discovered.windowId);
+    const initialTabId = await findReusableOwnedContainerTab(discovered.windowId, discovered.groupId);
     await ensureOwnedContainerTabGroup(role, discovered.windowId, [initialTabId]);
     await persistRuntimeState();
     return {
@@ -749,9 +749,13 @@ async function ensureOwnedContainerWindowUnlocked(
   return { windowId: container.windowId, initialTabId };
 }
 
-async function findReusableOwnedContainerTab(windowId: number): Promise<number | undefined> {
+async function findReusableOwnedContainerTab(windowId: number, groupId: number | null): Promise<number | undefined> {
+  // 只在 byCLI owned 标签组内找可复用 tab:绝不复用组外的用户 tab(例如用户把 dashboard
+  // localhost:19826 开在同一 byCLI 窗口里——它是 http 可调试 tab,旧实现会误当可复用 tab
+  // 返回,导致 handleNavigate 把 dashboard 就地跳走、dashboard 丢失)。
+  if (groupId === null) return undefined; // 无 byCLI 组 → 不复用任何 tab,交调用方新建
   try {
-    const tabs = await chrome.tabs.query({ windowId });
+    const tabs = await chrome.tabs.query({ windowId, groupId });
     const reusable = tabs.find(tab =>
       tab.id !== undefined &&
       initialTabIsAvailable(tab.id) &&
@@ -795,7 +799,9 @@ async function createOwnedTabLeaseUnlocked(leaseKey: string, initialUrl?: string
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    tab = await chrome.tabs.create({ windowId, url: createUrl, active: true });
+    // background 模式:tab 不抢激活(active:false),配合窗口 focused:false,录制 tab 不夺走 dashboard 焦点。
+    const activateTab = getWindowMode(leaseKey) === 'foreground';
+    tab = await chrome.tabs.create({ windowId, url: createUrl, active: activateTab });
   }
   if (!tab.id) throw new Error('Failed to create tab lease in automation container');
   await ensureOwnedContainerTabGroup(role, windowId, [tab.id]);
@@ -1012,6 +1018,10 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleNetworkCaptureStart(cmd, leaseKey);
       case 'network-capture-read':
         return await handleNetworkCaptureRead(cmd, leaseKey);
+      case 'ui-capture-start':
+        return await handleUiCaptureStart(cmd, leaseKey);
+      case 'ui-capture-read':
+        return await handleUiCaptureRead(cmd, leaseKey);
       case 'wait-download':
         return await handleWaitDownload(cmd);
       case 'frames':
@@ -1462,6 +1472,16 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
     }
   }
 
+  // 导航完成后把承载录制页的 owned 窗口提到前台并激活该 tab:复用已有 tab 时不走
+  // ensureOwnedContainerWindow 的聚焦路径(仅 chrome.tabs.update url),窗口会停在后台,
+  // 用户点「新建录制会话并打开」后看不到目标页。仅前台(interactive/browser surface)会话生效;
+  // background(automation)会话经 getWindowMode → focusOwnedWindowIfRequested 自动 no-op。
+  const navWindowMode = getWindowMode(leaseKey);
+  await focusOwnedWindowIfRequested(tab.windowId, navWindowMode);
+  if (navWindowMode === 'foreground') {
+    await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+  }
+
   return pageScopedResult(cmd.id, tabId, {
     title: tab.title,
     url: tab.url,
@@ -1507,7 +1527,9 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
         return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
       }
       const windowId = await getAutomationWindow(leaseKey);
-      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: true });
+      // background 模式:新 tab 不抢激活(投屏一体化,不夺 dashboard 焦点)。
+      const activateNewTab = getWindowMode(leaseKey) === 'foreground';
+      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
       if (!tab.id) return { id: cmd.id, ok: false, error: 'Failed to create tab' };
       await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
       setLeaseSession(leaseKey, {
@@ -1632,6 +1654,8 @@ const CDP_ALLOWLIST = new Set([
   'Input.dispatchMouseEvent',
   'Input.dispatchKeyEvent',
   'Input.insertText',
+  // 投屏滚动:synthesizeScrollGesture 真正驱动合成器滚动(dispatchMouseEvent mouseWheel 只发事件、很多页面不滚)。
+  'Input.synthesizeScrollGesture',
   // Page metrics & screenshots
   'Page.getLayoutMetrics',
   'Page.captureScreenshot',
@@ -1723,14 +1747,41 @@ async function handleNetworkCaptureStart(cmd: Command, leaseKey: string): Promis
   }
 }
 
-async function handleNetworkCaptureRead(cmd: Command, leaseKey: string): Promise<Result> {
+/** 提取自定义错误上的稳定 code(如 AmbiguousIframeTargetError.code);无则 undefined。 */
+function errorCodeOf(err: unknown): string | undefined {
+  const c = (err as { code?: unknown })?.code;
+  return typeof c === 'string' ? c : undefined;
+}
+
+async function handleNetworkCaptureRead(cmd: Command, leaseKey: string): Promise<Result> {  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    const data = await executor.readNetworkCapture(tabId, cmd.targetFrameUrl ? { targetFrameUrl: cmd.targetFrameUrl } : undefined);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
+  }
+}
+
+async function handleUiCaptureStart(cmd: Command, leaseKey: string): Promise<Result> {
   const cmdTabId = await resolveCommandTabId(cmd);
   const tabId = await resolveTabId(cmdTabId, leaseKey);
   try {
-    const data = await executor.readNetworkCapture(tabId);
-    return pageScopedResult(cmd.id, tabId, data);
+    await executor.startUiCapture(tabId);
+    return pageScopedResult(cmd.id, tabId, { started: true });
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleUiCaptureRead(cmd: Command, leaseKey: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    const data = await executor.readUiCapture(tabId, cmd.targetFrameUrl ? { targetFrameUrl: cmd.targetFrameUrl } : undefined);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
   }
 }
 

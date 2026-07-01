@@ -8,11 +8,14 @@ import type {
   HealthReport,
   InitResult,
   NetworkEntry,
+  PipelineResult,
+  PipelinePrompts,
   RankCandidate,
   RequestEnvelope,
+  SaveResult,
   VerifySummary,
 } from '@/types/recorder';
-import type { BindMode, BindResult, RecorderBootstrap, RecorderClient, SessionAdvanceResult, WritePolicy } from './recorderClient';
+import type { BindMode, BindResult, RecorderBootstrap, RecorderClient, RecordingMode, SessionAdvanceResult, WritePolicy } from './recorderClient';
 
 /**
  * be /recorder/capture/read 透传 daemon 原始抓包条目(非契约 RecorderNetworkEntry,见 #8 BE↔契约 gap),
@@ -44,7 +47,7 @@ function mapRawEntry(e: Record<string, unknown>): NetworkEntry {
 
 interface RequestStatus<T = unknown> {
   requestId: string;
-  type: 'analyze' | 'init' | 'verify' | 'capture' | 'rank';
+  type: 'analyze' | 'init' | 'verify' | 'capture' | 'rank' | 'pipeline';
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'timeout' | 'cancelled';
   startedAt: number;
   updatedAt: number;
@@ -52,7 +55,12 @@ interface RequestStatus<T = unknown> {
   pollAfterMs?: number | null;
   result?: T | null;
   error?: RequestEnvelope['error'];
+  /** pipeline 阶段进度(score/generate/verify…),轮询时实时更新。 */
+  progress?: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>;
 }
+
+/** pipeline 阶段进度回调类型(对外导出供 client 签名复用)。 */
+export type ProgressPhase = { stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string };
 
 /** mode → 契约枚举(03/05 章 SessionBindRequest.mode) */
 const BIND_MODE_MAP: Record<BindMode, string> = {
@@ -118,7 +126,7 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
    * 202 异步轮询(03 章):init/verify 返回 requestId 后,轮询 GET /recorder/requests/{id}
    * 至 terminal,再把 result/error 还原成 RequestEnvelope<T>,对上层抹平同步/异步差异。
    */
-  async function poll<T>(requestId: string): Promise<RequestEnvelope<T>> {
+  async function poll<T>(requestId: string, onProgress?: (phases: ProgressPhase[]) => void): Promise<RequestEnvelope<T>> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
       const res = await call<RequestStatus<T>>(`/recorder/requests/${encodeURIComponent(requestId)}`, {
@@ -127,6 +135,7 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
       // 状态查询本身失败(如 404 request_not_found)直接透传
       if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<T>;
       const st = res.data as unknown as RequestStatus<T>;
+      if (onProgress && st.progress) onProgress(st.progress);
       if (st.status === 'succeeded') {
         return { ok: true, schemaVersion: 'recorder.v1', requestId, data: (st.result ?? null) as T, error: null };
       }
@@ -144,21 +153,23 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
     return envelopeError('verify_timeout', '轮询超时') as RequestEnvelope<T>;
   }
 
-  /** 发起 202 异步请求并轮询到最终结果 */
-  async function callAsync<T>(path: string, body: unknown): Promise<RequestEnvelope<T>> {
+  /** 发起 202 异步请求并轮询到最终结果(onProgress:轮询途中实时回调阶段进度,用于 pipeline 展示)。 */
+  async function callAsync<T>(path: string, body: unknown, onProgress?: (phases: ProgressPhase[]) => void): Promise<RequestEnvelope<T>> {
     const accepted = await call<unknown>(path, { body });
     if (!accepted.ok || !accepted.requestId) return accepted as RequestEnvelope<T>;
-    return poll<T>(accepted.requestId);
+    return poll<T>(accepted.requestId, onProgress);
   }
 
   return {
     health: () => call<HealthReport>('/recorder/health', { method: 'GET' }),
-    bind: async (mode: BindMode) => {
+    bind: async (mode: BindMode, url?: string, recordingMode?: RecordingMode) => {
       // 不硬编码 contextId:'default'(真扩展常注册在生成的 profile id,如 'xhz62x7b';写死 'default'
       // → daemon profile_disconnected,真扩展实测踩过)。不传 → be 留空 → daemon 单连接回退路由到
       // 唯一连着的扩展。多 profile 选择是后续 UI 工作(届时显式传 contextId)。
+      // url:await_login 模式带目标 URL → be 立刻开 byCLI tab 跳该 URL 供用户登录。
+      // recordingMode:缺省不传(be 默认 tab_projection 投屏);embedded_iframe 才显式传。
       const res = await call<BindResult>('/recorder/session/bind', {
-        body: { mode: BIND_MODE_MAP[mode] },
+        body: { mode: BIND_MODE_MAP[mode], ...(url ? { url } : {}), ...(recordingMode ? { recordingMode } : {}) },
       });
       // 捕获 sessionId 供后续 side-effect 自动注入(bind 是会话起点)
       if (res.ok && res.data?.sessionId) sessionId = res.data.sessionId;
@@ -171,27 +182,51 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
       call<SessionAdvanceResult & { sampleName: 'A' | 'B'; started: boolean }>('/recorder/capture/start', {
         body: { sampleName: sample, trigger: 'user_manual' },
       }),
-    captureRead: async (sample) => {
-      const res = await call<{ sampleName?: 'A' | 'B'; entries?: unknown[] }>('/recorder/capture/read', { body: { sampleName: sample } });
+    captureRead: async (sample, seed) => {
+      const res = await call<{ sampleName?: 'A' | 'B'; entries?: unknown[]; actions?: unknown[]; actionsDropped?: number }>('/recorder/capture/read', { body: { sampleName: sample, ...(seed ? { seed } : {}) } });
       if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<CaptureSample>;
       const raw = Array.isArray(res.data.entries) ? (res.data.entries as Record<string, unknown>[]) : [];
-      return { ...res, data: { sampleName: sample, entries: raw.map(mapRawEntry) } };
+      const actions = Array.isArray(res.data.actions) ? (res.data.actions as CaptureSample['actions']) : undefined;
+      return {
+        ...res,
+        data: {
+          sampleName: sample,
+          entries: raw.map(mapRawEntry),
+          ...(actions && actions.length ? { actions } : {}),
+          ...(typeof res.data.actionsDropped === 'number' ? { actionsDropped: res.data.actionsDropped } : {}),
+        },
+      };
     },
-    rank: async () => {
-      // be 返回 {sessionId,state,stateVersion,candidates};前端只要候选数组(transport 拆包,非隐藏业务模型)。
+    screenshot: (quality?: number) =>
+      call<{ format: string; data: string }>('/recorder/screenshot', { body: quality !== undefined ? { quality } : {} }),
+    sendInput: (cdpMethod: string, cdpParams: Record<string, unknown>) =>
+      call<{ dispatched: boolean }>('/recorder/input', { body: { cdpMethod, cdpParams } }),
+    rank: async () => {      // be 返回 {sessionId,state,stateVersion,candidates};前端只要候选数组(transport 拆包,非隐藏业务模型)。
       const res = await call<{ candidates?: RankCandidate[] }>('/recorder/rank', { body: {} });
       if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<RankCandidate[]>;
       const candidates = Array.isArray(res.data.candidates) ? res.data.candidates : [];
       return { ...res, data: candidates };
     },
     // be /recorder/init 是同步 200,直接回 InitResult{report,dryRun}(不建 request、非 202 轮询)。
-    init: (name: string, selectedCandidateId: string, writePolicy: WritePolicy, responsibleUseAcknowledgedAt?: number) => {
+    init: (name: string, selectedCandidateId: string, writePolicy: WritePolicy, responsibleUseAcknowledgedAt?: number, llmEgressAcknowledgedAt?: number) => {
       const body: Record<string, unknown> = { name, selectedCandidateId, writePolicy };
       if (responsibleUseAcknowledgedAt !== undefined) body.responsibleUseAcknowledgedAt = responsibleUseAcknowledgedAt;
+      if (llmEgressAcknowledgedAt !== undefined) body.llmEgressAcknowledgedAt = llmEgressAcknowledgedAt;
       return call<InitResult>('/recorder/init', { body });
     },
     // verify 是 202 异步:内部轮询 GET /recorder/requests/{id} 至 terminal 得 VerifySummary。
     verify: (name: string) => callAsync<VerifySummary>('/recorder/verify', { name }),
+    // N5:pipeline 改 202 异步(score~90s+generate+verify 耗时长);callAsync 轮询到终态,onProgress 实时回阶段耗时。
+    pipeline: (llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: ProgressPhase[]) => void) =>
+      callAsync<PipelineResult>('/recorder/pipeline', { llmEgressAcknowledgedAt, ...(candidateIds?.length ? { candidateIds } : {}) }, onProgress),
+    pipelinePreview: () => call<{ prompts: PipelinePrompts; sentCandidateIds: string[] }>('/recorder/pipeline/preview', { body: {} }),
+    saveAdapter: (draftId: string, source?: string) => {
+      const body: Record<string, unknown> = { draftId };
+      if (source !== undefined) body.source = source;
+      return call<SaveResult>('/recorder/save', { body });
+    },
+    saveAdapters: (drafts: Array<{ draftId: string; source?: string }>) =>
+      call<SaveResult>('/recorder/save', { body: { drafts } }),
     cancel: async () => {
       const res = await call<{ cancelled: boolean }>('/recorder/cancel', { body: { scope: 'session' }, idempotent: false });
       sessionId = null; // 会话结束,清空持有的 sessionId

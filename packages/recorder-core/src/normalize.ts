@@ -16,8 +16,22 @@ import type {
 } from './types.js';
 
 // Dynamic/cache-buster param names to exclude from a stable endpoint (06).
-const DYNAMIC_PARAM_RE = /^(_t|_|ts|time|timestamp|nonce|uuid|sign|signature|csrf|token|callback|cb|rand|random)$/i;
-const CURSOR_PARAM_RE = /^(cursor|next|next_cursor|page_token|offset|after|before)$/i;
+// Exported so the endpoint-aggregation layer (aggregate.ts) can flag observed params
+// dynamicLike/cursorLike WITHOUT duplicating the patterns (single source of truth).
+export const DYNAMIC_PARAM_RE = /^(_t|_|ts|time|timestamp|nonce|uuid|sign|signature|csrf|token|callback|cb|rand|random)$/i;
+export const CURSOR_PARAM_RE = /^(cursor|next|next_cursor|page_token|offset|after|before)$/i;
+
+// Refinement of the dynamicLike umbrella (14-plan · scoring recalibration). These split
+// the SUB-KIND of a dynamic param as a deterministic name-pattern FACT — recorder-core
+// never applies a penalty (that is be's scorer's job in a later step):
+//   - SIGNED_PARAM_RE   → signature/auth/anti-bot params (sign/nonce/csrf/token/w_rid/x-bogus…).
+//   - CACHE_BUSTER_PARAM_RE → cache-buster params (_t/ts/timestamp/cb/rand…).
+// Both are anchored whole-name + case-insensitive, exactly like DYNAMIC_PARAM_RE. The two
+// sets do NOT overlap by design; if a name ever matched both, signedLike wins (higher-signal,
+// more conservative) — enforced in aggregate.ts, not here. A dynamicLike param matching
+// NEITHER (e.g. uuid/web_id/device_id/trace_id) is the "unknown dynamic" class (both false).
+export const SIGNED_PARAM_RE = /^(sign|signature|sig|hmac|hash|nonce|csrf|token|access_token|_signature|w_rid|x_bogus|x-bogus|verify|challenge)$/i;
+export const CACHE_BUSTER_PARAM_RE = /^(_t|_|t|ts|time|timestamp|cb|callback|rand|random|r)$/i;
 
 export interface NormalizedEntry {
   endpoint: EndpointDescriptor;
@@ -120,4 +134,31 @@ export function buildArgMappings(
     }
   }
   return mappings;
+}
+
+/**
+ * Resolve which request param(s) carry the user's search seed VALUE, by scanning captured
+ * query-param values for one equal to the seed (06 · seed→param; dashboard seed input).
+ *
+ * The dashboard user types a search VALUE ("apple") but never knows the URL param NAME
+ * (`q`/`keyword`/…). We recover the name by exact value match against the captured
+ * `queryParams` across all entries (canonical keeps query values; request bodies keep only
+ * key names, so body values cannot be matched here). Match is whitespace-trimmed and
+ * case-insensitive but NOT substring (a substring match would false-positive a paging index
+ * or any value that happens to contain the term). Returns the matched param NAMES (deduped),
+ * which the caller pairs with the raw seed to build seedArgsEvidence — the raw seed value
+ * itself is never returned or stored here.
+ */
+export function resolveSeedParams(entries: RecorderNetworkEntry[], seedValue: string): string[] {
+  const needle = seedValue.trim().toLowerCase();
+  if (!needle) return [];
+  const names = new Set<string>();
+  for (const e of entries) {
+    if (!e.queryParams) continue;
+    for (const [name, value] of Object.entries(e.queryParams)) {
+      if (typeof value !== 'string') continue;
+      if (value.trim().toLowerCase() === needle) names.add(name);
+    }
+  }
+  return [...names];
 }

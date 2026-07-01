@@ -43,6 +43,13 @@ export interface InitInput {
   /** ADR-0005: required when writePolicy=write. */
   writePolicy?: 'dry-run' | 'write';
   responsibleUseAcknowledgedAt?: number;
+  /** LLM 合成产物(MVP):有则填进 adapter 模板留白(func/columns/...);无则空骨架(行为不变)。 */
+  funcBody?: string;
+  columns?: Array<{ name: string }>;
+  description?: string;
+  access?: 'read' | 'write';
+  /** 合成所用模型;标进 provenance(@generated-by adapter-recorder-llm + @model)。 */
+  llmModel?: string;
 }
 
 /** Config snapshot injected into every RecorderReport (09). */
@@ -63,7 +70,7 @@ export interface RecorderReport {
 }
 
 export type InitResult =
-  | { ok: true; report: RecorderReport; dryRun: DryRunDiff }
+  | { ok: true; report: RecorderReport; dryRun: DryRunDiff; generatedSource: string }
   | { ok: false; errorCode: 'validation_failed' | 'responsible_use_required'; reason: string };
 
 const DEFAULT_SNAPSHOT: ConfigSnapshot = {
@@ -157,15 +164,19 @@ export function createAdapterDraft(
   // Render with provenance header so even phase-1 (non-atomic) writes are provenanced.
   const txnId = randomUUID();
   const reportJson = JSON.stringify(report, null, 2);
-  const provenanceHeader = buildProvenanceHeader({ txnId, reportPath, reportSha256: sha256(reportJson) });
+  const provenanceHeader = buildProvenanceHeader({ txnId, reportPath, reportSha256: sha256(reportJson), llmModel: input.llmModel });
   // browser derived from strategy (COOKIE/UI ⇒ authenticated browser context; PUBLIC ⇒ none),
   // matching registry normalizeCommand — be derives & sends domain/strategy but not browser (03:74).
   const browser = input.browser ?? (input.strategy !== undefined && input.strategy !== 'PUBLIC');
-  const rendered = renderAdapterTemplate({ site, command, domain: input.domain, strategy: input.strategy, browser, provenanceHeader });
+  // LLM 合成产物(若有)填进模板留白;无则空骨架(渲染输出字节级不变)。
+  const rendered = renderAdapterTemplate({
+    site, command, domain: input.domain, strategy: input.strategy, browser, provenanceHeader,
+    funcBody: input.funcBody, columns: input.columns, description: input.description, access: input.access,
+  });
   const dryRun = computeDryRunDiff(existing, rendered);
 
   if (writePolicy === 'dry-run') {
-    return { ok: true, report, dryRun };
+    return { ok: true, report, dryRun, generatedSource: rendered };
   }
 
   // Write transaction (07:95-104). A crash between the two artifact renames must never leave a
@@ -185,7 +196,41 @@ export function createAdapterDraft(
   atomicWrite(markerPath, JSON.stringify({ txnId, adapterPath, reportPath, adapterSha256, reportSha256, committedAt: Date.now() }));
   writeManifest(manifestPath, { txnId, adapterPath, reportPath, markerPath, adapterSha256, reportSha256, state: 'committed', createdAt: Date.now() });
 
-  return { ok: true, report, dryRun };
+  return { ok: true, report, dryRun, generatedSource: rendered };
+}
+
+// ── N4 · 保存「已审阅的完整 LLM 生成脚本」到 clis/(verify-then-save 流程) ──────────────
+// 与 createAdapterDraft 不同:这里写的是**调用方提供的完整 source**(草稿已通过静态检查 + verify + 人工审阅),
+// 不走模板渲染。原子写(temp+fsync+rename)+ provenance 头 + 同写一份 report。
+export interface SaveAdapterInput {
+  /** site/command */
+  name: string;
+  /** 完整 adapter 源码(已审阅;若无 provenance 头会自动补)。 */
+  source: string;
+  /** 生成所用模型(标进 provenance)。 */
+  llmModel?: string;
+}
+export type SaveAdapterResult =
+  | { ok: true; adapterPath: string; reportPath: string }
+  | { ok: false; errorCode: 'validation_failed'; reason: string };
+
+export function saveAdapterSource(input: SaveAdapterInput): SaveAdapterResult {
+  const v = validateAdapterName(input.name);
+  if (!v.ok) return { ok: false, errorCode: 'validation_failed', reason: v.reason };
+  if (typeof input.source !== 'string' || !input.source.trim()) {
+    return { ok: false, errorCode: 'validation_failed', reason: 'source required' };
+  }
+  const { site, command } = v.parts;
+  const adapterPath = path.join(clisDir(site), `${command}.js`);
+  const reportPath = path.join(os.homedir(), '.bycli', 'sites', site, 'recorder', `${command}-report.json`);
+  const txnId = randomUUID();
+  const report = { adapterPath, reportPath, source: 'llm-generated', llmModel: input.llmModel ?? null, savedAt: Date.now() };
+  const reportJson = JSON.stringify(report, null, 2);
+  const header = buildProvenanceHeader({ txnId, reportPath, reportSha256: sha256(reportJson), llmModel: input.llmModel });
+  const rendered = input.source.startsWith('// @generated-by') ? input.source : `${header}\n${input.source}`;
+  atomicWrite(reportPath, reportJson);
+  atomicWrite(adapterPath, rendered);
+  return { ok: true, adapterPath, reportPath };
 }
 
 // ── Startup crash recovery (07:106-117) ─────────────────────────────────────

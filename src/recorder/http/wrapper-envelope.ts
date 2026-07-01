@@ -64,6 +64,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   feature_disabled: 403,
   auth_required: 500,
   responsible_use_required: 400,
+  ambiguous_iframe_target: 400,
   request_not_found: 404,
   idempotency_conflict: 409,
   queue_full: 429,

@@ -2,7 +2,7 @@
 // 持有 SessionState + stateVersion,每个动作按 05 State Machine 校验当前态,
 // 非法转移返回 invalid_state(不真正调用 mock),错误态走 failed。
 import { useCallback, useMemo, useState } from 'react';
-import { getRecorderClient } from '@/services/recorderClient';
+import { getRecorderClient, type RecordingMode } from '@/services/recorderClient';
 import { INVALID_STATE_HINT, isTerminalError } from '@/constants/recorder';
 import { deriveAdapterName } from './adapterName';
 import { isActionAllowed, type RecorderAction } from './transitions';
@@ -10,9 +10,12 @@ import type {
   CaptureSample,
   HealthReport,
   InitResult,
+  PipelineDraft,
+  PipelinePrompts,
   RankCandidate,
   RecorderError,
   RequestEnvelope,
+  SavedAdapter,
   SessionState,
   VerifySummary,
 } from '@/types/recorder';
@@ -21,14 +24,38 @@ interface SessionData {
   sessionId?: string;
   health?: HealthReport;
   targetUrl?: string;
+  /** 产品录制形态(bind 时定):tab_projection(投屏,默认)/ embedded_iframe(页内嵌 iframe)/ vnc(容器 noVNC)。驱动 CaptureStep 渲染分支。 */
+  recordingMode?: RecordingMode;
+  /** vnc 模式:容器 noVNC 画面 URL(bind 返回);驱动 CaptureStep 的 VncFrame iframe src。 */
+  vncUrl?: string;
+  /** 当前正在录制的样本(captureStart 成功后置位、captureRead 成功后清空);驱动「开始/结束」按钮态 */
+  recording?: 'A' | 'B' | null;
   sampleA?: CaptureSample;
   sampleB?: CaptureSample;
+  /** A/B 各自声明的搜索关键词(评分识别 seed→param;结束录制时随 captureRead 下发,be 只存 HMAC 证据)。 */
+  seedA?: string;
+  seedB?: string;
   candidates?: RankCandidate[];
   selectedCandidateId?: string;
   /** 从选定候选派生并固化的 adapter 名(site/command);init 预览/写入与 verify 复用同一个 */
   adapterName?: string;
   /** dry-run 预览结果(不推进会话) */
   draftPreview?: InitResult;
+  /** P0-2:LLM 外发同意时刻;一旦同意,后续 preview/write 复用,允许把痕迹发往 Anthropic 合成。 */
+  llmEgressAck?: number;
+  /** N4/N5:LLM 流水线产出的脚本草稿(verify 后)+ 被拒候选 */
+  pipelineDrafts?: PipelineDraft[];
+  pipelineRejected?: Array<{ candidateId: string; reason: string }>;
+  /** 透明展示:本轮实际发给 LLM 的提示词(score + generate)+ 截图张数 */
+  pipelinePrompts?: PipelinePrompts;
+  /** 会被喂 LLM 的候选 id(预览时拉取;候选表格据此标「是否传 LLM」) */
+  pipelineSentIds?: string[];
+  /** pipeline 异步轮询途中的阶段进度(score/generate/verify 耗时),驱动进度展示。 */
+  pipelineProgress?: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>;
+  /** 保存成功后的 adapter 路径(单存兼容字段) */
+  savedAdapterPath?: string;
+  /** 多选保存成功后的脚本列表(site/名/路径),驱动结果列表展示 */
+  savedAdapters?: SavedAdapter[];
   /** write 写入结果(推进 ranked→draft_created) */
   draft?: InitResult;
   verifyResult?: VerifySummary;
@@ -57,7 +84,7 @@ export default function useRecorderSession() {
       onSuccess: (data: T) => { next: SessionState; patch?: Partial<SessionData> },
       fromStateOverride?: SessionState,
     ) => {
-      // 合并动作(如 bindAndNavigate)串联两步时,setState 异步、闭包 state 仍是旧值,
+      // 串联动作(如 startCaptureA = navigate→captureStart)串两步时,setState 异步、闭包 state 仍是旧值,
       // 故允许显式传入第二步的校验起点;默认用当前 state。
       if (!isActionAllowed(action, fromStateOverride ?? state)) {
         setError({ code: 'invalid_state', message: '非法状态转移', hint: INVALID_STATE_HINT });
@@ -91,44 +118,49 @@ export default function useRecorderSession() {
 
   const actions = {
     health: () => run('health', () => client.health(), (d) => ({ next: 'health_checked', patch: { health: d } })),
-    // bind 两种模式(05 章 Authentication Session Binding):
-    // 已登录标签页 → session_bound;新建页面待登录 → awaiting_user_login。
-    bind: (mode: 'existing' | 'await_login' = 'existing') =>
-      run('bind', () => client.bind(mode), (d) => ({
-        next: d.awaitingLogin ? 'awaiting_user_login' : 'session_bound',
-        patch: { sessionId: d.sessionId },
+    // 新建录制会话:仅绑定浏览器 + 保存目标 URL,**不导航、不开 tab**(开 tab 推迟到「开始录制」)。
+    // 若目标站点需要登录,用户在「开始录制」后打开的 byCLI 标签页内自行完成登录(Recorder 只绑定已有登录)。
+    bind: (url: string, recordingMode?: RecordingMode) =>
+      run('bind', () => client.bind('existing', url, recordingMode), (d) => ({
+        next: 'session_bound',
+        patch: { sessionId: d.sessionId, targetUrl: url, recording: null, recordingMode: recordingMode ?? 'tab_projection', vncUrl: d.vncUrl },
       })),
-    // awaiting_user_login → auth_confirmed(用户手动登录后确认)。
-    confirmAuth: () =>
-      run('confirmAuth', () => client.confirmAuth(), () => ({ next: 'auth_confirmed' })),
     navigate: (url: string) =>
-      run('navigate', () => client.navigate(url), (d) => ({ next: 'page_ready', patch: { targetUrl: d.url } })),
-    // 一步合并:新建录制会话 + 自动导航打开录制页(用户只需输 URL、点一次)。在 model 内串联 bind→navigate,
-    // 给 navigate 显式传 bind 后的 'session_bound' 作校验起点(避免 setState 异步导致的 stale-state invalid_state)。
-    bindAndNavigate: async (url: string) => {
-      const bound = await run('bind', () => client.bind('existing'), (d) => ({
-        next: d.awaitingLogin ? 'awaiting_user_login' : 'session_bound',
-        patch: { sessionId: d.sessionId },
-      }));
-      if (!bound) return false;
-      return run(
-        'navigate',
-        () => client.navigate(url),
-        (d) => ({ next: 'page_ready', patch: { targetUrl: d.url } }),
-        'session_bound',
-      );
+      run('navigate', () => client.navigate(url), (d) => ({ next: 'page_ready', patch: { targetUrl: d.url || url } })),
+    // 「开始/结束」两步录制(治旧的 arm 完立刻 read 抓 0 条):
+    // 开始 = navigate 新建 byCLI 标签页(A=页面 a / B=页面 b)→ captureStart 开窗;用户在该页操作。
+    // 结束 = captureRead 读窗冻结,产出样本 list。captureStart 后状态留在 page_ready、置 recording 标记。
+    startCaptureA: async () => {
+      const url = data.targetUrl;
+      if (!url) {
+        setError({ code: 'validation_failed', message: '缺少目标 URL,请返回上一步重新绑定会话', hint: INVALID_STATE_HINT });
+        return false;
+      }
+      // 从 session_bound 导航开页面 a(默认校验起点即当前 session_bound)。
+      // 注:**不要用 navigate 返回的 d.url 覆盖 targetUrl** —— 新建 owned tab 落在 about:blank,
+      // 返回的 d.url=about:blank 会污染 targetUrl,导致 B 录制 navigate 到 about:blank 被扩展拒(Blocked URL scheme)。
+      const nav = await run('navigate', () => client.navigate(url), () => ({ next: 'page_ready', patch: {} }));
+      if (!nav) return false;
+      return run('captureStart', () => client.captureStart('A'), () => ({ next: 'page_ready', patch: { recording: 'A' } }), 'page_ready');
     },
-    // 每个样本两步驱动(05 章 line 50 + Capture Sample Protocol):capture/start 开窗 → capture/read 关窗冻结。
-    captureA: async () => {
-      const started = await run('captureStart', () => client.captureStart('A'), () => ({ next: state }));
-      if (!started) return false;
-      return run('captureA', () => client.captureRead('A'), (d) => ({ next: 'capture_a', patch: { sampleA: d } }));
+    stopCaptureA: () =>
+      run('captureA', () => client.captureRead('A', data.seedA), (d) => ({ next: 'capture_a', patch: { sampleA: d, recording: null } })),
+    startCaptureB: async () => {
+      const url = data.targetUrl;
+      if (!url) {
+        setError({ code: 'validation_failed', message: '缺少目标 URL,请返回上一步重新绑定会话', hint: INVALID_STATE_HINT });
+        return false;
+      }
+      // 从 capture_a 重新导航开全新页面 b(navigate 已放开 capture_a 来源态)。同上:不覆盖 targetUrl。
+      const nav = await run('navigate', () => client.navigate(url), () => ({ next: 'page_ready', patch: {} }), 'capture_a');
+      if (!nav) return false;
+      return run('captureStart', () => client.captureStart('B'), () => ({ next: 'page_ready', patch: { recording: 'B' } }), 'page_ready');
     },
-    captureB: async () => {
-      const started = await run('captureStart', () => client.captureStart('B'), () => ({ next: state }));
-      if (!started) return false;
-      return run('captureB', () => client.captureRead('B'), (d) => ({ next: 'capture_b', patch: { sampleB: d } }));
-    },
+    stopCaptureB: () =>
+      run('captureB', () => client.captureRead('B', data.seedB), (d) => ({ next: 'capture_b', patch: { sampleB: d, recording: null } })),
+    /** 设置 A/B 样本的搜索关键词(CaptureStep 输入框驱动;仅前端态,结束录制时随 captureRead 下发)。 */
+    setSeed: (sample: 'A' | 'B', seed: string) =>
+      setData((d) => (sample === 'A' ? { ...d, seedA: seed } : { ...d, seedB: seed })),
     rank: () => run('rank', () => client.rank(), (d) => ({ next: 'ranked', patch: { candidates: d } })),
     // 选定候选时即派生并固化 adapter 名(init 预览/写入与 verify 复用同一个,避免漂移)。
     selectCandidate: (id: string) =>
@@ -137,16 +169,23 @@ export default function useRecorderSession() {
         return { ...d, selectedCandidateId: id, adapterName: cand ? deriveAdapterName(cand) : d.adapterName };
       }),
     // dry-run 预览:不推进会话,产出 {report,dryRun} 供用户审阅。
-    previewInit: () => {
+    // egressConsent=true 时(用户点「用 AI 生成」)才带 egress 同意戳 → be 才会把痕迹发模型合成(P0-2);
+    // 一旦同意即记入 session,后续重复预览/写入复用,无需再问。
+    previewInit: (egressConsent?: boolean) => {
       const id = data.selectedCandidateId;
       const name = data.adapterName;
       if (!id || !name) {
         setError({ code: 'validation_failed', message: '请先选择一个候选', hint: INVALID_STATE_HINT });
         return Promise.resolve(false);
       }
-      return run('previewInit', () => client.init(name, id, 'dry-run'), (d) => ({ next: 'ranked', patch: { draftPreview: d } }));
+      const egressAck = egressConsent ? Date.now() : data.llmEgressAck;
+      return run(
+        'previewInit',
+        () => client.init(name, id, 'dry-run', undefined, egressAck),
+        (d) => ({ next: 'ranked', patch: { draftPreview: d, ...(egressAck ? { llmEgressAck: egressAck } : {}) } }),
+      );
     },
-    // 确认写入:带 ADR-0005 责任声明确认,推进 ranked→draft_created。
+    // 确认写入:带 ADR-0005 责任声明确认,推进 ranked→draft_created。复用已记的 egress 同意(若有)。
     writeInit: () => {
       const id = data.selectedCandidateId;
       const name = data.adapterName;
@@ -154,8 +193,22 @@ export default function useRecorderSession() {
         setError({ code: 'validation_failed', message: '请先选择一个候选', hint: INVALID_STATE_HINT });
         return Promise.resolve(false);
       }
-      return run('writeInit', () => client.init(name, id, 'write', Date.now()), (d) => ({ next: 'draft_created', patch: { draft: d } }));
+      return run('writeInit', () => client.init(name, id, 'write', Date.now(), data.llmEgressAck), (d) => ({ next: 'draft_created', patch: { draft: d } }));
     },
+    // N4/N5 verify-then-save:从 ranked 跑 LLM 评分→多脚本→静态检查→草稿→verify→收集(带 egress 同意)。不推进。
+    runPipeline: (candidateIds?: string[]) => {
+      setData((d) => ({ ...d, pipelineProgress: [] })); // 开跑前清空上轮进度
+      return run('pipeline', () => client.pipeline(Date.now(), candidateIds, (phases) => setData((d) => ({ ...d, pipelineProgress: phases }))), (d) => ({ next: 'ranked', patch: { pipelineDrafts: d.drafts, pipelineRejected: d.rejected, pipelinePrompts: d.prompts, llmEgressAck: Date.now() } }));
+    },
+    // 外发前预览将发送的提示词(不调 LLM、不外发、不改状态);存进 pipelinePrompts 供面板展示。
+    previewPrompts: () =>
+      run('pipelinePreview', () => client.pipelinePreview(), (d) => ({ next: 'ranked', patch: { pipelinePrompts: d.prompts, pipelineSentIds: d.sentCandidateIds } })),
+    // 保存某个(可能编辑过的)草稿 → ranked→done。
+    saveDraft: (draftId: string, source?: string) =>
+      run('saveAdapter', () => client.saveAdapter(draftId, source), (d) => ({ next: 'done', patch: { savedAdapterPath: d.adapterPath, savedAdapters: d.saved } })),
+    // 多选保存:一次保存多个(可能编辑过的)草稿 → 全部存完一次 ranked→done。
+    saveDrafts: (drafts: Array<{ draftId: string; source?: string }>) =>
+      run('saveAdapter', () => client.saveAdapters(drafts), (d) => ({ next: 'done', patch: { savedAdapterPath: d.adapterPath, savedAdapters: d.saved } })),
     verify: () => {
       const name = data.adapterName;
       if (!name) {

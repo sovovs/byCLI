@@ -48,15 +48,15 @@ The ranker reads all score values from a validated `ScoringProfile`, never from 
 | `RANK_SCORE_DYNAMIC_FIELD_DELTA` | -10 | int -1000..1000 |
 | `RANK_SCORE_HTML_STATIC_ANALYTICS_DELTA` | -25 | int -1000..1000 |
 | `RANK_SCORE_SUSPECTED_MUTATION_DELTA` | -100 | int -1000..1000 |
-| `RANK_SCORE_HIGH_MIN` | 75 | int 0..1000 |
-| `RANK_SCORE_MEDIUM_MIN` | 50 | int 0..1000 |
+| `RANK_SCORE_HIGH_MIN` | 70 | int 0..1000 |
+| `RANK_SCORE_MEDIUM_MIN` | 45 | int 0..1000 |
 | `RANK_SCORE_LOW_MIN` | 20 | int 0..1000 |
 
 Validation: deltas are integers in `-1000..1000`; bands are integers in `0..1000` and must satisfy `HIGH_MIN > MEDIUM_MIN > LOW_MIN`; any out-of-range value or band-order violation is `config_invalid`. Hard rejects (mutation, unparseable URL, missing method, static resource, …) override ScoringProfile and are NOT configurable — they are security/domain invariants.
 
 `RANK_SCORE_HTML_STATIC_ANALYTICS_DELTA` applies only to the *weak/suspected* HTML/static-like signal (see `06`); a **confirmed** static resource or third-party analytics endpoint is a hard reject and never routes through this configurable delta.
 
-**Default-profile band ceiling (v1, non-stacking).** Each positive signal contributes its delta **at most once per candidate** (boolean, not per-occurrence). The default positive deltas therefore sum to at most `25+20+10+5 = 60`, which is **below** the default `RANK_SCORE_HIGH_MIN = 75`. This is intentional: under the **default** ScoringProfile, `high` confidence is **not reachable** — a strong read endpoint lands at `medium`/`low`. `high` is reserved for a custom/operator-tuned ScoringProfile (lower `HIGH_MIN`, or higher deltas) or a future stacking scoring v2. Implementations and fixtures must not assume default-profile `high`.
+**Default-profile band ceiling (v1, non-stacking).** Each positive signal contributes its delta **at most once per candidate** (boolean, not per-occurrence — the dashboard-be LLM scorer additionally deduplicates repeated signal names before summing). The default positive deltas sum to at most `25+20+10+5 = 60`, which is above the default `RANK_SCORE_MEDIUM_MIN = 45` but below the default `RANK_SCORE_HIGH_MIN = 70`. So under the **default** ScoringProfile, the pure-core rank track alone caps a strong read endpoint at `medium`. `high` is reachable in the dashboard-be **dual-track** path (deterministic rule score + a capped semantic bonus, max +25, from the LLM's semanticSignals — see 06/13), or via a custom/operator-tuned ScoringProfile (lower `HIGH_MIN` / higher deltas). Pure-core fixtures must not assume default-profile `high`.
 
 ## HighLevelConfig
 

@@ -7,8 +7,9 @@ describe('isActionAllowed(model 状态门禁)', () => {
     expect(isActionAllowed('health', 'idle')).toBe(true);
     expect(isActionAllowed('bind', 'health_checked')).toBe(true);
     expect(isActionAllowed('navigate', 'page_ready')).toBe(true);
+    expect(isActionAllowed('navigate', 'capture_a')).toBe(true); // B 录制从 capture_a 重新导航开页面 b
     expect(isActionAllowed('captureA', 'page_ready')).toBe(true);
-    expect(isActionAllowed('captureB', 'capture_a')).toBe(true);
+    expect(isActionAllowed('captureB', 'page_ready')).toBe(true); // B 也先导航回 page_ready 再读窗
     expect(isActionAllowed('rank', 'capture_b')).toBe(true);
     expect(isActionAllowed('previewInit', 'ranked')).toBe(true);
     expect(isActionAllowed('writeInit', 'ranked')).toBe(true);
@@ -21,9 +22,9 @@ describe('isActionAllowed(model 状态门禁)', () => {
     expect(isActionAllowed('captureA', 'capture_a')).toBe(false); // A 只能从 page_ready
     expect(isActionAllowed('writeInit', 'draft_created')).toBe(false); // 已写过
   });
-  it('captureStart 可从 page_ready 和 capture_a(A/B 两样本),不可从 capture_b', () => {
+  it('captureStart 仅从 page_ready 开窗(A/B 录制前都先导航回 page_ready),不可从 capture_a/b', () => {
     expect(isActionAllowed('captureStart', 'page_ready')).toBe(true);
-    expect(isActionAllowed('captureStart', 'capture_a')).toBe(true);
+    expect(isActionAllowed('captureStart', 'capture_a')).toBe(false);
     expect(isActionAllowed('captureStart', 'capture_b')).toBe(false);
   });
 });

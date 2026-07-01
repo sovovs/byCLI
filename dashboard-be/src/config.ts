@@ -13,6 +13,9 @@ const intFromEnv = (def: number, min: number, max: number) =>
     .preprocess((v) => (v === undefined || v === '' ? def : Number(v)), z.number().int().min(min).max(max))
     .default(def);
 
+const boolFromEnv = (def: boolean) =>
+  z.preprocess((v) => (v === undefined || v === '' ? def : v === '1' || v === 'true'), z.boolean()).default(def);
+
 const ConfigSchema = z.object({
   // 04 章 localhost HTTP shape
   HOST: z.literal('127.0.0.1').default('127.0.0.1'),
@@ -30,11 +33,35 @@ const ConfigSchema = z.object({
   DAEMON_PORT: intFromEnv(19825, 1024, 65535),
   // 可选:dashboard build 产物目录。设了才同源托管 UI + 注入 bootstrap;不设为 API-only(默认)。
   UI_DIST: z.string().min(1).optional(),
+  // 可选:embedded_iframe 录制模式的 CSP frame-src hardened override(逗号分隔 https origin)。
+  // 仅在 FEATURE_EMBEDDED_IFRAME_RECORDING 开时生效:不设 → frame-src https:(填 URL 即录);
+  // 设了 → frame-src 只放这些 origin(CI/企业收窄)。只认 https origin,非法即 fail-fast。
+  IFRAME_FRAME_SRC: z
+    .preprocess(
+      (v) => (typeof v === 'string' && v.length ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined),
+      z.array(z.string().url().startsWith('https://')).optional(),
+    )
+    .optional(),
   // 09 章 RecorderConfig 子集(shell 已用到的)
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   RECORDER_MAX_ACTIVE_SESSIONS: intFromEnv(2, 1, 10),
   REQUEST_TERMINAL_STATUS_TTL_MS: intFromEnv(1_800_000, 60_000, 86_400_000),
   REQUEST_POLL_AFTER_MS: intFromEnv(1000, 250, 10_000),
+  // 喂 LLM 评分/生成的候选软上限(决定默认勾选 top-N + 无手选时自动截断数)。越大召回越多但 prompt 越大越慢。
+  RECORDER_LLM_CANDIDATE_CAP: intFromEnv(5, 1, 20),
+  // LLM 合成(MVP):接 Anthropic(兼容)API 用 A/B 痕迹+截图生成 adapter func/columns。默认关。
+  // 须 FEATURE_LLM_SYNTHESIS=1 且有 RECORDER_LLM_API_KEY 才启用;否则 init 退回空模板(行为不变)。
+  // **刻意用 RECORDER_LLM_* 项目命名空间,不用 ANTHROPIC_API_KEY/ANTHROPIC_BASE_URL** —— 避免与
+  // Claude Code 等工具预置的同名 env 冲突(node --env-file 不覆盖已存在 env)。SDK client 显式传值 +
+  // authToken:null,完全不读环境里的 ANTHROPIC_*。RECORDER_LLM_BASE_URL 指向第三方兼容网关(可空=官方)。
+  LLM_API_KEY: z.string().min(1).optional(),
+  LLM_BASE_URL: z.string().url().optional(),
+  LLM_SYNTHESIS_ENABLED: boolFromEnv(false),
+  LLM_MODEL: z.string().min(1).default('claude-opus-4-8'),
+  // 单次 LLM 调用超时(ms)。SDK 默认 600s(10min)+2 retries,第三方兼容网关偶发高延迟时会把 rank
+  // 阶段挂满 10min 再抛(实测 618s)→ 静默退回规则分、用户看到误导性低分。显式收窄到 3min 快速失败。
+  // makeLlmClient 一并设 maxRetries:1(默认 2 会成倍放大挂起时长)。
+  LLM_TIMEOUT_MS: intFromEnv(180_000, 5_000, 600_000),
 });
 
 export type RecorderConfig = Readonly<z.infer<typeof ConfigSchema>> & {
@@ -58,10 +85,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RecorderConfig
     TOKEN: env.RECORDER_TOKEN,
     DAEMON_PORT: env.BYCLI_DAEMON_PORT,
     UI_DIST: env.RECORDER_UI_DIST,
+    IFRAME_FRAME_SRC: env.RECORDER_IFRAME_FRAME_SRC,
     LOG_LEVEL: env.LOG_LEVEL,
     RECORDER_MAX_ACTIVE_SESSIONS: env.RECORDER_MAX_ACTIVE_SESSIONS,
     REQUEST_TERMINAL_STATUS_TTL_MS: env.REQUEST_TERMINAL_STATUS_TTL_MS,
     REQUEST_POLL_AFTER_MS: env.REQUEST_POLL_AFTER_MS,
+    RECORDER_LLM_CANDIDATE_CAP: env.RECORDER_LLM_CANDIDATE_CAP,
+    LLM_API_KEY: env.RECORDER_LLM_API_KEY,
+    LLM_BASE_URL: env.RECORDER_LLM_BASE_URL,
+    LLM_SYNTHESIS_ENABLED: env.FEATURE_LLM_SYNTHESIS,
+    LLM_MODEL: env.RECORDER_LLM_MODEL,
+    LLM_TIMEOUT_MS: env.RECORDER_LLM_TIMEOUT_MS,
   });
   if (!parsed.success) {
     const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');

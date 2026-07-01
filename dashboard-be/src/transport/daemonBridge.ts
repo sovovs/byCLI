@@ -20,6 +20,8 @@ export interface DaemonCommandInput {
   page?: string | null;
   url?: string;
   pattern?: string;
+  /** embedded_iframe 录制:目标 iframe URL,透传给扩展做 capture 噪音过滤(只留该 iframe 子 session)。 */
+  targetFrameUrl?: string;
   /** 透传给 daemon 的其他命令字段(如 sampleName 等业务字段不进 daemon,仅 be 侧用) */
   [k: string]: unknown;
 }
@@ -40,9 +42,12 @@ export interface DaemonBridge {
   highLevelGet(path: string, opts?: { timeoutMs?: number }): Promise<DaemonCommandResult>;
 }
 
-/** 真实 bridge:fetch daemon /status,超时即视为不可达(返回 null,由调用方降级 daemon_unavailable)。 */
-export function createDaemonBridge(daemonPort: number): DaemonBridge {
-  const base = `http://127.0.0.1:${daemonPort}`;
+/** 真实 bridge:fetch daemon /status,超时即视为不可达(返回 null,由调用方降级 daemon_unavailable)。
+ *  target:number(端口,host 默认 127.0.0.1,本机 daemon)或 {host,port}(VNC 模式指向容器网关)。
+ *  默认 host=127.0.0.1 不变 —— tab_projection/embedded_iframe 走本机 daemon,行为完全不变。 */
+export function createDaemonBridge(target: number | { host?: string; port: number }): DaemonBridge {
+  const { host = '127.0.0.1', port } = typeof target === 'number' ? { port: target } : target;
+  const base = `http://${host}:${port}`;
   return {
     async status(opts = {}) {
       const { contextId, timeoutMs = 2000 } = opts;

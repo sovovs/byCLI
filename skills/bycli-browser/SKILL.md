@@ -18,7 +18,7 @@ This skill is for **driving a live browser** to accomplish an agent task. If you
 bycli doctor
 ```
 
-Until `doctor` is green, nothing else will work. Typical failures: Chrome not running, extension not installed, debug port blocked by 1Password / other extensions. The doctor output tells you which.
+Run `doctor` once before a browser session — not before every command. The live probe **auto-starts the daemon**, so a plain "daemon not running" is self-healing: just run your command instead of reaching for `bycli daemon restart`. Stop only for the setup failures `doctor` flags that you can't auto-fix: Chrome not running, extension not installed/connected, profile not selected, or debug port blocked by 1Password / other extensions. The doctor output tells you which and how to fix it.
 
 ---
 

@@ -11,15 +11,14 @@ describe('stepStatus', () => {
   });
 
   it('done 态(current=步数)→ 所有步骤都 done', () => {
-    // 7 步,索引 0..6,done 时 current=7
-    for (let i = 0; i < 7; i++) expect(stepStatus(i, 7, false)).toBe('done');
+    // stepStatus 是纯索引逻辑(与具体步数无关):current=N 时索引 0..N-1 全 done。
+    for (let i = 0; i < 5; i++) expect(stepStatus(i, 5, false)).toBe('done');
   });
 
-  it('verify 失败:高亮 verify 步(索引6),不落到 step0、不越界丢失', () => {
-    // 修复点:verifying 映射到索引6;失败时 current=6
-    expect(stepStatus(6, 6, true)).toBe('failed');
-    expect(stepStatus(5, 6, true)).toBe('done');
-    expect(stepStatus(0, 6, true)).toBe('done');
+  it('末步失败定位:高亮该步、不落 step0、不越界', () => {
+    expect(stepStatus(4, 4, true)).toBe('failed');
+    expect(stepStatus(3, 4, true)).toBe('done');
+    expect(stepStatus(0, 4, true)).toBe('done');
   });
 
   it('早期失败定位到失败前所在步骤', () => {

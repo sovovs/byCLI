@@ -539,7 +539,7 @@ describe('background tab isolation', () => {
     const result = await mod.__test__.handleTabs({ id: '2', action: 'tabs', op: 'new', url: 'https://new.example', session: adapterKey('twitter') }, adapterKey('twitter'));
 
     expect(result.ok).toBe(true);
-    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: true });
+    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: false });
   });
 
   it('reuses the initial container tab for first tab-new lease instead of leaving a blank tab', async () => {
@@ -856,7 +856,7 @@ describe('background tab isolation', () => {
     }));
     expect(maxInFlight).toBe(2);
     expect(chrome.windows.create).toHaveBeenCalledTimes(1);
-    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'about:blank', active: true });
+    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'about:blank', active: false });
   });
 
   it('releases owned sessions without closing the shared container', async () => {
@@ -921,6 +921,11 @@ describe('background tab isolation', () => {
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     expect(mod.__test__.getAutomationWindowId()).toBeNull();
     chrome.windows.create.mockClear();
+
+    // byCLI owned tab 归属 byCLI 标签组(组是浏览器状态,存储丢失后仍存活);复用据「组成员」判定,
+    // 不复用组外的用户 tab(如用户开在同窗口的 dashboard)。reconcile 复用此分组 owned tab。
+    const reuseGroupId = await chrome.tabs.group({ tabIds: [1], createProperties: { windowId: 1 } });
+    await chrome.tabGroups.update(reuseGroupId, { title: 'byCLI Adapter' });
 
     const tabId = await mod.__test__.resolveTabId(undefined, adapterKey('twitter'), 'https://after.example');
 

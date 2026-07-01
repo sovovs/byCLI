@@ -127,6 +127,22 @@ describe('httpRecorderClient — bind 模式映射与 sessionId 生命周期', (
     expect(bodyOf(last().init).mode).toBe('bind_existing_page');
   });
 
+  it("bind 不传 recordingMode 时 body 不带该字段(be 默认 tab_projection,向后兼容)", async () => {
+    fetchMock.mockResolvedValueOnce(res(okEnv({ sessionId: 's', contextId: 'default', targetId: 't', awaitingLogin: false })));
+    const client = createHttpRecorderClient(bootstrap);
+    await client.bind('existing', 'https://juejin.cn');
+    expect('recordingMode' in (bodyOf(last().init) as Record<string, unknown>)).toBe(false);
+  });
+
+  it("bind('existing', url, 'embedded_iframe') 显式下发 recordingMode", async () => {
+    fetchMock.mockResolvedValueOnce(res(okEnv({ sessionId: 's', contextId: 'default', targetId: 't', awaitingLogin: false })));
+    const client = createHttpRecorderClient(bootstrap);
+    await client.bind('existing', 'https://juejin.cn', 'embedded_iframe');
+    const body = bodyOf(last().init) as Record<string, unknown>;
+    expect(body.recordingMode).toBe('embedded_iframe');
+    expect(body.url).toBe('https://juejin.cn');
+  });
+
   it('bind 后 side-effect 自动注入 bind 返回的 sessionId', async () => {
     fetchMock.mockResolvedValueOnce(
       res(okEnv({ sessionId: 'sess-1', contextId: 'default', targetId: 't', awaitingLogin: false })),
@@ -256,5 +272,55 @@ describe('httpRecorderClient — init 同步 / verify 202 轮询', () => {
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe('invalid_state');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('httpRecorderClient — 一体化录制 screenshot/input', () => {
+  it('screenshot 带 quality 走 POST /recorder/screenshot,回 base64 data', async () => {
+    fetchMock.mockResolvedValueOnce(res(okEnv({ format: 'jpeg', data: 'QkFTRTY0' })));
+    const client = createHttpRecorderClient(bootstrap);
+
+    const r = await client.screenshot(55);
+
+    expect(r.ok).toBe(true);
+    expect(r.data?.data).toBe('QkFTRTY0');
+    const { url, init } = last();
+    expect(url).toContain('/recorder/screenshot');
+    expect(bodyOf(init)).toMatchObject({ quality: 55 });
+  });
+
+  it('sendInput 转发 cdpMethod + cdpParams 到 /recorder/input', async () => {
+    fetchMock.mockResolvedValueOnce(res(okEnv({ dispatched: true })));
+    const client = createHttpRecorderClient(bootstrap);
+
+    const r = await client.sendInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: 10, y: 20 });
+
+    expect(r.ok).toBe(true);
+    expect(r.data?.dispatched).toBe(true);
+    const { url, init } = last();
+    expect(url).toContain('/recorder/input');
+    expect(bodyOf(init)).toMatchObject({ cdpMethod: 'Input.dispatchMouseEvent', cdpParams: { type: 'mousePressed', x: 10, y: 20 } });
+  });
+});
+
+describe('httpRecorderClient — 多选保存(saveAdapters 批量)', () => {
+  it('saveAdapters 把 drafts[] 作为 body 发到 /recorder/save,回 saved[] 列表', async () => {
+    fetchMock.mockResolvedValueOnce(res(okEnv({
+      state: 'done',
+      saved: [
+        { draftId: 'draft_0', site: 'x', name: 'search', adapterPath: '~/.bycli/clis/x/search.js' },
+        { draftId: 'draft_1', site: 'x', name: 'list', adapterPath: '~/.bycli/clis/x/list.js' },
+      ],
+    })));
+    const client = createHttpRecorderClient(bootstrap);
+
+    const r = await client.saveAdapters([{ draftId: 'draft_0' }, { draftId: 'draft_1', source: '// edited' }]);
+
+    expect(r.ok).toBe(true);
+    expect(r.data?.saved).toHaveLength(2);
+    expect(r.data?.saved?.[1]).toMatchObject({ site: 'x', name: 'list' });
+    const { url, init } = last();
+    expect(url).toContain('/recorder/save');
+    expect(bodyOf(init)).toMatchObject({ drafts: [{ draftId: 'draft_0' }, { draftId: 'draft_1', source: '// edited' }] });
   });
 });

@@ -40,12 +40,19 @@ export interface AdapterTemplateInput {
   browser?: boolean;
   /** provenance header lines embedded at the top (07:89). */
   provenanceHeader?: string;
+  /** LLM 合成填充(MVP):有则填进留白,无则保持 TODO 空骨架(字节级不变)。
+   *  funcBody = `async (kwargs) => { ... }` 的**函数体**,**原样插入**(LLM 生成代码,非数据值,
+   *  刻意打破 no-raw-user-code;靠 verify 子进程隔离 + dry-run 人工审阅兜底)。其余仍 JSON 转义。 */
+  funcBody?: string;
+  columns?: Array<{ name: string }>;
+  description?: string;
+  access?: 'read' | 'write';
 }
 
 /**
- * Render adapter source from a fixed template (no raw user-code injection). String
- * values are JSON-escaped so a crafted site/command/domain cannot break out of the
- * template literal.
+ * Render adapter source from a fixed template. String values are JSON-escaped so a crafted
+ * site/command/domain cannot break out of the template literal. The one exception is
+ * `funcBody` (LLM-generated code) which is inserted raw — see AdapterTemplateInput.
  */
 export function renderAdapterTemplate(input: AdapterTemplateInput): string {
   const site = JSON.stringify(input.site);
@@ -56,13 +63,27 @@ export function renderAdapterTemplate(input: AdapterTemplateInput): string {
   const header = input.provenanceHeader ? input.provenanceHeader.replace(/\n?$/, '\n') : '';
   const funcSig = browser ? 'async (page, kwargs) =>' : 'async (kwargs) =>';
 
+  // 各留白:有 LLM 产物则填(数据值 JSON 转义,funcBody 原样);无则保持原 TODO 行(字节级不变)。
+  const descLine = input.description
+    ? `  description: ${JSON.stringify(input.description)},`
+    : `  description: '', // TODO: describe what this command does`;
+  const accessLine = input.access
+    ? `  access: ${JSON.stringify(input.access)},`
+    : `  access: 'read',  // TODO: 'read' for queries, 'write' for remote/account state changes`;
+  const columnsLine = input.columns && input.columns.length
+    ? `  columns: ${JSON.stringify(input.columns.map((c) => c.name))},`
+    : `  columns: [], // TODO: field names for table output`;
+  const funcBlock = input.funcBody
+    ? `  func: ${funcSig} {\n${input.funcBody}\n  },`
+    : `  func: ${funcSig} {\n    // TODO: implement data fetching (prefer fetch over browser automation)\n    return [];\n  },`;
+
   return `${header}import { cli, Strategy } from '@sovovs/bycli/registry';
 
 cli({
   site: ${site},
   name: ${command},
-  description: '', // TODO: describe what this command does
-  access: 'read',  // TODO: 'read' for queries, 'write' for remote/account state changes
+${descLine}
+${accessLine}
   example: ${JSON.stringify(`bycli ${input.site} ${input.command} -f yaml`)},
   domain: ${domain},
   strategy: Strategy.${strategy},
@@ -70,11 +91,8 @@ cli({
   args: [
     { name: 'limit', type: 'int', default: 10, help: 'Number of items' },
   ],
-  columns: [], // TODO: field names for table output
-  func: ${funcSig} {
-    // TODO: implement data fetching (prefer fetch over browser automation)
-    return [];
-  },
+${columnsLine}
+${funcBlock}
 });
 `;
 }
@@ -83,16 +101,20 @@ export interface ProvenanceInput {
   txnId: string;
   reportPath: string;
   reportSha256: string;
+  /** LLM 合成时标注:生成器改 `adapter-recorder-llm` + 附 @model,供审计区分模板骨架 vs 模型生成。 */
+  llmModel?: string;
 }
 
 /** Build the non-sensitive provenance header embedded in generated adapters (07:89). */
 export function buildProvenanceHeader(p: ProvenanceInput): string {
-  return [
-    '// @generated-by adapter-recorder',
+  const lines = [
+    p.llmModel ? '// @generated-by adapter-recorder-llm' : '// @generated-by adapter-recorder',
     `// @txn ${p.txnId}`,
     `// @report ${p.reportPath}`,
     `// @report-sha256 ${p.reportSha256}`,
-  ].join('\n');
+  ];
+  if (p.llmModel) lines.push(`// @model ${p.llmModel}`);
+  return lines.join('\n');
 }
 
 export interface DryRunDiff {

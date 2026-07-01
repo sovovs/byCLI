@@ -102,6 +102,15 @@ export function pairSamples(samples: CaptureSample[], canonical: RecorderNetwork
       pairs.push({ kind: 'single', a, reviewRequired: true, reason: 'no matching B-sample entry' });
     }
   }
+  // B entries with a usable shape that no A entry consumed (e.g. a B-only endpoint,
+  // or an A/B response shape-drift where pairKey includes bodyShape.kind so the same
+  // endpoint's array-A / object-B never pairKey-match). Emit them as single pairs so
+  // they reach groupPairsByEndpoint, which re-folds by method+host+pathname and can
+  // surface mixedResponseShape / responseShapeVariants across the real A/B split.
+  bEntries.forEach((b, i) => {
+    if (usedB.has(i) || !hasStableShape(b)) return;
+    pairs.push({ kind: 'single', a: b, reviewRequired: true, reason: 'no matching A-sample entry' });
+  });
   if (pairs.length === 0) {
     return { ok: false, errorCode: 'insufficient_samples', reason: 'no pairable entry with usable shape' };
   }

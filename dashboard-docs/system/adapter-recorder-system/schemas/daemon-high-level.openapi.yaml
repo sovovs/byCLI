@@ -47,6 +47,14 @@ paths:
                 browser: { type: boolean }
                 writePolicy: { type: string, enum: [dry-run, write] }
                 responsibleUseAcknowledgedAt: { type: integer, description: "required when writePolicy=write (ADR-0005)" }
+                # LLM 合成产物(MVP,feature-gated):be 在 FEATURE_LLM_SYNTHESIS 时填充。
+                # 有则 renderAdapterTemplate 填进模板留白(func/columns/...),无则空骨架(行为不变)。
+                # funcBody = `async (kwargs) => { ... }` 的函数体,**原样插入**(LLM 生成代码,非数据值)。
+                funcBody: { type: string, description: "LLM-generated func body, inserted raw" }
+                columns: { type: array, items: { type: object, properties: { name: { type: string }, path: { type: string }, type: { type: string } } } }
+                description: { type: string }
+                access: { type: string, enum: [read, write] }
+                llmModel: { type: string, description: "model id; stamps @generated-by adapter-recorder-llm + @model in provenance" }
       responses:
         '200':
           description: draft created (or dry-run diff)
@@ -66,6 +74,7 @@ paths:
                         properties:
                           exists: { type: boolean }
                           changedLines: { type: [integer, "null"] }
+                      generatedSource: { type: string, description: "rendered adapter source for dry-run review (LLM 合成时含生成的 func/columns)" }
         '400':
           description: "validation_failed, or responsible_use_required (responsibleUseAcknowledgedAt missing when writePolicy=write — M-005)"
           content:

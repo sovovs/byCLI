@@ -31,7 +31,7 @@ describe('resolveScoringProfile (M8a · RANK_SCORE_* env → validated profile)'
   });
 
   it('band-order violation (HIGH<=MEDIUM) → config_invalid', () => {
-    const r = resolveScoringProfile({ RANK_SCORE_HIGH_MIN: '40' }); // default MEDIUM_MIN=50 > 40
+    const r = resolveScoringProfile({ RANK_SCORE_HIGH_MIN: '40' }); // default MEDIUM_MIN=45 > 40
     expect(r).toMatchObject({ ok: false, errorCode: 'config_invalid' });
   });
 });

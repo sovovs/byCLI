@@ -1,6 +1,20 @@
 // isTerminalError 单测:终态错误码判定是单一来源,且与 be 实际对前端发的终态契约对齐。
 import { describe, it, expect } from 'vitest';
-import { isTerminalError, TERMINAL_ERROR_CODES } from './recorder';
+import { isTerminalError, TERMINAL_ERROR_CODES, FLOW_STEPS, flowStepsFor } from './recorder';
+
+describe('flowStepsFor', () => {
+  it('LLM-off → 原完整步骤含「排序候选」', () => {
+    const steps = flowStepsFor(false);
+    expect(steps).toBe(FLOW_STEPS);
+    expect(steps.some((s) => s.key === 'rank')).toBe(true);
+  });
+  it('LLM-on → 去掉「排序候选」,A/B 各独立步骤,生成步从 capture_b 起', () => {
+    const steps = flowStepsFor(true);
+    expect(steps.some((s) => s.key === 'rank')).toBe(false);
+    expect(steps.map((s) => s.key)).toEqual(['health', 'bind', 'captureA', 'captureB', 'generate']);
+    expect(steps.find((s) => s.key === 'generate')!.enterState).toBe('capture_b');
+  });
+});
 
 describe('isTerminalError / TERMINAL_ERROR_CODES', () => {
   it('be 实际终态码 → true(会话不可恢复,推进 failed)', () => {

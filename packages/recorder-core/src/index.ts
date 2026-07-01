@@ -9,8 +9,9 @@
 
 export { rankSamples } from './rank.js';
 export { canonicalizeEntry, CANONICAL_SCORING_RAW_FIELDS, type RawNetworkEntry, type CanonicalResult } from './canonical.js';
-export { normalizeEntry, buildArgMappings, type NormalizedEntry } from './normalize.js';
+export { normalizeEntry, buildArgMappings, resolveSeedParams, type NormalizedEntry } from './normalize.js';
 export { pairSamples, type Pair, type PairingResult } from './pairing.js';
+export { groupPairsByEndpoint, type EndpointGroup } from './aggregate.js';
 export { scoreCandidate, type ScoreContext, type ScoreResult, type HardReject } from './score.js';
 export {
   analyzeSite, detectAntiBot, classifyPattern, findNearestAdapter,
@@ -34,11 +35,17 @@ export {
 export {
   resolveScoringProfile, resolveFeatureFlags, DEFAULT_FEATURE_FLAGS,
   validateTempCapacity, DEFAULT_TEMP_CAPACITY,
-  type FeatureFlags, type ConfigResolveError, type TempCapacity,
+  RECORDING_MODES, DEFAULT_RECORDING_MODE,
+  type FeatureFlags, type ConfigResolveError, type TempCapacity, type RecordingMode,
 } from './config.js';
 export { randomToken, safeEqual } from './transport-crypto.js';
 export { type ErrorCode, type RecorderError } from './errors.js';
 export { createMetrics, type Metrics, type MetricsSnapshot, type HistogramStat } from './metrics.js';
+export {
+  correlateTimeline,
+  type RawAction, type RawNetEntry, type CorrelateOptions,
+  type CorrelatedTimeline, type CorrelatedNetEntry, type TimelineAction,
+} from './timeline.js';
 export {
   createLogger,
   type Logger, type LogLevel, type LogFields, type LoggerOptions,
@@ -50,6 +57,8 @@ export {
   type RankInput,
   type RankResult,
   type RankCandidate,
+  type ParamObservation,
+  type ParamUnionItem,
   type CaptureSample,
   type RecorderNetworkEntry,
   type SourceCompleteness,

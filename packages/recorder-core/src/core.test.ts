@@ -27,11 +27,12 @@ describe('M4 core engine · fixture corpus (10/10)', () => {
     if (!r.ok) return;
     const c = r.candidates[0];
     expect(c.id).toMatch(/^cand_/);
-    // Default ScoringProfile v1 is non-stacking: stable_json(+25)+seed_arg(+20)=45 → low.
-    // 'high' is unreachable under the default profile (positive cap 60 < HIGH_MIN 75) by
-    // design — high requires a custom/preview ScoringProfile (see 06/09). Codex B-revised.
-    expect(c.score).toBe(45);
-    expect(c.confidence).toBe('low');
+    // Default ScoringProfile (14-plan 校准) is non-stacking: stable_json(+30)+seed_arg(+20)=50.
+    // Bands 70/45/20 → 50 ≥ MEDIUM_MIN(45) = 'medium'.
+    // Pure-core positive cap is now 65 (< HIGH_MIN 70) so 'high' is unreachable here by
+    // design — 'high' needs the BE dual-track (rule + LLM semanticBonus). Codex B-revised + 第4步.
+    expect(c.score).toBe(50);
+    expect(c.confidence).toBe('medium');
     expect(c.endpoint.method).toBe('GET');
     expect(c.endpoint.pathname).toBe('/api/search');
     expect(c.args?.some((a) => a.argName === 'keyword' && a.in === 'query')).toBe(true);
@@ -190,5 +191,32 @@ describe('M4 core engine · invariants', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.candidates.length).toBeGreaterThan(0);
+  });
+
+  it('WebSocket entries (kind=cdp-websocket) are excluded from ranking — no phantom ws endpoint', () => {
+    const ws = { kind: 'cdp-websocket', requestId: 'ws_1', method: 'GET', url: 'wss://x.com/socket', responseStatus: 101 };
+    const r = rankSamples(run([
+      sample('A', [ws, jsonList('https://x.com/api/search?keyword=cat')], { keyword: { placeholder: 'k', type: 'string' } }),
+      sample('B', [ws, jsonList('https://x.com/api/search?keyword=dog')], { keyword: { placeholder: 'k2', type: 'string' } }),
+    ]));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Only the HTTP endpoint survives; the ws:// frame produces no candidate.
+    expect(r.candidates.every((c) => c.endpoint.pathname === '/api/search')).toBe(true);
+    expect(r.candidates.some((c) => /socket/.test(c.endpoint.urlTemplate))).toBe(false);
+  });
+
+  it('WebSocket-only site → insufficient_samples reason names Pattern E + the ws endpoint', () => {
+    const ws = {
+      kind: 'cdp-websocket', requestId: 'ws_1', method: 'GET', url: 'wss://x.com/stream',
+      responseStatus: 101, webSocketFrames: [{ direction: 'received' }, { direction: 'received' }],
+    };
+    const r = rankSamples(run([sample('A', [ws]), sample('B', [ws])]));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.errorCode).toBe('insufficient_samples');
+    expect(r.reason).toMatch(/Pattern E/);
+    // frames aggregate across both samples for the same ws url (2 + 2).
+    expect(r.reason).toMatch(/wss:\/\/x\.com\/stream \(4 frames\)/);
   });
 });

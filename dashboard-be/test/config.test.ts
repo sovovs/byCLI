@@ -23,4 +23,17 @@ describe('loadConfig — M8a ScoringProfile + FeatureFlags wiring', () => {
   it('fails fast (config_invalid) on a malformed feature flag', () => {
     expect(() => loadConfig({ FEATURE_DIRECT_CDP_CAPTURE: 'maybe' })).toThrow(ConfigInvalidError);
   });
+
+  it('parses RECORDER_IFRAME_FRAME_SRC into an https origin list', () => {
+    const cfg = loadConfig({ RECORDER_IFRAME_FRAME_SRC: 'https://juejin.cn, https://example.com' });
+    expect(cfg.IFRAME_FRAME_SRC).toEqual(['https://juejin.cn', 'https://example.com']);
+  });
+
+  it('leaves IFRAME_FRAME_SRC undefined when unset', () => {
+    expect(loadConfig({}).IFRAME_FRAME_SRC).toBeUndefined();
+  });
+
+  it('fails fast (config_invalid) on a non-https iframe frame-src origin', () => {
+    expect(() => loadConfig({ RECORDER_IFRAME_FRAME_SRC: 'http://insecure.example' })).toThrow(ConfigInvalidError);
+  });
 });

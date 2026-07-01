@@ -39,6 +39,7 @@ export type ErrorCode =
   | 'fixture_mismatch'
   | 'output_truncated'
   | 'feature_disabled'
+  | 'ambiguous_iframe_target'
   | 'config_invalid';
 
 export interface RecorderError {
@@ -115,6 +116,39 @@ export interface ScoreExplanationItem {
 
 export type Confidence = 'high' | 'medium' | 'low' | 'rejected';
 
+/**
+ * ParamObservation($defs) —— recorder-core 聚拢出的**确定性参数事实**(14-plan 第1步)。
+ * 只放观测事实,绝不含语义判断(paramRole/exposeAsArg 是 LLM 层的活,不在此契约)。
+ */
+export interface ParamObservation {
+  name: string;
+  in: 'query' | 'body';
+  observedCount: number;
+  totalCalls: number;
+  observedSamples: Array<'A' | 'B'>;
+  observedAlways: boolean;
+  observedVariation: boolean | 'unknown';
+  valueKinds: string[];
+  dynamicLike: boolean;
+  cursorLike: boolean;
+}
+
+/**
+ * ParamUnionItem($defs) —— LLM 在 ParamObservation 事实之上推断的**参数语义角色**(14-plan 第2/5步)。
+ * 由 dashboard-be/llm/score.ts 产出,be 在 /recorder/rank 合并到 RankCandidate;LLM-off 路径无此字段。
+ * 与 core 不同:这里带语义判断(paramRole/exposeAsArg/inferredMeaning),是 LLM 层的活。
+ */
+export interface ParamUnionItem {
+  name: string;
+  in: 'query' | 'body' | 'path' | 'header';
+  requiredness?: 'always' | 'optional';
+  observedVariation?: boolean;
+  paramRole?: string;
+  exposeAsArg?: 'yes' | 'optional_candidate' | 'no';
+  inferredMeaning?: string;
+  why?: string;
+}
+
 /** RankCandidate($defs) —— rank 步骤核心输出 */
 export interface RankCandidate {
   id: string;
@@ -129,6 +163,29 @@ export interface RankCandidate {
   scoreExplanation?: ScoreExplanationItem[];
   risks?: string[];
   evidenceIds?: string[];
+  /** 14-plan 第1步:聚拢后该 endpoint group 全部成员调用的请求参数并集(只放事实)。可选/向后兼容。 */
+  paramObservations?: ParamObservation[];
+  /** 成员调用里出现过的 distinct 响应 bodyShape.kind(如 ['array','object'])。可选/向后兼容。 */
+  responseShapeVariants?: Array<'array' | 'object' | 'scalar' | 'html' | 'unknown'>;
+  /** 聚拢进该候选的全部成员 entry 的 requestId(debug/provenance)。可选/向后兼容。 */
+  mergedRequestIds?: string[];
+  /** 打分来源:'llm'=LLM 判定信号后 be 求和;缺省=规则启发式打分(LLM 无 key/失败时的兜底)。 */
+  scoredBy?: 'llm';
+  /** LLM 自报效用分(0-100,辅助,非权威 —— be 用双轨重算权威分)。be 合并 LLM 结果时附加。 */
+  llmUtilityScore?: number;
+  /** LLM 一句话:这个接口做什么/返回什么数据(给用户看)。be 合并 LLM 结果时附加;LLM-off 无。 */
+  inferredFunction?: string;
+  /** LLM 参数语义推断(角色/是否暴露,叠在 paramObservations 事实之上)。be 合并时附加;LLM-off 无。 */
+  paramUnion?: ParamUnionItem[];
+}
+
+/** WebSocket 数据帧(仅 kind='cdp-websocket';opcode 1=text/2=binary,binary 的 preview 带 base64: 前缀) */
+export interface WsFrame {
+  direction: 'sent' | 'received';
+  opcode: number;
+  payloadPreview: string;
+  payloadFullSize?: number;
+  payloadTruncated?: boolean;
 }
 
 /** capture 样本里的单条网络条目(精简自 RecorderNetworkEntry,用于 UI 展示) */
@@ -138,17 +195,40 @@ export interface NetworkEntry {
   url: string;
   host?: string;
   pathname?: string;
+  /** 原始扩展条目类型:'cdp'=HTTP(Fetch/XHR)、'cdp-websocket'=WebSocket 连接 */
+  kind?: 'cdp' | 'cdp-websocket';
   response?: {
     status?: number;
     mime?: string;
     bodyShape?: { kind?: string; itemKeys?: string[] };
   };
+  /** 扁平响应状态(原始扩展形状;与 response.status 二选一) */
+  responseStatus?: number;
   timing?: { startedAt?: number; durationMs?: number };
+  /** WebSocket 数据帧序列(仅 kind='cdp-websocket') */
+  webSocketFrames?: WsFrame[];
+  /** 背压溢出丢弃的帧数 */
+  webSocketFramesDropped?: number;
+}
+
+/** M-UI 用户操作事件(user-action 轨;input 仅含 valueShape,绝无原始值) */
+export interface UserAction {
+  type: 'click' | 'input' | 'submit' | 'keydown';
+  selector: string;
+  tag?: string;
+  role?: string;
+  text?: string;
+  valueShape?: { len: number; kind: string };
+  key?: string;
 }
 
 export interface CaptureSample {
   sampleName: 'A' | 'B';
   entries: NetworkEntry[];
+  /** M-UI:本样本录到的用户操作(可选;旧后端/未启用时无) */
+  actions?: UserAction[];
+  /** 录制窗口溢出丢弃的操作数(ring-cap) */
+  actionsDropped?: number;
 }
 
 /** /recorder/health 返回 */
@@ -157,6 +237,8 @@ export interface HealthReport {
   daemon: 'ok' | 'down';
   extension: 'ok' | 'disconnected';
   highLevel: 'ok' | 'down';
+  /** N5:LLM 合成是否可用(开关+key)。false → ranked 回退手动流程(RankStep+InitStep)。 */
+  llmSynthesis?: boolean;
 }
 
 /** RecorderReport(bundle $defs/RecorderReport)—— init 预览/写入产出的报告 */
@@ -182,6 +264,59 @@ export interface DryRunDiff {
 export interface InitResult {
   report: RecorderReport;
   dryRun: DryRunDiff;
+  /** 渲染好的 adapter 源码(供 dry-run 审阅);LLM 合成时含生成的 func/columns,否则为空骨架。 */
+  generatedSource?: string;
+  /** P0-2:AI 合成可用但尚未外发(无 egress 同意)→ true,前端据此显示「用 AI 生成(将发送痕迹)」同意 CTA。 */
+  llmSynthesisOffered?: boolean;
+}
+
+/** N4/N5 · LLM 流水线产出的脚本草稿(评分 + verify 后) */
+export interface PipelineDraft {
+  id: string;
+  candidateId: string;
+  site: string;
+  name: string;
+  source: string;
+  score: number;
+  confidence: 'high' | 'medium' | 'low' | 'rejected';
+  reason: string;
+  risks: string[];
+  notes: string[];
+  staticOk: boolean;
+  staticViolations: string[];
+  verify: { ok: boolean; rows: number; fieldCount: number; reasons: string[] };
+  /** 静态通过 + verify 达标 → 可保存 */
+  usable: boolean;
+}
+export interface PipelinePrompts {
+  /** 评分阶段发给 LLM 的完整提示词文本。 */
+  score: string;
+  /** 生成脚本阶段发给 LLM 的完整提示词文本(无 generate 候选时为空串)。 */
+  generate: string;
+  /** 随提示词外发的页面截图张数(图片本身不在文本里,仅标注数量)。 */
+  screenshotCount: number;
+}
+export interface PipelineResult {
+  drafts: PipelineDraft[];
+  rejected: Array<{ candidateId: string; reason: string }>;
+  /** 透明展示:本轮实际发给 LLM 的提示词(score + generate)+ 截图张数。 */
+  prompts?: PipelinePrompts;
+}
+export interface SavedAdapter {
+  draftId: string;
+  site: string;
+  name: string;
+  adapterPath?: string;
+}
+
+export interface SaveResult {
+  state: string;
+  /** 批量保存:成功落盘的脚本列表(site/名/路径);单存时为单元素。 */
+  saved?: SavedAdapter[];
+  /** 批量保存:失败的草稿 + 原因(部分成功时返回)。 */
+  failed?: Array<{ draftId: string; reason: string }>;
+  /** 向后兼容:首个成功脚本的路径(单存调用方仍读它)。 */
+  adapterPath?: string;
 }
 
 /** verify runner 事件(JSONL) */

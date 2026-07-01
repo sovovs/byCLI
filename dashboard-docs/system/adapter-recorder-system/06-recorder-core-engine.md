@@ -76,6 +76,10 @@ The normalized outputs below are formalized as machine contracts in `adapter-rec
 
 `headerShape`, `bodyParamCandidates` and `antiBotSignal` are rank-internal signals, not separate candidate output fields: `bodyParamCandidates` is consumed to build `ArgMapping[]`, while `headerShape` and `antiBotSignal` feed `scoreExplanation`/`risks` (and `authRequired`). They are deliberately not surfaced as standalone `RankCandidate`/`EndpointDescriptor` fields.
 
+### seed→param resolution (where `seedArgsEvidence` comes from)
+
+`seedArgsEvidence` keys are **param names**, but a user only supplies a search **value** ("apple"). `resolveSeedParams(entries, seedValue)` (pure, in `normalize.ts`) recovers the name by scanning captured `queryParams` **values** for an exact (trim + lowercase, never substring) match and returning the matched param name(s). Callers (the dashboard recording flow via `dashboard-be`) pair the resolved name with the raw seed and run it through `deriveEvidenceSeedArgs` — so the ranker's `seed_arg_maps_to_param` (+20) / `response_echoes_seed` (+10) signals can fire. The raw seed value never enters core output (see ADR 0003). Request bodies keep only key names (not values), so only query values are matchable here; values hidden in POST bodies / SSR page URLs are not resolved and fall back to no evidence.
+
 | Object | Rule | Output |
 | --- | --- | --- |
 | URL | split host/path/query, sort keys, remove cache-buster | `urlTemplate`, `queryParams`, `dynamicParams` |
@@ -119,12 +123,12 @@ Bands:
 
 | Score | Confidence | Behavior |
 | --- | --- | --- |
-| `>=75` no hard risk | high | default candidate, verify required |
-| `50-74` or explainable dynamic fields | medium | manual review |
-| `20-49` | low | backup evidence only |
+| `>=70` no hard risk | high | default candidate, verify required |
+| `45-69` or explainable dynamic fields | medium | manual review |
+| `20-44` | low | backup evidence only |
 | `<20` or hard reject | rejected | hidden by default with reason |
 
-> **Default-profile ceiling (v1).** Positive deltas are non-stacking (each at most once per candidate), so the default positive sum is at most `60` — below `high`'s `>=75`. Under the **default** ScoringProfile, `high` is therefore **not reachable**; a strong read endpoint lands at `medium`/`low`. `high` requires an operator-tuned ScoringProfile or a future stacking scoring v2 (see `09`). The fixture corpus below asserts default-profile bands.
+> **Default-profile ceiling (v1).** Positive deltas are non-stacking (each at most once per candidate), so the pure-core positive sum is at most `60` — above `medium`'s `>=45` but below `high`'s `>=70`. Under the **default** ScoringProfile, the pure-core rank track alone caps a strong read endpoint at `medium`. `high` is reachable via the dashboard-be **dual-track** path (deterministic rule score + a capped semantic bonus, max +25, from the LLM's semanticSignals — see `09`/`13`), or via an operator-tuned ScoringProfile. The fixture corpus below asserts pure-core default-profile bands.
 
 Hard rejects: mutation, confirmed third-party analytics, unparseable URL, missing method, confirmed static resource, pairing failed without response shape. The `-25` weak HTML/static-like delta applies only to *suspected* (not confirmed) cases; a confirmed static/analytics resource is a hard reject and overrides the profile.
 

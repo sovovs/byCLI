@@ -30,6 +30,7 @@ export type ErrorCode =
   | 'fixture_mismatch'
   | 'output_truncated'
   | 'feature_disabled'
+  | 'ambiguous_iframe_target'
   | 'config_invalid';
 
 /** 统一错误体(契约源 = bundle $defs/Error)。 */

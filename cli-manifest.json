@@ -14864,67 +14864,6 @@
     "sourceFile": "jira/search.js"
   },
   {
-    "site": "juejin",
-    "name": "search",
-    "description": "掘金搜索",
-    "access": "read",
-    "domain": "juejin.cn",
-    "strategy": "public",
-    "browser": true,
-    "args": [
-      {
-        "name": "query",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "搜索关键词"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "返回结果数量 (max 20)"
-      },
-      {
-        "name": "type",
-        "type": "int",
-        "default": 0,
-        "required": false,
-        "help": "搜索类型：0=综合搜索，2=文章搜索，12=课程搜索，9=标签搜索，1=用户搜索",
-        "choices": [
-          "0",
-          "2",
-          "12",
-          "9",
-          "1"
-        ]
-      },
-      {
-        "name": "sort",
-        "type": "int",
-        "default": 0,
-        "required": false,
-        "help": "排序类型：0=综合排序，1=最新优先，2=最热优先",
-        "choices": [
-          "0",
-          "1",
-          "2"
-        ]
-      }
-    ],
-    "columns": [
-      "rank",
-      "title",
-      "author",
-      "summary",
-      "url"
-    ],
-    "type": "js",
-    "modulePath": "juejin/search.js",
-    "sourceFile": "juejin/search.js"
-  },
-  {
     "site": "ke",
     "name": "chengjiao",
     "description": "贝壳找房成交记录",

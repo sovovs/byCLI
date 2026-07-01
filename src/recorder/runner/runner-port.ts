@@ -41,6 +41,8 @@ interface StartInput {
   rawSeedArgs: Record<string, unknown>;
   fixture: string;
   trace: string;
+  /** N3:显式 adapter 路径 override(verify 录制器临时草稿用);缺省按 name 派生 ~/.bycli/clis/<site>/<cmd>.js。 */
+  adapterPath?: string;
 }
 
 interface VerifyRun {
@@ -297,7 +299,7 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
       const written = writeInputJson(requestId, {
         requestId,
         name: input.name,
-        adapterPath: resolveAdapterPath(input.name),
+        adapterPath: input.adapterPath ?? resolveAdapterPath(input.name),
         executionSeedArgs: input.rawSeedArgs, // raw → input.json only
         fixture: input.fixture,
         trace: input.trace,
