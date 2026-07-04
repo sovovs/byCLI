@@ -63,3 +63,6 @@ outputs/
 dashboard-be/IMPLEMENTATION_PLAN.md
 docs/superpowers/
 docs/developer/documentation-audit-2026-05.md
+# 内部设计/路线过程文档(Codex 审计标记:含作者/日期/竞品分析/customer report)
+designs/
+docs/design/

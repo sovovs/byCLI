@@ -107,7 +107,7 @@ describe('public commands E2E', () => {
       'submit',
       pdfPath,
       '--email',
-      'wang2629651228@gmail.com',
+      'reviewer@example.com',
       '--venue',
       'RAL',
       '--dry-run',
@@ -121,7 +121,7 @@ describe('public commands E2E', () => {
     expect(data).toMatchObject({
       status: 'dry-run',
       file: 'sample.pdf',
-      email: 'wang2629651228@gmail.com',
+      email: 'reviewer@example.com',
       venue: 'RAL',
     });
   }, 30_000);
