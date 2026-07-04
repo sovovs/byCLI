@@ -2,6 +2,8 @@
 
 > 来源:2026-06-30 与 Codex 两轮设计讨论 + 四轮真机数据 prompt 实验 + 一轮 Codex 计划评审(挑出 6 High + 4 Moderate 实现坑,全部吸收进本版)。
 > 实验证据:同输入同模型(gpt-5.5 经网关),article_rank 从旧架构 30/low → 新 prompt 88/high;4 个 browser-settings 聚成 1 条且仍 reject;seed 正例 search/articles 判出 seed_arg_maps_to_param=present + keyword seed_argument(92/high);token 顺带省 64%(同 endpoint evidence md5 相同,现被复制 N 份)。
+>
+> **后续(2026-07-03):** 本文档定的 score/generate prompt 结构之上又做了一轮**体积压缩**(paramObservations/paramUnion/recommendedColumns TOON 表格化 + JSON minify + evidence 精简 + generate 按选中候选过滤),真机 A/B 验证信号判定无损。权威见 [15-score-prompt-compression](./15-score-prompt-compression.md)。
 
 ## 两个诉求
 

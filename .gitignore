@@ -35,3 +35,15 @@ private/
 
 # recorder 三端管理脚本运行态
 .recorder-run/
+
+# 内部产物 / 真机调试 dump(开源前清理,2026-07-04)
+.understand-anything/
+.context/
+score.txt
+cli.txt
+zipjson.txt
+score.*.txt
+CLAUDE.md
+.neuralmemory/
+.gstack/
+.recorder-run/

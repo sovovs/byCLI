@@ -27,10 +27,15 @@ dashboard/                     # 前端(现状,保留)= 「可选 localhost HTTP
 dashboard-be/                  # 真实 Local Service 的 HTTP 形态(薄封装 + 安全门禁)
 dashboard-docs/
   README.md                    # 本文件:总入口 + 三条铁律 + 迁移说明
-  system/                      # = 现有 adapter-recorder-system/ 整体迁入,不拆
-    00-tdd-governance.md ... 11-roadmap-and-acceptance.md
-    adr/                       # 关键决策记录(0001-ui-channel 等)
-    schemas/                   # 契约单一来源:adapter-recorder.bundle.json + *.openapi.yaml
+  system/                      # 系统/架构设计,两个平级子系统
+    adapter-recorder-system/   # 录制器:怎么录制生成 adapter(00–15 + adr/ + schemas/)
+      00-tdd-governance.md ... 15-score-prompt-compression.md
+      adr/                     # 关键决策记录(0001-ui-channel 等)
+      schemas/                 # 契约单一来源:adapter-recorder.bundle.json + *.openapi.yaml
+    adapter-runtime/           # 核心运行时:src/execution.ts 怎么执行 adapter/驱动浏览器(2026-07-04 从根迁入)
+      README.md                # adapter-*(4阶段)+ execution-*(5篇)+ bycli-{browser-vs-adapter,cli-strategy,ai} 代码原理讲解
+    skills/                    # byCLI 技能说明+实现原理(2026-07-04 从根迁入)
+      README.md                # bycli-{adapter-author,autofix}-skill:skills/*/SKILL.md 用途+依赖代码
   ui/                          # 新增:页面设计(净新增,现有文档没有)
     00-overview.md             # 信息架构、导航、页面清单、与 system 的映射
     01-design-system.md        # = dashboard/design-system/MASTER.md 的设计层来源
