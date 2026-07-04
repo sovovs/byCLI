@@ -1,8 +1,8 @@
 /**
  * Recorder Core Engine — type mirror of schemas/adapter-recorder.bundle.json $defs.
  *
- * KEEP IN SYNC with dashboard-docs/system/adapter-recorder-system/schemas/
- * adapter-recorder.bundle.json ($defs) and the prose in 06-recorder-core-engine.md.
+ * KEEP IN SYNC with dashboard/schemas/adapter-recorder.bundle.json ($defs)
+ * and the recorder-core engine design (internal design docs, not open-sourced).
  * These are hand-written to match the wire contract (same pattern as the frontend's
  * dashboard/src/types/recorder.ts); the bundle is the single source of truth.
  */

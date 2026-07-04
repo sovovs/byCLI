@@ -46,7 +46,7 @@ dashboard-be/
 ```
 
 ## 契约对齐(不重定义)
-- 类型:从 `dashboard-docs/.../schemas/` 引用;ErrorCode 复用,error 映射照 03 章表(invalid_state→400、csrf_failed/auth_failed→403、feature_disabled→403、request_not_found→404、idempotency_conflict→409…)。
+- 类型:从 `dashboard/schemas/` 引用;ErrorCode 复用,error 映射照 03 章表(invalid_state→400、csrf_failed/auth_failed→403、feature_disabled→403、request_not_found→404、idempotency_conflict→409…)。
 - envelope 形状照 OpenAPI `ApiResponse`;RequestStatus 照 schema(含 expiresAt/pollAfterMs)。
 - 幂等:`Idempotency-Key`,scope=uiSessionId+endpoint+key(03 章)。
 

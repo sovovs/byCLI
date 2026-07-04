@@ -11,7 +11,7 @@ import { dirname, resolve } from 'node:path';
 import { canonicalizeEntry, CANONICAL_SCORING_RAW_FIELDS } from './canonical.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const bundlePath = resolve(here, '../../../dashboard-docs/system/adapter-recorder-system/schemas/adapter-recorder.bundle.json');
+const bundlePath = resolve(here, '../../../dashboard/schemas/adapter-recorder.bundle.json');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const BUNDLE = JSON.parse(readFileSync(bundlePath, 'utf8')) as { $defs: Record<string, any> };
 

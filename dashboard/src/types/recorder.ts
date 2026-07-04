@@ -1,4 +1,4 @@
-// Adapter Recorder 契约类型 —— 对齐 docs/adapter-recorder-system/schemas/adapter-recorder.bundle.json ($defs)
+// Adapter Recorder 契约类型 —— 对齐 dashboard/schemas/adapter-recorder.bundle.json ($defs)
 // 修改本文件须同步 schema bundle(prose 与 schema 必须一起更新)。
 
 /** 统一响应包(03 · Contracts) */

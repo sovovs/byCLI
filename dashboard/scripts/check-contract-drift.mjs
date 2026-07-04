@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-// bundle 物理位置:已随 dashboard-docs 迁移到 dashboard-docs/system/adapter-recorder-system/。
-const BUNDLE = resolve(here, '../../dashboard-docs/system/adapter-recorder-system/schemas/adapter-recorder.bundle.json');
+// bundle 物理位置:契约源随开源范围迁至 dashboard/schemas/(设计文档 dashboard-docs 不开源)。
+const BUNDLE = resolve(here, '../schemas/adapter-recorder.bundle.json');
 const TYPES = resolve(here, '../src/types/recorder.ts');
 
 /** 从 bundle 读取一个 $defs enum(字符串数组) */
