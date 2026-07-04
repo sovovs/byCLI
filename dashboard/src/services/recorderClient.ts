@@ -6,6 +6,7 @@ import type {
   CaptureSample,
   HealthReport,
   InitResult,
+  PipelineDraft,
   PipelineResult,
   PipelinePrompts,
   RankCandidate,
@@ -33,6 +34,35 @@ export interface PipelineProgressPhase {
   status: 'running' | 'done';
   durationMs?: number;
   detail?: string;
+}
+
+/** pipeline 阶段性 prompt:be 分阶段就绪(score 先出、score 完出 generate)时回调,供分析过渡页按阶段展示提示词。 */
+export interface PipelinePartialPrompts {
+  score?: string;
+  generate?: string;
+  screenshotCount?: number;
+}
+
+/** rank 结果:候选数组 + rank 阶段真正发给 LLM 的评分提示词(LLM-off 时 undefined)。 */
+export interface RankResult {
+  candidates: RankCandidate[];
+  /** rank 阶段实际发给 LLM 的评分提示词(与 be buildScorePrompt 同源;LLM 未启用时缺省)。 */
+  scorePrompt?: string;
+}
+
+/** 拆步①评分结果:候选(含 LLM 语义)+ 双阶段提示词 + 送 LLM 候选 id + 被拒候选。 */
+export interface PipelineScoreResult {
+  candidates: RankCandidate[];
+  rejected: Array<{ candidateId: string; reason: string }>;
+  /** score 阶段发给 LLM 的评分提示词。 */
+  scorePrompt: string;
+  /** generate 阶段将发给 LLM 的生成提示词(score 已算出 genCands,故此刻可得)。 */
+  generatePrompt: string;
+  screenshotCount: number;
+  /** 被送 LLM 生成的候选 id(= decision==='generate' 的候选)。 */
+  sentCandidateIds: string[];
+  /** LLM 返回的原始 interfaces JSON 文本(透明展示;LLM-off/解析失败时缺省)。 */
+  llmRawJson?: string;
 }
 
 /** bind 返回:awaitingLogin=true 表示进入 awaiting_user_login 分支;vncUrl=vnc 模式容器 noVNC 画面地址 */
@@ -72,7 +102,9 @@ export interface RecorderClient {
   /** 一体化录制(Phase 2):把 canvas 上的输入经 CDP Input.* 回传到真 tab。
    *  cdpMethod 限 Input.dispatchMouseEvent/dispatchKeyEvent/insertText(be 侧白名单)。 */
   sendInput(cdpMethod: string, cdpParams: Record<string, unknown>): Promise<RequestEnvelope<{ dispatched: boolean }>>;
-  rank(): Promise<RequestEnvelope<RankCandidate[]>>;
+  /** rank(候选提取 + LLM 语义重打分,同步 200)。返回候选数组 + rank 阶段真正发给 LLM 的评分提示词
+   *  (scorePrompt;LLM-off 时 undefined),供转场页/候选表透明展示。 */
+  rank(): Promise<RequestEnvelope<RankResult>>;
   /**
    * select-only init(契约 InitRequest required: name + writePolicy + selectedCandidateId)。
    * be 端从选定候选服务端派生 domain/strategy/endpoint。dry-run 仅预览(不推进会话);
@@ -91,11 +123,36 @@ export interface RecorderClient {
   verify(name: string): Promise<RequestEnvelope<VerifySummary>>;
   /** N4/N5 verify-then-save:从 ranked 跑 LLM 评分→多脚本→静态检查→草稿→verify→收集;带 egress 同意戳。
    *  candidateIds=用户手选要传 LLM 的候选(空→be 按 cap 自动 top-N)。
-   *  onProgress=pipeline 异步轮询途中的阶段进度回调(score/generate/verify 耗时),用于页面实时展示。 */
-  pipeline(llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: PipelineProgressPhase[]) => void): Promise<RequestEnvelope<PipelineResult>>;
-  /** 外发前预览:不调用 LLM、不外发、不改状态,只返回将要发送的评分阶段提示词 + 截图张数 + 会被喂 LLM 的候选 id。 */
-  pipelinePreview(): Promise<RequestEnvelope<{ prompts: PipelinePrompts; sentCandidateIds: string[] }>>;
-  /** 保存某个(可能编辑过的)草稿到 clis/;ranked→done。 */
+   *  onProgress=pipeline 异步轮询途中的阶段进度回调(score/generate/verify 耗时),用于页面实时展示。
+   *  onPartial=阶段性 prompt 回调(be 在 score/generate 就绪时分阶段回),让分析过渡页按阶段展示提示词。 */
+  pipeline(
+    llmEgressAcknowledgedAt: number,
+    candidateIds?: string[],
+    onProgress?: (phases: PipelineProgressPhase[]) => void,
+    onPartial?: (prompts: PipelinePartialPrompts) => void,
+  ): Promise<RequestEnvelope<PipelineResult>>;
+  /** 外发前预览:不调用 LLM、不外发、不改状态,只返回将要发送的提示词 + 截图张数 + 会被喂 LLM 的候选 id。
+   *  candidateIds=用户在候选页选中要生成脚本的接口 → be 据此构建按选中的 generate 提示词预览(空→全部 genCands)。 */
+  pipelinePreview(candidateIds?: string[]): Promise<RequestEnvelope<{ prompts: PipelinePrompts; sentCandidateIds: string[] }>>;
+  /** 拆步①评分:score-only。回候选(含 LLM inferredFunction/paramUnion)+ score/generate 提示词 + 送 LLM 候选 id。
+   *  不生成、不产草稿。genCands 由 be 存 registry 供第②步生成复用。202 异步。 */
+  pipelineScore(
+    llmEgressAcknowledgedAt: number,
+    candidateIds?: string[],
+    onProgress?: (phases: PipelineProgressPhase[]) => void,
+    onPartial?: (prompts: PipelinePartialPrompts) => void,
+  ): Promise<RequestEnvelope<PipelineScoreResult>>;
+  /** 拆步②生成:generate-only。读 be 存的 genCands 生成脚本+静态检查+写草稿(不 verify)。202 异步。
+   *  candidateIds=用户在候选页选中要生成脚本的接口(be 只为选中且 decision==='generate' 的候选生成);
+   *  空/未传 → be 用全部 genCands(向后兼容)。 */
+  pipelineGenerate(
+    llmEgressAcknowledgedAt: number,
+    candidateIds?: string[],
+    onProgress?: (phases: PipelineProgressPhase[]) => void,
+  ): Promise<RequestEnvelope<{ drafts: PipelineDraft[] }>>;
+  /** 拆步③单草稿测试:draftId 对应草稿真 verify(daemon /v1/verify),回 verify 结果 + usable。202 异步。 */
+  draftVerify(draftId: string): Promise<RequestEnvelope<{ draftId: string; verify: PipelineDraft['verify']; usable: boolean }>>;
+  /** 保存某个(可能编辑过的)草稿到 clis/;保存后停留 ranked(可继续存其他)。 */
   saveAdapter(draftId: string, source?: string): Promise<RequestEnvelope<SaveResult>>;
   /** 多选保存:一次保存多个(可能编辑过的)草稿到 clis/;全部存完一次 ranked→done。 */
   saveAdapters(drafts: Array<{ draftId: string; source?: string }>): Promise<RequestEnvelope<SaveResult>>;

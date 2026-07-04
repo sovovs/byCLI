@@ -32,6 +32,7 @@ export type ErrorCode =
   | 'idempotency_conflict'
   | 'temp_store_full'
   | 'verify_timeout'
+  | 'pipeline_timeout'
   | 'analyze_timeout'
   | 'adapter_runtime_error'
   | 'runner_protocol_error'
@@ -287,6 +288,9 @@ export interface PipelineDraft {
   verify: { ok: boolean; rows: number; fieldCount: number; reasons: string[] };
   /** 静态通过 + verify 达标 → 可保存 */
   usable: boolean;
+  /** 拆步流程:0700 草稿文件路径(第三步单草稿 verify 用)。仅静态通过**且写盘成功**的草稿有;
+   *  静态未过 / 写盘失败 → undefined(前端据此禁用「测试」,与 be draft/verify 的 filePath guard 对齐)。 */
+  filePath?: string;
 }
 export interface PipelinePrompts {
   /** 评分阶段发给 LLM 的完整提示词文本。 */

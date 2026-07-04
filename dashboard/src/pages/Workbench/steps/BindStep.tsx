@@ -22,7 +22,7 @@ const MODE_HINT: Record<RecordingMode, string> = {
 };
 
 export default function BindStep({ loading, onBind }: Props) {
-  const [url, setUrl] = useState('https://example.com/search');
+  const [url, setUrl] = useState('https://juejin.cn/');
   const [injectFault, setInjectFault] = useState(false);
   const [mode, setMode] = useState<RecordingMode>('tab_projection');
   const { token } = theme.useToken();
@@ -60,7 +60,7 @@ export default function BindStep({ loading, onBind }: Props) {
               prefix={<LinkOutlined />}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/search"
+              placeholder="https://juejin.cn/"
               onPressEnter={handleBind}
             />
           </Form.Item>

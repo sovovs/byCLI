@@ -1,7 +1,7 @@
 // 录制会话状态机 model(@umijs/max model)。
 // 持有 SessionState + stateVersion,每个动作按 05 State Machine 校验当前态,
 // 非法转移返回 invalid_state(不真正调用 mock),错误态走 failed。
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { getRecorderClient, type RecordingMode } from '@/services/recorderClient';
 import { INVALID_STATE_HINT, isTerminalError } from '@/constants/recorder';
 import { deriveAdapterName } from './adapterName';
@@ -36,6 +36,8 @@ interface SessionData {
   seedA?: string;
   seedB?: string;
   candidates?: RankCandidate[];
+  /** rank 阶段真正发给 LLM 的评分提示词(透明展示:转场页 + 候选表回看;LLM-off 时 undefined)。 */
+  rankScorePrompt?: string;
   selectedCandidateId?: string;
   /** 从选定候选派生并固化的 adapter 名(site/command);init 预览/写入与 verify 复用同一个 */
   adapterName?: string;
@@ -52,6 +54,16 @@ interface SessionData {
   pipelineSentIds?: string[];
   /** pipeline 异步轮询途中的阶段进度(score/generate/verify 耗时),驱动进度展示。 */
   pipelineProgress?: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>;
+  /** 拆步流程子步:candidates(评分候选)→ generate(生成脚本)→ scripts(测试保存)。默认 candidates。 */
+  pipelineSubStep?: 'candidates' | 'generate' | 'scripts';
+  /** 拆步①score 阶段回的 generate 提示词(第②步生成页折叠展示,点生成前先看)。 */
+  generatePrompt?: string;
+  /** 拆步①score 阶段 LLM 返回的原始 interfaces JSON(评分候选页折叠展示原始返回)。 */
+  llmRawJson?: string;
+  /** 拆步③每个草稿的「测试中」标记(draftId → 是否 verify 进行中),驱动测试按钮 loading。 */
+  draftVerifying?: Record<string, boolean>;
+  /** 拆步③已保存的草稿 id 集合(单存后标记,停留本页可继续存其他)。 */
+  savedDraftIds?: string[];
   /** 保存成功后的 adapter 路径(单存兼容字段) */
   savedAdapterPath?: string;
   /** 多选保存成功后的脚本列表(site/名/路径),驱动结果列表展示 */
@@ -70,10 +82,13 @@ export default function useRecorderSession() {
   // transport 由 bootstrap 决定:默认 mock,FEATURE_LOCALHOST_HTTP_UI + token 注入时切真实 HTTP。
   const client = useMemo(() => getRecorderClient(), []);
 
-  const advance = useCallback((next: SessionState, patch?: Partial<SessionData>) => {
+  // patch 支持静态对象或函数式((最新 data)=>Partial)——后者用于依赖旧值的回写(单草稿 verify/save 交错并发时
+  // 避免闭包快照互相覆盖)。
+  type PatchArg = Partial<SessionData> | ((d: SessionData) => Partial<SessionData>);
+  const advance = useCallback((next: SessionState, patch?: PatchArg) => {
     setState(next);
     setStateVersion((v) => v + 1);
-    if (patch) setData((d) => ({ ...d, ...patch }));
+    if (patch) setData((d) => ({ ...d, ...(typeof patch === 'function' ? patch(d) : patch) }));
   }, []);
 
   /** 统一动作执行:校验当前态 → 调 mock → 成功推进 / 失败转 failed */
@@ -81,7 +96,7 @@ export default function useRecorderSession() {
     async <T>(
       action: RecorderAction,
       call: () => Promise<RequestEnvelope<T>>,
-      onSuccess: (data: T) => { next: SessionState; patch?: Partial<SessionData> },
+      onSuccess: (data: T) => { next: SessionState; patch?: PatchArg },
       fromStateOverride?: SessionState,
     ) => {
       // 串联动作(如 startCaptureA = navigate→captureStart)串两步时,setState 异步、闭包 state 仍是旧值,
@@ -115,6 +130,22 @@ export default function useRecorderSession() {
     },
     [state, advance],
   );
+
+  // 生成脚本页:按选中候选取 generate 提示词预览(不调 LLM、不改状态、不动 loading)。
+  // **稳定引用**(useCallback):PipelineStep 的 effect 依赖它,inline 每次新引用会导致 setData→render→effect
+  // 重复请求死循环(codex High)。**seq guard**:用户快速改选中 → 旧 preview 晚返回不覆盖新的(codex High)。
+  const previewSeq = useRef(0);
+  const previewGeneratePrompt = useCallback(async (candidateIds?: string[]) => {
+    const seq = ++previewSeq.current;
+    try {
+      const res = await client.pipelinePreview(candidateIds);
+      if (seq !== previewSeq.current) return; // 有更新的请求已发起 → 丢弃本次(防乱序覆盖)
+      if (res.ok && res.data) {
+        const gen = res.data.prompts.generate;
+        setData((d) => (d.generatePrompt === gen ? d : { ...d, generatePrompt: gen })); // 相等不 setState(防无谓 render)
+      }
+    } catch { /* 预览失败不阻断生成(生成时 be 仍按选中过滤) */ }
+  }, [client]);
 
   const actions = {
     health: () => run('health', () => client.health(), (d) => ({ next: 'health_checked', patch: { health: d } })),
@@ -161,7 +192,7 @@ export default function useRecorderSession() {
     /** 设置 A/B 样本的搜索关键词(CaptureStep 输入框驱动;仅前端态,结束录制时随 captureRead 下发)。 */
     setSeed: (sample: 'A' | 'B', seed: string) =>
       setData((d) => (sample === 'A' ? { ...d, seedA: seed } : { ...d, seedB: seed })),
-    rank: () => run('rank', () => client.rank(), (d) => ({ next: 'ranked', patch: { candidates: d } })),
+    rank: () => run('rank', () => client.rank(), (d) => ({ next: 'ranked', patch: { candidates: d.candidates, rankScorePrompt: d.scorePrompt, pipelineSubStep: 'candidates' } })),
     // 选定候选时即派生并固化 adapter 名(init 预览/写入与 verify 复用同一个,避免漂移)。
     selectCandidate: (id: string) =>
       setData((d) => {
@@ -195,20 +226,75 @@ export default function useRecorderSession() {
       }
       return run('writeInit', () => client.init(name, id, 'write', Date.now(), data.llmEgressAck), (d) => ({ next: 'draft_created', patch: { draft: d } }));
     },
-    // N4/N5 verify-then-save:从 ranked 跑 LLM 评分→多脚本→静态检查→草稿→verify→收集(带 egress 同意)。不推进。
-    runPipeline: (candidateIds?: string[]) => {
-      setData((d) => ({ ...d, pipelineProgress: [] })); // 开跑前清空上轮进度
-      return run('pipeline', () => client.pipeline(Date.now(), candidateIds, (phases) => setData((d) => ({ ...d, pipelineProgress: phases }))), (d) => ({ next: 'ranked', patch: { pipelineDrafts: d.drafts, pipelineRejected: d.rejected, pipelinePrompts: d.prompts, llmEgressAck: Date.now() } }));
+    // 拆步①评分:score-only。进 ranked 后自动触发(或用户重跑)。回候选(含 LLM 语义)+ 双提示词。不推进,停 candidates 子步。
+    runScore: (candidateIds?: string[]) => {
+      setData((d) => ({ ...d, pipelineProgress: [] }));
+      return run(
+        'pipelineScore',
+        () => client.pipelineScore(
+          Date.now(),
+          candidateIds,
+          (phases) => setData((d) => ({ ...d, pipelineProgress: phases })),
+          (partial) => setData((d) => ({
+            ...d,
+            pipelinePrompts: {
+              score: partial.score ?? d.pipelinePrompts?.score ?? '',
+              generate: partial.generate ?? d.pipelinePrompts?.generate ?? '',
+              screenshotCount: partial.screenshotCount ?? d.pipelinePrompts?.screenshotCount ?? 0,
+            },
+          })),
+        ),
+        (d) => ({ next: 'ranked', patch: {
+          candidates: d.candidates, pipelineRejected: d.rejected, pipelineSentIds: d.sentCandidateIds,
+          pipelinePrompts: { score: d.scorePrompt, generate: d.generatePrompt, screenshotCount: d.screenshotCount },
+          generatePrompt: d.generatePrompt, llmRawJson: d.llmRawJson, llmEgressAck: Date.now(), pipelineSubStep: 'candidates',
+        } }),
+      );
+    },
+    // 候选页「下一步」→ 进生成子步(纯前端切页,不调 be)。
+    goToGenerate: () => setData((d) => ({ ...d, pipelineSubStep: 'generate' })),
+    // 候选页「上一步」/生成页返回 → 回候选子步。
+    goToCandidates: () => setData((d) => ({ ...d, pipelineSubStep: 'candidates' })),
+    // 拆步②生成:generate-only。点「生成 cli 脚本」触发。完成后自动进 scripts 子步展示脚本。
+    runGenerate: (candidateIds?: string[]) => {
+      setData((d) => ({ ...d, pipelineProgress: [] }));
+      return run(
+        'pipelineGenerate',
+        () => client.pipelineGenerate(Date.now(), candidateIds, (phases) => setData((d) => ({ ...d, pipelineProgress: phases }))),
+        // 重新生成:清上一轮的草稿测试/保存痕迹(savedDraftIds/savedAdapters/draftVerifying),避免残留展示。
+        (d) => ({ next: 'ranked', patch: { pipelineDrafts: d.drafts, savedDraftIds: [], savedAdapters: [], draftVerifying: {}, pipelineSubStep: 'scripts' } }),
+      );
+    },
+    // 拆步③单草稿测试:draftId 真 verify。回写该草稿 verify/usable(不推进、不切页)。draftVerifying 驱动按钮 loading。
+    // patch 用函数式(基于最新 data)——测试与保存可交错并发,闭包快照回写会互相覆盖。
+    verifyDraft: (draftId: string) => {
+      setData((d) => ({ ...d, draftVerifying: { ...d.draftVerifying, [draftId]: true } }));
+      return run(
+        'draftVerify',
+        () => client.draftVerify(draftId),
+        (d) => ({ next: 'ranked', patch: (cur: SessionData) => ({
+          pipelineDrafts: (cur.pipelineDrafts ?? []).map((dr) => dr.id === d.draftId ? { ...dr, verify: d.verify, usable: d.usable } : dr),
+          draftVerifying: { ...cur.draftVerifying, [d.draftId]: false },
+        }) }),
+      ).then((okFlag) => {
+        if (!okFlag) setData((d) => ({ ...d, draftVerifying: { ...d.draftVerifying, [draftId]: false } }));
+        return okFlag;
+      });
     },
     // 外发前预览将发送的提示词(不调 LLM、不外发、不改状态);存进 pipelinePrompts 供面板展示。
     previewPrompts: () =>
       run('pipelinePreview', () => client.pipelinePreview(), (d) => ({ next: 'ranked', patch: { pipelinePrompts: d.prompts, pipelineSentIds: d.sentCandidateIds } })),
-    // 保存某个(可能编辑过的)草稿 → ranked→done。
+    // 生成脚本页:按选中候选取 generate 提示词预览(稳定引用 + seq guard,定义见上方 previewGeneratePrompt)。
+    previewGeneratePrompt,
+    // 拆步③单草稿保存:保存后停留 ranked/scripts 子步(可继续存其他),标记 savedDraftIds。
+    // patch 用函数式(基于最新 data)——与并发的测试回写互不覆盖。
     saveDraft: (draftId: string, source?: string) =>
-      run('saveAdapter', () => client.saveAdapter(draftId, source), (d) => ({ next: 'done', patch: { savedAdapterPath: d.adapterPath, savedAdapters: d.saved } })),
-    // 多选保存:一次保存多个(可能编辑过的)草稿 → 全部存完一次 ranked→done。
-    saveDrafts: (drafts: Array<{ draftId: string; source?: string }>) =>
-      run('saveAdapter', () => client.saveAdapters(drafts), (d) => ({ next: 'done', patch: { savedAdapterPath: d.adapterPath, savedAdapters: d.saved } })),
+      run('saveAdapter', () => client.saveAdapter(draftId, source), (d) => ({ next: 'ranked', patch: (cur: SessionData) => ({
+        savedAdapterPath: d.adapterPath,
+        savedAdapters: [...(cur.savedAdapters ?? []), ...(d.saved ?? [])],
+        savedDraftIds: [...(cur.savedDraftIds ?? []), draftId],
+        pipelineSubStep: 'scripts',
+      }) })),
     verify: () => {
       const name = data.adapterName;
       if (!name) {

@@ -8,11 +8,14 @@ describe('flowStepsFor', () => {
     expect(steps).toBe(FLOW_STEPS);
     expect(steps.some((s) => s.key === 'rank')).toBe(true);
   });
-  it('LLM-on → 去掉「排序候选」,A/B 各独立步骤,生成步从 capture_b 起', () => {
+  it('LLM-on → 去掉「排序候选」,A/B 各独立步骤,「生成并保存」拆成三子步(评分/生成/测试)', () => {
     const steps = flowStepsFor(true);
     expect(steps.some((s) => s.key === 'rank')).toBe(false);
-    expect(steps.map((s) => s.key)).toEqual(['health', 'bind', 'captureA', 'captureB', 'generate']);
-    expect(steps.find((s) => s.key === 'generate')!.enterState).toBe('capture_b');
+    expect(steps.some((s) => s.key === 'generate')).toBe(false);
+    expect(steps.map((s) => s.key)).toEqual(['health', 'bind', 'captureA', 'captureB', 'score', 'genScripts', 'testSave']);
+    // 评分子步从 capture_b 起;测试子步 doneState 为 done(全流程终点)。
+    expect(steps.find((s) => s.key === 'score')!.enterState).toBe('capture_b');
+    expect(steps.find((s) => s.key === 'testSave')!.doneState).toBe('done');
   });
 });
 

@@ -8,6 +8,7 @@ import type {
   HealthReport,
   InitResult,
   NetworkEntry,
+  PipelineDraft,
   PipelineResult,
   PipelinePrompts,
   RankCandidate,
@@ -15,7 +16,7 @@ import type {
   SaveResult,
   VerifySummary,
 } from '@/types/recorder';
-import type { BindMode, BindResult, RecorderBootstrap, RecorderClient, RecordingMode, SessionAdvanceResult, WritePolicy } from './recorderClient';
+import type { BindMode, BindResult, PipelineScoreResult, RankResult, RecorderBootstrap, RecorderClient, RecordingMode, SessionAdvanceResult, WritePolicy } from './recorderClient';
 
 /**
  * be /recorder/capture/read 透传 daemon 原始抓包条目(非契约 RecorderNetworkEntry,见 #8 BE↔契约 gap),
@@ -57,10 +58,14 @@ interface RequestStatus<T = unknown> {
   error?: RequestEnvelope['error'];
   /** pipeline 阶段进度(score/generate/verify…),轮询时实时更新。 */
   progress?: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>;
+  /** 阶段性结果(pipeline 分阶段提示词):score 完先出 generate prompt,让分析过渡页按阶段展示提示词。 */
+  partialResult?: { prompts?: { score?: string; generate?: string; screenshotCount?: number } };
 }
 
 /** pipeline 阶段进度回调类型(对外导出供 client 签名复用)。 */
 export type ProgressPhase = { stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string };
+/** pipeline 阶段性 prompt(be 分阶段写:score 先出、score 完出 generate),供分析过渡页实时展示。 */
+export type PartialPrompts = { score?: string; generate?: string; screenshotCount?: number };
 
 /** mode → 契约枚举(03/05 章 SessionBindRequest.mode) */
 const BIND_MODE_MAP: Record<BindMode, string> = {
@@ -69,7 +74,14 @@ const BIND_MODE_MAP: Record<BindMode, string> = {
 };
 
 const POLL_FALLBACK_MS = 1000;
-const POLL_TIMEOUT_MS = 120_000;
+// 双阈值超时(Codex 裁定):固定总 deadline 会把长 pipeline(rank+score+generate ~224s)误报超时。
+// 改成:只要后端 progress/updatedAt 在推进就重置 idle 计时;连续 IDLE 无进展才判超时;ABSOLUTE 兜底防永不结束。
+// score 阶段是**单次长 LLM 调用**(候选分批 + 每批经 Cloudflare 120s/批 + 重试),be 端一次跑完才回结果,
+// 期间 request 的 progress/updatedAt/status 都不推进 → 旧 150s idle 会把正常的长评分误报成"长时间无进展"
+// pipeline_timeout(真机 25 候选实测:单批 LLM 往返 230s)。idle 提到 10min 覆盖最慢分批;绝对上限同步抬到
+// 20min 防被 idle 反超(否则 15min 绝对会先于 10min idle 触发,idle 形同虚设)。
+const POLL_IDLE_TIMEOUT_MS = 600_000; // 连续 10min 无任何进展(progress/updatedAt/status 都不变)才超时
+const POLL_ABSOLUTE_TIMEOUT_MS = 1_200_000; // 20min 总兜底,无条件超时
 
 let seq = 0;
 const clientRequestId = () => `cli_${Date.now().toString(36)}_${(++seq).toString(36)}`;
@@ -126,9 +138,19 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
    * 202 异步轮询(03 章):init/verify 返回 requestId 后,轮询 GET /recorder/requests/{id}
    * 至 terminal,再把 result/error 还原成 RequestEnvelope<T>,对上层抹平同步/异步差异。
    */
-  async function poll<T>(requestId: string, onProgress?: (phases: ProgressPhase[]) => void): Promise<RequestEnvelope<T>> {
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
-    while (Date.now() < deadline) {
+  async function poll<T>(requestId: string, onProgress?: (phases: ProgressPhase[]) => void, onPartial?: (prompts: PartialPrompts) => void): Promise<RequestEnvelope<T>> {
+    const start = Date.now();
+    let idleDeadline = start + POLL_IDLE_TIMEOUT_MS;
+    const absoluteDeadline = start + POLL_ABSOLUTE_TIMEOUT_MS;
+    // 进展指纹:后端 updatedAt / progress 阶段数 / status / 各阶段 stage+status+detail 任一变化即视为"有进展",重置 idle 计时。
+    let lastFingerprint = '';
+    // partialResult 去重指纹:be 每轮都回同一份 prompts,只在内容变化时才回调上层(避免重复 setState)。
+    let lastPartialFp = '';
+    const fingerprintOf = (st: RequestStatus<T>): string => {
+      const phases = (st.progress ?? []).map((p) => `${p.stage}:${p.status}:${p.detail ?? ''}:${p.durationMs ?? ''}`).join('|');
+      return `${(st as { updatedAt?: unknown }).updatedAt ?? ''}#${st.status}#${(st.progress ?? []).length}#${phases}`;
+    };
+    while (Date.now() < absoluteDeadline && Date.now() < idleDeadline) {
       const res = await call<RequestStatus<T>>(`/recorder/requests/${encodeURIComponent(requestId)}`, {
         method: 'GET',
       });
@@ -136,6 +158,21 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
       if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<T>;
       const st = res.data as unknown as RequestStatus<T>;
       if (onProgress && st.progress) onProgress(st.progress);
+      // 阶段性 prompt:be 在 score/generate 阶段就绪时写 partialResult.prompts,变化即回调上层实时展示(不必等终态)。
+      if (onPartial && st.partialResult?.prompts) {
+        const p = st.partialResult.prompts;
+        const fp = `${p.score ?? ''}#${p.generate ?? ''}#${p.screenshotCount ?? ''}`;
+        if (fp !== lastPartialFp) {
+          lastPartialFp = fp;
+          onPartial(p);
+        }
+      }
+      // 有进展 → 重置 idle deadline(只要后端在推进阶段就不算超时;真卡死才靠 idle/absolute 兜底)。
+      const fp = fingerprintOf(st);
+      if (fp !== lastFingerprint) {
+        lastFingerprint = fp;
+        idleDeadline = Date.now() + POLL_IDLE_TIMEOUT_MS;
+      }
       if (st.status === 'succeeded') {
         return { ok: true, schemaVersion: 'recorder.v1', requestId, data: (st.result ?? null) as T, error: null };
       }
@@ -150,14 +187,16 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
       }
       await new Promise((r) => setTimeout(r, st.pollAfterMs ?? POLL_FALLBACK_MS));
     }
-    return envelopeError('verify_timeout', '轮询超时') as RequestEnvelope<T>;
+    // 区分 idle 卡死 vs 绝对上限;错误码用 pipeline_timeout(不再复用误导性的 verify_timeout)。
+    const reason = Date.now() >= absoluteDeadline ? '总时长超过上限' : '长时间无进展';
+    return envelopeError('pipeline_timeout', `轮询超时(${reason})`) as RequestEnvelope<T>;
   }
 
-  /** 发起 202 异步请求并轮询到最终结果(onProgress:轮询途中实时回调阶段进度,用于 pipeline 展示)。 */
-  async function callAsync<T>(path: string, body: unknown, onProgress?: (phases: ProgressPhase[]) => void): Promise<RequestEnvelope<T>> {
+  /** 发起 202 异步请求并轮询到最终结果(onProgress:轮询途中实时回调阶段进度;onPartial:阶段性 prompt 回调,用于 pipeline 展示)。 */
+  async function callAsync<T>(path: string, body: unknown, onProgress?: (phases: ProgressPhase[]) => void, onPartial?: (prompts: PartialPrompts) => void): Promise<RequestEnvelope<T>> {
     const accepted = await call<unknown>(path, { body });
     if (!accepted.ok || !accepted.requestId) return accepted as RequestEnvelope<T>;
-    return poll<T>(accepted.requestId, onProgress);
+    return poll<T>(accepted.requestId, onProgress, onPartial);
   }
 
   return {
@@ -201,11 +240,12 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
       call<{ format: string; data: string }>('/recorder/screenshot', { body: quality !== undefined ? { quality } : {} }),
     sendInput: (cdpMethod: string, cdpParams: Record<string, unknown>) =>
       call<{ dispatched: boolean }>('/recorder/input', { body: { cdpMethod, cdpParams } }),
-    rank: async () => {      // be 返回 {sessionId,state,stateVersion,candidates};前端只要候选数组(transport 拆包,非隐藏业务模型)。
-      const res = await call<{ candidates?: RankCandidate[] }>('/recorder/rank', { body: {} });
-      if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<RankCandidate[]>;
+    rank: async () => {      // be 返回 {sessionId,state,stateVersion,candidates,scorePrompt?};前端要候选数组 + rank 阶段 LLM 提示词(透明展示)。
+      const res = await call<{ candidates?: RankCandidate[]; scorePrompt?: string }>('/recorder/rank', { body: {} });
+      if (!res.ok || res.data === null) return res as unknown as RequestEnvelope<RankResult>;
       const candidates = Array.isArray(res.data.candidates) ? res.data.candidates : [];
-      return { ...res, data: candidates };
+      const scorePrompt = typeof res.data.scorePrompt === 'string' ? res.data.scorePrompt : undefined;
+      return { ...res, data: { candidates, scorePrompt } };
     },
     // be /recorder/init 是同步 200,直接回 InitResult{report,dryRun}(不建 request、非 202 轮询)。
     init: (name: string, selectedCandidateId: string, writePolicy: WritePolicy, responsibleUseAcknowledgedAt?: number, llmEgressAcknowledgedAt?: number) => {
@@ -216,10 +256,19 @@ export function createHttpRecorderClient(bootstrap: RecorderBootstrap): Recorder
     },
     // verify 是 202 异步:内部轮询 GET /recorder/requests/{id} 至 terminal 得 VerifySummary。
     verify: (name: string) => callAsync<VerifySummary>('/recorder/verify', { name }),
-    // N5:pipeline 改 202 异步(score~90s+generate+verify 耗时长);callAsync 轮询到终态,onProgress 实时回阶段耗时。
-    pipeline: (llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: ProgressPhase[]) => void) =>
-      callAsync<PipelineResult>('/recorder/pipeline', { llmEgressAcknowledgedAt, ...(candidateIds?.length ? { candidateIds } : {}) }, onProgress),
-    pipelinePreview: () => call<{ prompts: PipelinePrompts; sentCandidateIds: string[] }>('/recorder/pipeline/preview', { body: {} }),
+    // N5:pipeline 改 202 异步(score~90s+generate+verify 耗时长);callAsync 轮询到终态,onProgress 实时回阶段耗时,onPartial 分阶段回 prompt。
+    pipeline: (llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: ProgressPhase[]) => void, onPartial?: (prompts: PartialPrompts) => void) =>
+      callAsync<PipelineResult>('/recorder/pipeline', { llmEgressAcknowledgedAt, ...(candidateIds?.length ? { candidateIds } : {}) }, onProgress, onPartial),
+    pipelinePreview: (candidateIds?: string[]) => call<{ prompts: PipelinePrompts; sentCandidateIds: string[] }>('/recorder/pipeline/preview', { body: candidateIds && candidateIds.length ? { candidateIds } : {} }),
+    // 拆步①评分:score-only,202 异步。回候选(含 LLM 语义)+ 双提示词 + 送 LLM 候选 id。
+    pipelineScore: (llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: ProgressPhase[]) => void, onPartial?: (prompts: PartialPrompts) => void) =>
+      callAsync<PipelineScoreResult>('/recorder/pipeline/score', { llmEgressAcknowledgedAt, ...(candidateIds?.length ? { candidateIds } : {}) }, onProgress, onPartial),
+    // 拆步②生成:generate-only,202 异步。读 be 存的 genCands 生成脚本+静态检查+写草稿(不 verify)。
+    pipelineGenerate: (llmEgressAcknowledgedAt: number, candidateIds?: string[], onProgress?: (phases: ProgressPhase[]) => void) =>
+      callAsync<{ drafts: PipelineDraft[] }>('/recorder/pipeline/generate', { llmEgressAcknowledgedAt, ...(candidateIds && candidateIds.length ? { candidateIds } : {}) }, onProgress),
+    // 拆步③单草稿测试:draftId 真 verify,202 异步。回 verify 结果 + usable。
+    draftVerify: (draftId: string) =>
+      callAsync<{ draftId: string; verify: PipelineDraft['verify']; usable: boolean }>('/recorder/draft/verify', { draftId }),
     saveAdapter: (draftId: string, source?: string) => {
       const body: Record<string, unknown> = { draftId };
       if (source !== undefined) body.source = source;

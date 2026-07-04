@@ -22,15 +22,28 @@ export const FLOW_STEPS: Array<{
 ];
 
 /**
- * LLM 路径的步骤栏:rank 已不再是用户手动步(候选提取自动跑、纯本地不外发),并入「生成并保存」。
- * 故去掉「排序候选」单列,generate 步从 capture_b 起。LLM-off 兜底仍用完整 FLOW_STEPS(手动选候选)。
+ * LLM 路径的步骤栏:rank 已不再是用户手动步(候选提取自动跑、纯本地不外发),并入生成流程;
+ * 且「生成并保存」拆成三子步(评分候选 → 生成脚本 → 测试保存),都停留后端 ranked 态,由前端 subStep 切换。
+ * LLM-off 兜底仍用完整 FLOW_STEPS(手动选候选 + init/verify)。
  */
 export function flowStepsFor(llmSynthesis: boolean | undefined): typeof FLOW_STEPS {
   if (!llmSynthesis) return FLOW_STEPS;
-  return FLOW_STEPS.filter((s) => s.key !== 'rank').map((s) =>
-    s.key === 'generate' ? { ...s, enterState: 'capture_b' as SessionState } : s,
-  );
+  const head = FLOW_STEPS.filter((s) => s.key !== 'rank' && s.key !== 'generate');
+  // 三子步:enterState/doneState 都停在 ranked(仅用于 StepRail 展示,不驱动真实状态机)。
+  const subSteps: typeof FLOW_STEPS = [
+    { key: 'score', title: '评分候选', enterState: 'capture_b', doneState: 'ranked' },
+    { key: 'genScripts', title: '生成脚本', enterState: 'ranked', doneState: 'ranked' },
+    { key: 'testSave', title: '测试保存', enterState: 'ranked', doneState: 'done' },
+  ];
+  return [...head, ...subSteps];
 }
+
+/** 拆步流程子步 → StepRail 三子步在(LLM 路径)步骤栏里的相对偏移(相对三子步起点)。 */
+export const PIPELINE_SUBSTEP_OFFSET: Record<'candidates' | 'generate' | 'scripts', number> = {
+  candidates: 0,
+  generate: 1,
+  scripts: 2,
+};
 
 /** 状态在主流程中的序号(= 当前活动 step 索引,用于 StepRail current 计算);终态/分支态返回特殊值 */
 export const STATE_ORDER: Record<SessionState, number> = {

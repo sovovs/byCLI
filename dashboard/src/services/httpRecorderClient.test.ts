@@ -98,6 +98,32 @@ describe('httpRecorderClient — 门禁 header 与 transport 形态', () => {
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe('network_error');
   });
+
+  it('rank 从 envelope 拆出 {candidates, scorePrompt}(scorePrompt 缺省 → undefined)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      res(okEnv({ sessionId: 's', state: 'ranked', stateVersion: 2, candidates: [{ id: 'c1' }], scorePrompt: 'RANK_PROMPT' })),
+    );
+    const client = createHttpRecorderClient(bootstrap);
+
+    const r = await client.rank();
+
+    expect(r.ok).toBe(true);
+    expect(r.data?.candidates).toEqual([{ id: 'c1' }]);
+    expect(r.data?.scorePrompt).toBe('RANK_PROMPT');
+  });
+
+  it('rank 无 scorePrompt(LLM-off)时 candidates 仍拆出,scorePrompt=undefined', async () => {
+    fetchMock.mockResolvedValueOnce(
+      res(okEnv({ sessionId: 's', state: 'ranked', stateVersion: 2, candidates: [{ id: 'c1' }] })),
+    );
+    const client = createHttpRecorderClient(bootstrap);
+
+    const r = await client.rank();
+
+    expect(r.ok).toBe(true);
+    expect(r.data?.candidates).toEqual([{ id: 'c1' }]);
+    expect(r.data?.scorePrompt).toBeUndefined();
+  });
 });
 
 describe('httpRecorderClient — bind 模式映射与 sessionId 生命周期', () => {
@@ -272,6 +298,57 @@ describe('httpRecorderClient — init 同步 / verify 202 轮询', () => {
     expect(r.ok).toBe(false);
     expect(r.error?.code).toBe('invalid_state');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('httpRecorderClient — pipeline 分阶段 progress / partialResult', () => {
+  it('轮询途中把 progress 与 partialResult.prompts 分阶段回调,partial 去重只回变化项', async () => {
+    // 1) 202 accepted → 2) score running(先出 score prompt)→ 3) generate running(出 generate prompt)→ 4) succeeded
+    fetchMock.mockResolvedValueOnce(res(okEnv({ accepted: true }, 'req-p')));
+    fetchMock.mockResolvedValueOnce(
+      res(okEnv({
+        requestId: 'req-p', type: 'pipeline', status: 'running', updatedAt: 1,
+        progress: [{ stage: 'score', status: 'running' }],
+        partialResult: { prompts: { score: 'SCORE_PROMPT', screenshotCount: 2 } },
+        pollAfterMs: 0,
+      })),
+    );
+    fetchMock.mockResolvedValueOnce(
+      res(okEnv({
+        requestId: 'req-p', type: 'pipeline', status: 'running', updatedAt: 2,
+        progress: [{ stage: 'score', status: 'done', durationMs: 500 }, { stage: 'generate', status: 'running' }],
+        // score 不变、新增 generate → onPartial 只应因内容变化回调一次
+        partialResult: { prompts: { score: 'SCORE_PROMPT', generate: 'GEN_PROMPT', screenshotCount: 2 } },
+        pollAfterMs: 0,
+      })),
+    );
+    fetchMock.mockResolvedValueOnce(
+      res(okEnv({
+        requestId: 'req-p', type: 'pipeline', status: 'succeeded', updatedAt: 3,
+        result: { drafts: [], rejected: [], prompts: { score: 'SCORE_PROMPT', generate: 'GEN_PROMPT', screenshotCount: 2 } },
+      })),
+    );
+    const client = createHttpRecorderClient(bootstrap);
+    const phases: unknown[] = [];
+    const partials: Array<{ score?: string; generate?: string; screenshotCount?: number }> = [];
+
+    const r = await client.pipeline(
+      Date.now(),
+      ['cand_1'],
+      (p) => phases.push(p),
+      (prompts) => partials.push(prompts),
+    );
+
+    expect(r.ok).toBe(true);
+    // partial 分两阶段回调:score-only 一次、含 generate 一次(去重后正好 2 次,不因每轮轮询重复回调)。
+    expect(partials).toEqual([
+      { score: 'SCORE_PROMPT', screenshotCount: 2 },
+      { score: 'SCORE_PROMPT', generate: 'GEN_PROMPT', screenshotCount: 2 },
+    ]);
+    // progress 每轮都回调(running×2)。
+    expect(phases.length).toBe(2);
+    // 初始 POST 带 candidateIds(手选传 LLM)。
+    expect(bodyOf(callAt(0).init)).toMatchObject({ candidateIds: ['cand_1'] });
   });
 });
 

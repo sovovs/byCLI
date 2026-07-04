@@ -18,8 +18,12 @@ export const ALLOWED_FROM = {
   // init 拆两动作:dry-run 预览(不推进)与 write 写入(推进 ranked→draft_created),均自 ranked。
   previewInit: ['ranked'],
   writeInit: ['ranked'],
-  // N4/N5 verify-then-save:pipeline 自 ranked 不推进(产草稿);saveAdapter 自 ranked 推进 →done。
+  // N4/N5 verify-then-save:pipeline 自 ranked 不推进(产草稿);saveAdapter 自 ranked 保存后停留 ranked(可继续存)。
   pipeline: ['ranked'],
+  // 拆步流程(评分→生成→测试):三动作均自 ranked、均不推进状态(前端 subStep 控制三页)。
+  pipelineScore: ['ranked'],
+  pipelineGenerate: ['ranked'],
+  draftVerify: ['ranked'],
   // 外发前预览提示词:自 ranked,不外发不推进。
   pipelinePreview: ['ranked'],
   saveAdapter: ['ranked'],

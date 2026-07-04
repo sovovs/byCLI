@@ -7,6 +7,7 @@ import { CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import StepRail from './components/StepRail';
 import StatePanel from './components/StatePanel';
 import ErrorRecovery from './components/ErrorRecovery';
+import AnalysisEvidencePanel from './components/AnalysisEvidencePanel';
 import HealthStep from './steps/HealthStep';
 import BindStep from './steps/BindStep';
 import CaptureStep from './steps/CaptureStep';
@@ -14,7 +15,7 @@ import RankStep from './steps/RankStep';
 import PipelineStep from './steps/PipelineStep';
 import InitStep from './steps/InitStep';
 import VerifyStep from './steps/VerifyStep';
-import { FLOW_STEPS, flowStepsFor, STATE_ORDER, isFailed } from '@/constants/recorder';
+import { FLOW_STEPS, flowStepsFor, STATE_ORDER, PIPELINE_SUBSTEP_OFFSET, isFailed } from '@/constants/recorder';
 
 const { Text } = Typography;
 
@@ -45,14 +46,20 @@ export default function Workbench() {
   // 当前活动 step 序号(0-based);done=全完成;failed=定位失败前步骤;其余=effectiveOrder。
   const currentStep =
     state === 'done' ? FLOW_STEPS.length : failed ? lastReachedRef.current : Math.max(0, effectiveOrder);
-  // LLM 路径步骤栏去掉「排序候选」(合并进生成步):capture_b(order 3)/ranked(order 4)都落到生成步,
-  // done 落到末尾。LLM-off 用原 5 步与原 current。
+  // LLM 路径步骤栏:去掉「排序候选」,并把「生成并保存」拆成三子步(评分候选/生成脚本/测试保存)。
+  // capture_b(rank 运行中)/ranked 都落到三子步区:三子步起点 = 前置步数(head=health/bind/captureA/captureB);
+  // ranked 态按 pipelineSubStep 映射到对应子步,capture_b 落到第一子步(评分)。done 落到末尾。
   const railSteps = flowStepsFor(llmOn);
+  const subStepBase = railSteps.findIndex((s) => s.key === 'score'); // 三子步起点索引
   const railCurrent = !llmOn
     ? currentStep
     : state === 'done'
       ? railSteps.length
-      : Math.min(currentStep, railSteps.length - 1);
+      : state === 'ranked'
+        ? subStepBase + PIPELINE_SUBSTEP_OFFSET[data.pipelineSubStep ?? 'candidates']
+        : state === 'capture_b'
+          ? subStepBase // rank 运行中 → 评分子步
+          : Math.min(currentStep, railSteps.length - 1);
 
   const renderActiveStep = () => {
     switch (state) {
@@ -93,18 +100,29 @@ export default function Workbench() {
           return (
             <PipelineStep
               loading={loading}
+              subStep={data.pipelineSubStep ?? 'candidates'}
               drafts={data.pipelineDrafts}
-              rejected={data.pipelineRejected}
               prompts={data.pipelinePrompts}
               candidates={data.candidates}
               sentCandidateIds={data.pipelineSentIds}
               pipelineProgress={data.pipelineProgress}
               seedA={data.seedA}
               seedB={data.seedB}
+              sampleA={data.sampleA}
+              sampleB={data.sampleB}
+              rankScorePrompt={data.rankScorePrompt}
+              generatePrompt={data.generatePrompt}
+              llmRawJson={data.llmRawJson}
+              draftVerifying={data.draftVerifying}
+              savedDraftIds={data.savedDraftIds}
               savedAdapters={data.savedAdapters}
-              onRunPipeline={actions.runPipeline}
-              onPreviewPrompts={actions.previewPrompts}
-              onSaveMany={actions.saveDrafts}
+              onRunScore={actions.runScore}
+              onGoToGenerate={actions.goToGenerate}
+              onGoToCandidates={actions.goToCandidates}
+              onRunGenerate={actions.runGenerate}
+              onPreviewGenerate={actions.previewGeneratePrompt}
+              onVerifyDraft={actions.verifyDraft}
+              onSaveDraft={actions.saveDraft}
             />
           );
         }
@@ -159,11 +177,15 @@ export default function Workbench() {
     if (state === 'capture_b') {
       if (llmOn) {
         return (
-          <div style={{ padding: '40px 8px', textAlign: 'center' }}>
-            <Spin indicator={<LoadingOutlined style={{ fontSize: 28 }} spin />} />
-            <div style={{ marginTop: 12 }}>
-              <Text type="secondary">正在分析录制痕迹、提取候选接口…</Text>
+          <div>
+            <div style={{ padding: '32px 8px 24px', textAlign: 'center' }}>
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 28 }} spin />} />
+              <div style={{ marginTop: 12 }}>
+                <Text type="secondary">正在分析录制痕迹、提取候选接口…</Text>
+              </div>
             </div>
+            {/* 透明展示:本次分析用的 A/B 痕迹 + rank 阶段发给 LLM 的评分提示词(运行中提示词未回 → 占位)。 */}
+            <AnalysisEvidencePanel sampleA={data.sampleA} sampleB={data.sampleB} scorePrompt={data.rankScorePrompt} defaultOpen />
           </div>
         );
       }

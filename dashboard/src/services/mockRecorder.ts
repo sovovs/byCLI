@@ -10,7 +10,7 @@ import type {
   RequestEnvelope,
   VerifySummary,
 } from '@/types/recorder';
-import type { RecorderClient, WritePolicy } from './recorderClient';
+import type { RankResult, RecorderClient, WritePolicy } from './recorderClient';
 
 let reqSeq = 0;
 const nextRequestId = () => `req_${(++reqSeq).toString(36).padStart(6, '0')}`;
@@ -347,9 +347,12 @@ export const mockRecorder: RecorderClient = {
     return ok({ dispatched: true });
   },
 
-  async rank(): Promise<RequestEnvelope<RankCandidate[]>> {
+  async rank(): Promise<RequestEnvelope<RankResult>> {
     await delay(880);
-    return ok(CANDIDATES);
+    return ok({
+      candidates: CANDIDATES,
+      scorePrompt: '你是 adapter 评分助手。下面每个候选都是 recorder-core 已按 (method+host+pathname) 聚拢好的 endpoint group…\n[候选 + paramObservations 事实 + A/B 证据 JSON]',
+    });
   },
 
   async init(
@@ -380,11 +383,18 @@ export const mockRecorder: RecorderClient = {
   },
 
   // N4/N5:mock LLM 流水线——返回两个草稿(一个 usable、一个 verify 不达标),演示多脚本结果页。
-  async pipeline(_llmEgressAcknowledgedAt: number, _candidateIds?: string[], onProgress?: (phases: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>) => void) {
-    // mock 模拟阶段进度,让开发态也能看到 score→generate→verify 的实时推进。
+  async pipeline(
+    _llmEgressAcknowledgedAt: number,
+    _candidateIds?: string[],
+    onProgress?: (phases: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>) => void,
+    onPartial?: (prompts: { score?: string; generate?: string; screenshotCount?: number }) => void,
+  ) {
+    // mock 模拟阶段进度 + 分阶段 prompt,让开发态也能看到 score→generate→verify 的实时推进与提示词分阶段出现。
     onProgress?.([{ stage: 'score', status: 'running' }]);
+    onPartial?.({ score: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]', screenshotCount: 2 });
     await delay(500);
     onProgress?.([{ stage: 'score', status: 'done', durationMs: 500 }, { stage: 'generate', status: 'running' }]);
+    onPartial?.({ generate: '你是 adapter 代码生成助手。为下列高分接口生成完整 cli 脚本…\n[筛后候选 + 证据 JSON]' });
     await delay(500);
     onProgress?.([{ stage: 'score', status: 'done', durationMs: 500 }, { stage: 'generate', status: 'done', durationMs: 500 }, { stage: 'verify', status: 'running' }]);
     await delay(400);
@@ -413,16 +423,83 @@ export const mockRecorder: RecorderClient = {
       },
     });
   },
-  async pipelinePreview() {
+  async pipelinePreview(candidateIds?: string[]) {
     await delay(200);
     return ok({
       prompts: {
         score: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]',
-        generate: '',
+        // mock:按选中候选回 generate 预览。对齐 be——空 candidateIds→全部 genCands(非空 prompt),
+        // 非空→只选中的。避免开发态与真实后端行为不一致(codex Low)。
+        generate: candidateIds && candidateIds.length
+          ? `你是 adapter 生成器。为选中的 ${candidateIds.length} 个接口生成脚本…\n[${candidateIds.join(', ')} 的结构摘要 JSON]`
+          : '你是 adapter 生成器。为全部生成资格候选生成脚本…\n[cand_1, cand_2 的结构摘要 JSON]',
         screenshotCount: 2,
       },
       sentCandidateIds: ['cand_1', 'cand_2'], // mock:前若干候选传 LLM(cand_3 被截/junk)
     });
+  },
+  // 拆步①评分:score-only。模拟阶段进度 + score 提示词,回候选(含 LLM 语义)+ 双提示词 + 送 LLM 候选 id。
+  async pipelineScore(
+    _llmEgressAcknowledgedAt: number,
+    _candidateIds?: string[],
+    onProgress?: (phases: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>) => void,
+    onPartial?: (prompts: { score?: string; generate?: string; screenshotCount?: number }) => void,
+  ) {
+    onProgress?.([{ stage: 'score', status: 'running' }]);
+    onPartial?.({ score: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]', screenshotCount: 2 });
+    await delay(600);
+    onProgress?.([{ stage: 'score', status: 'done', durationMs: 600 }]);
+    return ok({
+      candidates: CANDIDATES,
+      rejected: [{ candidateId: 'cand_3', reason: 'mutation(埋点写操作)' }],
+      scorePrompt: '你是 adapter 评分助手。对每个候选接口判断是否值得做成数据命令…\n[候选 + A/B 证据 JSON]',
+      generatePrompt: '你是 adapter 代码生成助手。为下列高分接口生成完整 cli 脚本…\n[筛后候选 + 证据 JSON]',
+      screenshotCount: 2,
+      sentCandidateIds: ['cand_1', 'cand_2'],
+      llmRawJson: JSON.stringify({
+        interfaces: [
+          { candidateId: 'cand_1', inferredFunction: '按关键词搜索商品并返回结果列表(含标题、链接、价格)', isDataEndpoint: true, ruleSignals: [{ name: 'stable_json_shape', present: true, why: '响应是稳定 array 列表' }, { name: 'seed_arg_maps_to_param', present: true, why: 'A/B 关键词映射到 q' }], semanticSignals: [{ name: 'rich_business_data', strength: 'strong', why: '20 条含价格的业务数据' }], paramUnion: [{ name: 'q', paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '搜索关键词' }, { name: 'page', paramRole: 'pagination', exposeAsArg: 'optional_candidate', inferredMeaning: '分页页码' }], llmUtilityScore: 90, llmUtilityBand: 'high' },
+          { candidateId: 'cand_2', inferredFunction: '搜索建议词接口(返回联想词列表)', isDataEndpoint: true, ruleSignals: [{ name: 'stable_json_shape', present: true, why: '返回建议词数组' }], semanticSignals: [{ name: 'rich_business_data', strength: 'weak', why: '仅建议词、信息量低' }], paramUnion: [{ name: 'q', paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '前缀词' }], llmUtilityScore: 40, llmUtilityBand: 'low' },
+        ],
+      }, null, 2),
+    });
+  },
+  // 拆步②生成:generate-only。模拟生成进度,回草稿(verify 占位「尚未测试」,usable=false,待第③步测)。
+  async pipelineGenerate(
+    _llmEgressAcknowledgedAt: number,
+    _candidateIds?: string[],
+    onProgress?: (phases: Array<{ stage: string; status: 'running' | 'done'; durationMs?: number; detail?: string }>) => void,
+  ) {
+    onProgress?.([{ stage: 'generate', status: 'running' }]);
+    await delay(800);
+    onProgress?.([{ stage: 'generate', status: 'done', durationMs: 800 }]);
+    return ok({
+      drafts: [
+        {
+          id: 'draft_0', candidateId: 'cand_1', site: 'example-com', name: 'search', score: 92, confidence: 'high' as const,
+          reason: '搜索接口,响应是列表,关键词映射到 q 参数', risks: [], notes: ['page 固定为 1'],
+          staticOk: true, staticViolations: [], usable: false, filePath: '/tmp/bycli-draft/example-com/search.js',
+          verify: { ok: false, rows: 0, fieldCount: 0, reasons: ['尚未测试'] },
+          source: LLM_SOURCE,
+        },
+        {
+          id: 'draft_1', candidateId: 'cand_2', site: 'example-com', name: 'suggest', score: 35, confidence: 'low' as const,
+          reason: '建议词接口,信息量较低', risks: ['仅返回建议词'], notes: [],
+          staticOk: true, staticViolations: [], usable: false, filePath: '/tmp/bycli-draft/example-com/suggest.js',
+          verify: { ok: false, rows: 0, fieldCount: 0, reasons: ['尚未测试'] },
+          source: LLM_SOURCE.replace('search', 'suggest'),
+        },
+      ],
+    });
+  },
+  // 拆步③单草稿测试:模拟真 verify。draft_0 达标(rows 20),draft_1 不达标(rows 0)。
+  async draftVerify(draftId: string) {
+    await delay(700);
+    const okVerify = draftId === 'draft_0';
+    const verify = okVerify
+      ? { ok: true, rows: 20, fieldCount: 3, reasons: [] }
+      : { ok: false, rows: 0, fieldCount: 1, reasons: ['rows 0 < 期望 1'] };
+    return ok({ draftId, verify, usable: okVerify });
   },
 
   async saveAdapter(_draftId: string, _source?: string) {
