@@ -46,6 +46,11 @@ export interface PipelineDeps {
   verifyDraft: (args: VerifyDraftArgs) => Promise<VerifySummaryLike | null>;
   /** 可选:阶段计时日志(诊断"生成慢"卡在 score/generate/verify 哪一段)。 */
   log?: (stage: string, durationMs: number, detail?: string) => void;
+  /** 可选:阶段**开始**信号(进入某阶段前调,让前端 progress 显示 running,idle-timeout 见活动不误判)。 */
+  onPhaseStart?: (stage: string) => void;
+  /** 可选:阶段性 prompt 就绪回调(score 阶段先出 score prompt;score 完、genCands 定后出 generate prompt),
+   *  让分析过渡页按当前阶段实时展示对应提示词(不必等 pipeline 全跑完)。 */
+  onPrompts?: (prompts: Partial<PipelinePrompts>) => void;
 }
 
 export interface PipelineDraft {
@@ -63,6 +68,12 @@ export interface PipelineDraft {
   verify: VerifyOutcome;
   /** 静态通过 + verify 达标 → 可展示/保存。 */
   usable: boolean;
+  /** 拆步流程:0700 草稿文件路径(第三步单草稿 verify 用;仅静态通过+落盘的草稿有)。 */
+  filePath?: string;
+  /** 拆步流程:该草稿 verify 时传给 runner 的种子参数(来自 verifyExpectation)。 */
+  verifyArgs?: Record<string, unknown>;
+  /** 拆步流程:verify 达标判定所需的期望(rows/fieldCount/allowedOrigins 等)。 */
+  verifyExpectation?: GeneratedScript['verifyExpectation'];
 }
 export interface PipelinePrompts {
   /** 评分(score)阶段发给 LLM 的完整提示词文本。 */
@@ -81,9 +92,135 @@ export interface PipelineResult {
   prompts: PipelinePrompts;
 }
 
+/** score 阶段产出:评分结果 + 选中生成的候选(genCands,已 merge 语义层)+ 被拒 + 提示词。 */
+export interface ScoreStageResult {
+  scored: NonNullable<Awaited<ReturnType<Scorer['score']>>>;
+  /** decision==='generate' 且 merge 了 paramUnion/inferredFunction 的原始候选,供 generate 阶段用。 */
+  genCands: RankCandidate[];
+  rejected: Array<{ candidateId: string; reason: string }>;
+  prompts: PipelinePrompts;
+}
+
+/** generate 阶段产出:草稿目录 + 草稿(verify 未跑,初始 usable=false,verify.reasons=['尚未测试'])。 */
+export interface GenerateStageResult {
+  draftDir: string;
+  drafts: PipelineDraft[];
+}
+
+/**
+ * score-only 阶段:评分 + 构建 score/generate 提示词 + 计算 genCands(选中生成的候选,merge 语义层)。
+ * 不生成、不写盘、不 verify。拆步流程第一步用;失败(scorer 返回 null)→ null。
+ */
+export async function runScore(input: PipelineInput, deps: PipelineDeps): Promise<ScoreStageResult | null> {
+  const log = deps.log ?? (() => {});
+  const phaseStart = deps.onPhaseStart ?? (() => {});
+  const emitPrompts = deps.onPrompts ?? (() => {});
+  const t0 = Date.now();
+  phaseStart('score');
+  const scorePrompt = buildScorePrompt({ candidates: input.candidates, samples: input.samples, candidateIds: input.candidateIds, cap: input.cap });
+  const screenshotCount = input.samples.filter((s) => !!s.screenshot).length;
+  emitPrompts({ score: scorePrompt, screenshotCount });
+  const scored = await deps.scorer.score(input);
+  log('score', Date.now() - t0, `candidates=${input.candidates.length}`);
+  if (!scored) return null;
+  const rejected = scored.candidates
+    .filter((c) => c.decision !== 'generate')
+    .map((c) => ({ candidateId: c.candidateId, reason: c.confidence === 'rejected' ? (c.reason || 'rejected') : `${c.confidence} not auto-generated` }));
+
+  // 选中 decision==='generate' 的候选(medium+),映射回原始 RankCandidate(带 endpoint/args)。
+  // Bug 1(Codex P1):把 ScoredCandidate 的语义层(paramUnion 角色/暴露、inferredFunction 用途)
+  // merge 回原始候选再喂生成器——聚拢候选的 seed/分页/查询维度知识只活在 paramObservations(事实)+
+  // LLM 的 paramUnion(语义),不透传的话 Prompt B 只见 endpoint/args,会生成无参/错参 adapter。
+  const genCands = scored.candidates
+    .filter((c) => c.decision === 'generate')
+    .map((c) => {
+      const rc = input.candidates.find((rc) => rc.id === c.candidateId);
+      if (!rc) return undefined;
+      return {
+        ...rc,
+        ...(c.paramUnion ? { paramUnion: c.paramUnion } : {}),
+        ...(c.inferredFunction ? { inferredFunction: c.inferredFunction } : {}),
+      };
+    })
+    .filter((c): c is RankCandidate => !!c);
+
+  const prompts: PipelinePrompts = {
+    score: scorePrompt,
+    generate: genCands.length ? buildGenPrompt({ candidates: genCands, samples: input.samples }) : '',
+    screenshotCount,
+  };
+  if (genCands.length) emitPrompts({ generate: prompts.generate });
+
+  return { scored, genCands, rejected, prompts };
+}
+
+/**
+ * generate-only 阶段:对 genCands 生成脚本 + 逐个静态检查 + 写 0700 草稿。**不 verify、不 repair**
+ * (verify 移到拆步流程第三步的单草稿端点)。每个草稿 verify 初始占位(usable=false,reasons=['尚未测试'])。
+ * genCands 空 → 返回空草稿;generator 返回 null → null。
+ */
+export async function runGenerate(
+  genCands: RankCandidate[],
+  scored: ScoreStageResult['scored'],
+  samples: SynthesisSample[],
+  deps: PipelineDeps,
+): Promise<GenerateStageResult | null> {
+  const log = deps.log ?? (() => {});
+  const phaseStart = deps.onPhaseStart ?? (() => {});
+  const scoreById = new Map(scored.candidates.map((c) => [c.candidateId, c]));
+  if (!genCands.length) return { draftDir: '', drafts: [] };
+
+  const tGen = Date.now();
+  phaseStart('generate');
+  const gen = await deps.generator.generate({ candidates: genCands, samples });
+  log('generate', Date.now() - tGen, `genCands=${genCands.length}`);
+  if (!gen) return null;
+
+  const draftDir = gen.scripts.length ? makeDraftDir() : '';
+  const drafts: PipelineDraft[] = [];
+  // 逐个静态白名单检查 + 写 0700 草稿。verify 不在此阶段跑(第三步单独触发)。
+  gen.scripts.forEach((s) => {
+    const sc = scoreById.get(s.candidateId);
+    const base = {
+      candidateId: s.candidateId, site: s.site, name: s.name, source: s.source,
+      score: sc?.score ?? 0, confidence: sc?.confidence ?? 'low' as const, reason: sc?.reason ?? '',
+      risks: s.risks, notes: s.notes,
+    };
+    const origins = s.verifyExpectation?.allowedOrigins ?? [];
+    const check = staticCheckScript(s.source, origins);
+    if (!check.ok) {
+      drafts.push({ ...base, staticOk: false, staticViolations: check.violations, verify: { ok: false, rows: 0, fieldCount: 0, reasons: ['静态检查未通过'] }, usable: false });
+      return;
+    }
+    const file = writeDrafts(draftDir, [{ site: s.site, name: s.name, source: s.source }])[0];
+    if (!file) {
+      drafts.push({ ...base, staticOk: true, staticViolations: [], verify: { ok: false, rows: 0, fieldCount: 0, reasons: ['草稿写入失败'] }, usable: false });
+      return;
+    }
+    // 静态通过、已落盘:verify 待第三步单独触发。verifyArgs/expectation 存入草稿供后续 verify 复用。
+    drafts.push({
+      ...base, staticOk: true, staticViolations: [],
+      verify: { ok: false, rows: 0, fieldCount: 0, reasons: ['尚未测试'] }, usable: false,
+      filePath: file.path,
+      verifyArgs: s.verifyExpectation?.verifyArgs ?? {},
+      verifyExpectation: s.verifyExpectation,
+    });
+  });
+  // 排序:静态通过优先,再按分降序(verify 未跑,不参与排序)。
+  drafts.sort((a, b) => (b.staticOk ? 1 : 0) - (a.staticOk ? 1 : 0) || b.score - a.score);
+  return { draftDir, drafts };
+}
+
 export async function runPipeline(input: PipelineInput, deps: PipelineDeps): Promise<PipelineResult | null> {
   const log = deps.log ?? (() => {});
+  const phaseStart = deps.onPhaseStart ?? (() => {});
+  const emitPrompts = deps.onPrompts ?? (() => {});
   const t0 = Date.now();
+  // score 阶段:先标 running,并把 score prompt 立即回调(分析过渡页在评分阶段就能看到评分提示词)。
+  phaseStart('score');
+  const scorePrompt = buildScorePrompt({ candidates: input.candidates, samples: input.samples, candidateIds: input.candidateIds, cap: input.cap });
+  const screenshotCount = input.samples.filter((s) => !!s.screenshot).length;
+  emitPrompts({ score: scorePrompt, screenshotCount });
   const scored = await deps.scorer.score(input);
   log('score', Date.now() - t0, `candidates=${input.candidates.length}`);
   if (!scored) return null;
@@ -112,16 +249,18 @@ export async function runPipeline(input: PipelineInput, deps: PipelineDeps): Pro
 
   // 透明展示:重建本轮实际发给 LLM 的提示词文本(score 用全部候选;generate 用筛后候选)。
   // 用与真实调用同一个纯 builder,确保展示的就是发出去的;截图仅标注张数(图片不进文本)。
-  const screenshotCount = input.samples.filter((s) => !!s.screenshot).length;
   const prompts: PipelinePrompts = {
-    score: buildScorePrompt({ candidates: input.candidates, samples: input.samples, candidateIds: input.candidateIds, cap: input.cap }),
+    score: scorePrompt,
     generate: genCands.length ? buildGenPrompt({ candidates: genCands, samples: input.samples }) : '',
     screenshotCount,
   };
+  // generate prompt 就绪即回调(分析过渡页在生成阶段能看到脚本提示词,不必等 pipeline 全跑完)。
+  if (genCands.length) emitPrompts({ generate: prompts.generate });
 
   if (!genCands.length) return { draftDir: '', drafts: [], rejected, prompts };
 
   const tGen = Date.now();
+  phaseStart('generate');
   const gen = await deps.generator.generate({ candidates: genCands, samples: input.samples });
   log('generate', Date.now() - tGen, `genCands=${genCands.length}`);
   if (!gen) return null;

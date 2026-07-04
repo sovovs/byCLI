@@ -17,10 +17,10 @@ import { rankSamples, analyzeSite, resolveSeedParams, deriveEvidenceSeedArgs, DE
 import { createSynthesizer, type Synthesizer } from './llm/synthesize.js';
 import { createScorer, buildScorePrompt, selectCandidatesForLlm, type Scorer } from './llm/score.js';
 import { makeStructureAwareResponsePreview } from './llm/responseSummary.js';
-import { createGenerator, type Generator } from './llm/generate.js';
-import { runPipeline } from './llm/pipeline.js';
+import { createGenerator, buildGenPrompt, type Generator } from './llm/generate.js';
+import { runPipeline, runScore, runGenerate, type PipelineDraft } from './llm/pipeline.js';
 import { cleanupDraftDir } from './llm/draft-store.js';
-import type { VerifySummaryLike } from './llm/verify-expectation.js';
+import { meetsExpectation, type VerifySummaryLike, type VerifyOutcome } from './llm/verify-expectation.js';
 import {
   ok,
   fail,
@@ -60,6 +60,31 @@ function daemonFor(ctx: Ctx, session: { recordingMode: RecordingMode; gatewayPor
   let b = ctx.vncBridges.get(session.gatewayPort);
   if (!b) { b = createDaemonBridge({ host: '127.0.0.1', port: session.gatewayPort }); ctx.vncBridges.set(session.gatewayPort, b); }
   return b;
+}
+
+// LLM scorer/generator onError 收到的既可能是 Error(超时/网络/解析),也可能是**结构化观测对象**
+// (如 score.ts 的 { kind:'score_prompt_degraded', chars, candidates, degraded })。旧写法
+// `String(err?.message || err)` 对无 message 的对象落到 String(obj) = "[object Object]",
+// 日志里根本看不出发生了什么。这里统一序列化成可读字符串:
+//   - Error → message(+ cause 若有)
+//   - 结构化对象 → JSON.stringify(丢失 message 也能看到 kind/字段)
+//   - 其它 → String()
+function stringifyLlmError(err: unknown): string {
+  if (err instanceof Error) {
+    const cause = (err as { cause?: unknown }).cause;
+    return cause != null ? `${err.message} (cause: ${stringifyLlmError(cause)})` : err.message;
+  }
+  if (err && typeof err === 'object') {
+    // 有 message 字段的类 Error 对象优先取 message;否则整体 JSON 化(含 kind 等诊断字段)。
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg) return msg;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
 }
 
 const json = (res: ServerResponse, status: number, body: ApiResponse | object): void => {
@@ -266,6 +291,11 @@ function handleCancel(ctx: Ctx, body: Record<string, unknown>, res: ServerRespon
     return sendFail(res, 'validation_failed', 'sessionId required for session/capture cancel');
   }
   if (sessionId) {
+    // 拆步流程:save 不再即时清理草稿目录(用户可逐个保存),改由会话取消/终止时清理,防 0700 临时目录泄漏。
+    if (scope === 'session') {
+      const drafts = ctx.registry.getDrafts(sessionId);
+      if (drafts?.dir) cleanupDraftDir(drafts.dir);
+    }
     ctx.registry.cancelSession(sessionId);
     // vnc 会话:回收容器(best-effort,fire-and-forget,不阻塞同步返回)。
     if (ctx.vnc.get(sessionId)) void ctx.vnc.stop(sessionId).catch(() => {});
@@ -586,53 +616,12 @@ async function handleRank(ctx: Ctx, body: Record<string, unknown>, res: ServerRe
     // insufficient_samples etc. — session already advanced to 'ranked'; surface the reason.
     return sendFail(res, 'insufficient_samples', result.reason);
   }
-  let candidates = result.candidates;
-  // LLM 重打分(best-effort):scorer 让模型判定每个信号成立性,be 用 profile delta 求和=权威分。
-  // 把 LLM 的 score/confidence/risks/signals 合并回对应候选;LLM 返回 null(无 key/失败/超时)→ 全保留规则分。
-  try {
-    const scoreSamples = samples.map((sm) => {
-      const st = sm.sampleName === 'B' ? stored.B : stored.A;
-      return { sampleName: sm.sampleName, entries: sm.entries as never, screenshot: st?.screenshot, actions: st?.actions as never };
-    });
-    const scored = await ctx.scorer.score({ candidates, samples: scoreSamples, cap: ctx.cfg.RECORDER_LLM_CANDIDATE_CAP, profile });
-    if (scored) {
-      const byId = new Map(scored.candidates.map((c) => [c.candidateId, c]));
-      candidates = candidates.map((c) => {
-        const llm = byId.get(c.id);
-        if (!llm) return c; // 未被 LLM 评(超软上限/预过滤垃圾)→ 保留规则分
-        return {
-          ...c,
-          score: llm.uiScore,
-          confidence: llm.confidence,
-          ...(llm.risks?.length ? { risks: llm.risks } : {}),
-          // 第3步 Codex Moderate 2:scoreExplanation 填**真 delta**(rule=profile delta、
-          // semantic=bonus delta),不再全 0——前端 PipelineStep:34 用 delta>0 判 seed 命中。
-          scoreExplanation: llm.scoreExplanation,
-          // llmUtilityScore 是 LLM 自报辅助分,独立字段(不折进 scoreExplanation 权威分)。
-          ...(typeof llm.llmUtilityScore === 'number' ? { llmUtilityScore: llm.llmUtilityScore } : {}),
-          // 第2/5步:LLM 推断的接口功能 + 参数语义角色跨线给前端展示(给用户看「接口做什么/参数含义」)。
-          // 仅在 LLM 实际产出时合并;LLM-off 路径 undefined → 不写(保持向后兼容)。
-          ...(llm.inferredFunction ? { inferredFunction: llm.inferredFunction } : {}),
-          ...(llm.paramUnion?.length ? { paramUnion: llm.paramUnion } : {}),
-          scoredBy: 'llm' as const,
-        };
-      });
-      ctx.logger.info('recorder.rank.llm_scored', { sessionId, status: 'ok', stage: `scored=${scored.candidates.length}/${result.candidates.length}` });
-    } else {
-      // scored===null 有两种成因,区分记录(避免误报「no key」):
-      // ① 未配置 key(LLM 未启用)→ 本就走规则分,预期行为;
-      // ② 配了 key 但调用失败/超时 → scorer.onError 已记 llm_score_error,这里标 failed 提示看那条。
-      const llmConfigured = ctx.cfg.LLM_SYNTHESIS_ENABLED && !!ctx.cfg.LLM_API_KEY;
-      ctx.logger.info('recorder.rank.llm_scored', {
-        sessionId,
-        status: 'skipped',
-        stage: llmConfigured ? 'LLM scoring failed/timed out (see llm_score_error) → 规则分' : 'no LLM key configured → 规则分',
-      });
-    }
-  } catch (e) {
-    ctx.logger.warn('recorder.rank.llm_scored', { sessionId, status: 'error', stage: `${String((e as Error).message || e)} → 规则分兜底` });
-  }
-  // Freeze candidates on the session so /recorder/init can select one by id (H-002).
+  // rank 只做「聚拢候选 + 规则分」(快、本地、免费),**不调 LLM**。真正的 LLM 评分(inferredFunction/
+  // paramUnion/双轨分)只在用户进「评分候选页」时经 /recorder/pipeline/score 发生一次——避免 rank 与
+  // score 两阶段重复调 LLM(重复花钱),且修 no genCands 根因:genStage 只在 score 阶段写,rank 提前用
+  // LLM 填候选会让评分页误判"已评过"跳过 score → genStage 从不写 → 生成报 no genCands。
+  const candidates = result.candidates;
+  // Freeze candidates on the session so /recorder/init 与 /recorder/pipeline/* 可按 id 选/复用(H-002)。
   ctx.registry.storeCandidates(sessionId, candidates as unknown as Array<{ id: string; [k: string]: unknown }>);
   json(res, 200, ok({ sessionId, state: 'ranked', stateVersion: adv.session.stateVersion, candidates }));
 }
@@ -907,19 +896,30 @@ async function runPipelineAsync(
     // 与 handleRank 同源 profile(live/preview),传进 pipeline scorer 求分,避免退回闭包默认(High 6)。
     const live = ctx.config.current();
     const profile = live.featureFlags.FEATURE_PREVIEW_SCORING_PROFILE ? live.scoringProfile : DEFAULT_SCORING_PROFILE;
-    const result = await runPipeline(
-      { candidates: candidates as never, samples: samples as never, candidateIds, cap: ctx.cfg.RECORDER_LLM_CANDIDATE_CAP, profile },
-      {
-        scorer: ctx.scorer,
-        generator: ctx.generator,
-        verifyDraft: (a) => verifyDraftSync(ctx, { ...a, sessionId }),
-        // log(stage,...) 在阶段**结束**时被调(带耗时);进入下一阶段前先标 running。这里统一:每次 log 把该 stage 标 done。
-        log: (stage, durationMs, detail) => {
-          ctx.registry.setPhaseDone(requestId, stage, durationMs, detail);
-          ctx.logger.info('recorder.pipeline.phase', { sessionId, status: 'ok', durationMs, stage: detail ? `${stage} ${detail}` : stage });
+    // 20s heartbeat:长阶段(generate ~90s)pending 时定期 bump updatedAt,让前端 idle-timeout 见活动不误判卡死。
+    const hb = setInterval(() => ctx.registry.touchRequest(requestId), 20_000);
+    let result;
+    try {
+      result = await runPipeline(
+        { candidates: candidates as never, samples: samples as never, candidateIds, cap: ctx.cfg.RECORDER_LLM_CANDIDATE_CAP, profile },
+        {
+          scorer: ctx.scorer,
+          generator: ctx.generator,
+          verifyDraft: (a) => verifyDraftSync(ctx, { ...a, sessionId }),
+          // 阶段**开始**:标 running(前端 progress 显示 running + idle-timeout 见活动)。
+          onPhaseStart: (stage) => ctx.registry.setPhaseRunning(requestId, stage),
+          // 阶段性 prompt 就绪(score prompt 早出 / score 完出 generate prompt)→ 写 partialResult,分析过渡页按阶段展示。
+          onPrompts: (prompts) => ctx.registry.setPartialResult(requestId, { prompts }),
+          // log(stage,...) 在阶段**结束**时被调(带耗时);标 done。
+          log: (stage, durationMs, detail) => {
+            ctx.registry.setPhaseDone(requestId, stage, durationMs, detail);
+            ctx.logger.info('recorder.pipeline.phase', { sessionId, status: 'ok', durationMs, stage: detail ? `${stage} ${detail}` : stage });
+          },
         },
-      },
-    );
+      );
+    } finally {
+      clearInterval(hb);
+    }
     if (!result) {
       return void ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: 'LLM 流水线失败(评分/生成返回空)' } });
     }
@@ -931,6 +931,206 @@ async function runPipelineAsync(
   } catch (e) {
     ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: String((e as Error).message || e) } });
   }
+}
+
+// ── 拆步流程(评分候选 → 生成脚本 → 测试保存):三个独立端点,均自 ranked、不推进状态 ──────────
+
+/** 共享:ranked + LLM 可用 + egress 同意校验;返回 {session} 或已 sendFail。egressRequired=false 时跳过同意校验。 */
+function guardPipelineStage(
+  ctx: Ctx, body: Record<string, unknown>, res: ServerResponse, egressRequired: boolean,
+): { sessionId: string; s: ReturnType<Registry['getSession']> } | null {
+  const sessionId = body.sessionId;
+  if (typeof sessionId !== 'string') { sendFail(res, 'validation_failed', 'sessionId required'); return null; }
+  const s = ctx.registry.getSession(sessionId);
+  if (!s) { sendFail(res, 'request_not_found', 'session not found'); return null; }
+  if (s.state !== 'ranked') { sendFail(res, 'invalid_state', `cannot run pipeline stage from ${s.state}`); return null; }
+  const llmAvailable = ctx.cfg.LLM_SYNTHESIS_ENABLED && !!ctx.cfg.LLM_API_KEY;
+  if (!llmAvailable) { sendFail(res, 'validation_failed', 'LLM 合成未启用(需 FEATURE_LLM_SYNTHESIS + RECORDER_LLM_API_KEY)'); return null; }
+  if (egressRequired && typeof body.llmEgressAcknowledgedAt !== 'number') {
+    sendFail(res, 'validation_failed', 'llmEgressAcknowledgedAt required(外发前置同意)'); return null;
+  }
+  return { sessionId, s };
+}
+
+/** 共享:从 registry 读 session 冻结的 A/B 样本,组装 pipeline 用 samples 数组。 */
+function pipelineSamples(ctx: Ctx, sessionId: string): Array<{ sampleName: 'A' | 'B'; entries: unknown; screenshot?: string; actions?: unknown }> {
+  const stored = ctx.registry.getSamples(sessionId) ?? {};
+  const samples = [];
+  if (stored.A) samples.push({ sampleName: 'A' as const, entries: stored.A.entries, screenshot: stored.A.screenshot, actions: stored.A.actions });
+  if (stored.B) samples.push({ sampleName: 'B' as const, entries: stored.B.entries, screenshot: stored.B.screenshot, actions: stored.B.actions });
+  return samples;
+}
+
+/** 共享:pipeline 阶段后台 runner 的 deps(heartbeat/onPhaseStart/onPrompts/log,与旧 runPipelineAsync 同套)。 */
+function pipelineStageDeps(ctx: Ctx, sessionId: string, requestId: string) {
+  return {
+    scorer: ctx.scorer,
+    generator: ctx.generator,
+    verifyDraft: (a: { name: string; adapterPath: string; verifyArgs: Record<string, unknown> }) => verifyDraftSync(ctx, { ...a, sessionId }),
+    onPhaseStart: (stage: string) => ctx.registry.setPhaseRunning(requestId, stage),
+    onPrompts: (prompts: Record<string, unknown>) => ctx.registry.setPartialResult(requestId, { prompts }),
+    log: (stage: string, durationMs: number, detail?: string) => {
+      ctx.registry.setPhaseDone(requestId, stage, durationMs, detail);
+      ctx.logger.info('recorder.pipeline.phase', { sessionId, status: 'ok', durationMs, stage: detail ? `${stage} ${detail}` : stage });
+    },
+  };
+}
+
+// POST /recorder/pipeline/score:只评分(score-only),出候选(含 LLM 语义推断)+ score/generate 提示词。
+// 不生成、不写盘。genCands + 评分结果存 registry 供第二步生成复用。202 异步。
+async function handlePipelineScore(ctx: Ctx, body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+  const g = guardPipelineStage(ctx, body, res, true);
+  if (!g) return;
+  const { sessionId, s } = g;
+  const candidates = (ctx.registry.getCandidates(sessionId) ?? []) as unknown as RankCandidate[];
+  if (!candidates.length) return sendFail(res, 'validation_failed', 'no candidates(先 rank)');
+  const samples = pipelineSamples(ctx, sessionId);
+  const candidateIds = Array.isArray(body.candidateIds) ? body.candidateIds.filter((x): x is string => typeof x === 'string') : undefined;
+
+  const requestId = newRequestId();
+  ctx.registry.createRequest({ requestId, type: 'pipeline', sessionId, contextId: s!.contextId, profileId: s!.profileId, pollAfterMs: ctx.config.current().REQUEST_POLL_AFTER_MS });
+  json(res, 202, ok({ accepted: true, sessionId, type: 'pipeline' }, requestId));
+  void runScoreAsync(ctx, sessionId, candidates, samples, candidateIds, requestId);
+}
+
+async function runScoreAsync(
+  ctx: Ctx, sessionId: string, candidates: RankCandidate[],
+  samples: Array<{ sampleName: 'A' | 'B'; entries: unknown; screenshot?: string; actions?: unknown }>,
+  candidateIds: string[] | undefined, requestId: string,
+): Promise<void> {
+  try {
+    const live = ctx.config.current();
+    const profile = live.featureFlags.FEATURE_PREVIEW_SCORING_PROFILE ? live.scoringProfile : DEFAULT_SCORING_PROFILE;
+    const result = await runScore(
+      { candidates: candidates as never, samples: samples as never, candidateIds, cap: ctx.cfg.RECORDER_LLM_CANDIDATE_CAP, profile },
+      pipelineStageDeps(ctx, sessionId, requestId) as never,
+    );
+    if (!result) return void ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: 'LLM 评分失败(返回空)' } });
+    // 存 genCands + 评分结果供 generate 阶段复用(不重复评分)。
+    ctx.registry.storeGenStage(sessionId, result.genCands, result.scored);
+    // 把 LLM 语义层(inferredFunction/paramUnion/score/confidence)merge 回候选给前端展示。
+    const scoreById = new Map(result.scored.candidates.map((c) => [c.candidateId, c]));
+    let mergedCount = 0;
+    const mergedCandidates = candidates.map((c) => {
+      const llm = scoreById.get(c.id as string);
+      if (!llm) return c;
+      mergedCount++;
+      return {
+        ...c, score: llm.uiScore, confidence: llm.confidence,
+        ...(llm.risks?.length ? { risks: llm.risks } : {}),
+        ...(llm.scoreExplanation ? { scoreExplanation: llm.scoreExplanation } : {}),
+        ...(typeof llm.llmUtilityScore === 'number' ? { llmUtilityScore: llm.llmUtilityScore } : {}),
+        ...(llm.inferredFunction ? { inferredFunction: llm.inferredFunction } : {}),
+        ...(llm.paramUnion?.length ? { paramUnion: llm.paramUnion } : {}),
+        scoredBy: 'llm' as const,
+      };
+    });
+    const sentCandidateIds = result.genCands.map((c) => c.id);
+    // 诊断:LLM 分实际 merge 回了几个候选(rank 阶段有等价日志,拆步 score 此前缺)。
+    // mergedCount 远小于 candidates.length → 回填 id 错配(位置对齐兜底已尽量救);= 0 → 全走规则分。
+    ctx.logger.info('recorder.pipeline.score', { sessionId, status: 'ok', stage: `merged=${mergedCount}/${candidates.length} genCands=${result.genCands.length}` });
+    ctx.registry.finalizeRequest(requestId, { status: 'succeeded', result: {
+      sessionId, candidates: mergedCandidates, rejected: result.rejected,
+      scorePrompt: result.prompts.score, generatePrompt: result.prompts.generate,
+      screenshotCount: result.prompts.screenshotCount, sentCandidateIds,
+      ...(result.scored.rawInterfacesJson ? { llmRawJson: result.scored.rawInterfacesJson } : {}),
+    } });
+  } catch (e) {
+    ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: String((e as Error).message || e) } });
+  }
+}
+
+// 从请求体解析用户选中的候选 id(candidateIds 多选优先,selectedCandidateId 单选兜底兼容 init 契约)。
+// generate 与 preview 共用,避免两处过滤规则漂移(codex Moderate)。
+function selectedCandidateIdsFromBody(body: Record<string, unknown>): string[] {
+  if (Array.isArray(body.candidateIds)) return body.candidateIds.filter((x): x is string => typeof x === 'string');
+  if (typeof body.selectedCandidateId === 'string' && body.selectedCandidateId) return [body.selectedCandidateId];
+  return [];
+}
+
+// 按选中过滤 genCands:选中集空 → 全部(向后兼容);否则只留选中的。generate 与 preview 共用同一规则。
+function selectGenCands(body: Record<string, unknown>, allGenCands: RankCandidate[]): RankCandidate[] {
+  const selectedIds = selectedCandidateIdsFromBody(body);
+  return selectedIds.length ? allGenCands.filter((c) => selectedIds.includes(c.id)) : allGenCands;
+}
+
+// POST /recorder/pipeline/generate:只生成脚本(generate-only)+ 静态检查 + 写 0700 草稿。不 verify。
+// 读第一步存的 genCands;草稿持久化(不 cleanup,留给第三步逐个 verify/save)。202 异步。
+async function handlePipelineGenerate(ctx: Ctx, body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+  const g = guardPipelineStage(ctx, body, res, true);
+  if (!g) return;
+  const { sessionId, s } = g;
+  const genStage = ctx.registry.getGenStage(sessionId);
+  if (!genStage || !Array.isArray(genStage.genCands) || !genStage.genCands.length) {
+    return sendFail(res, 'validation_failed', 'no genCands(先 score)');
+  }
+  // 用户在候选页选中的接口:generate 只为选中且生成资格(decision==='generate')的候选生成脚本。
+  // 缺省/空 → 全部 genCands(向后兼容)。修 bug:此前忽略选中,全 decision=generate 候选(7个)全喂 →
+  // prompt 巨大(97KB 撞 CF 120s)、生成一堆没选的脚本。过滤规则与 preview 共用 selectGenCands 防漂移。
+  const genCands = selectGenCands(body, genStage.genCands as RankCandidate[]);
+  if (!genCands.length) {
+    return sendFail(res, 'validation_failed', '选中的候选都不具备生成资格(decision≠generate),或选中集与 genCands 无交集');
+  }
+  const samples = pipelineSamples(ctx, sessionId);
+  const requestId = newRequestId();
+  ctx.registry.createRequest({ requestId, type: 'pipeline', sessionId, contextId: s!.contextId, profileId: s!.profileId, pollAfterMs: ctx.config.current().REQUEST_POLL_AFTER_MS });
+  json(res, 202, ok({ accepted: true, sessionId, type: 'pipeline' }, requestId));
+  void runGenerateAsync(ctx, sessionId, genCands, genStage.scored, samples, requestId);
+}
+
+async function runGenerateAsync(
+  ctx: Ctx, sessionId: string, genCands: RankCandidate[], scored: unknown,
+  samples: Array<{ sampleName: 'A' | 'B'; entries: unknown; screenshot?: string; actions?: unknown }>,
+  requestId: string,
+): Promise<void> {
+  // 20s heartbeat:generate 长阶段 pending 时 bump updatedAt,让前端 idle-timeout 见活动不误判卡死。
+  const hb = setInterval(() => ctx.registry.touchRequest(requestId), 20_000);
+  try {
+    const result = await runGenerate(genCands as never, scored as never, samples as never, pipelineStageDeps(ctx, sessionId, requestId) as never);
+    if (!result) return void ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: 'LLM 生成失败(返回空)' } });
+    const prev = ctx.registry.getDrafts(sessionId);
+    if (prev?.dir && prev.dir !== result.draftDir) cleanupDraftDir(prev.dir);
+    const items = result.drafts.map((d, i) => ({ id: `draft_${i}`, ...d }));
+    ctx.registry.storeDrafts(sessionId, result.draftDir, items);
+    ctx.registry.finalizeRequest(requestId, { status: 'succeeded', result: { sessionId, drafts: items } });
+  } catch (e) {
+    ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: String((e as Error).message || e) } });
+  } finally {
+    clearInterval(hb);
+  }
+}
+
+// POST /recorder/draft/verify:单草稿真 verify(第三步「测试」按钮)。body {draftId}。复用 verifyDraftSync
+// (daemon /v1/verify + 轮询)→ meetsExpectation 判定 → 回写 registry 草稿。202 异步。
+async function handleDraftVerify(ctx: Ctx, body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+  const sessionId = body.sessionId;
+  if (typeof sessionId !== 'string') return sendFail(res, 'validation_failed', 'sessionId required');
+  const draftId = body.draftId;
+  if (typeof draftId !== 'string' || !draftId) return sendFail(res, 'validation_failed', 'draftId required');
+  const s = ctx.registry.getSession(sessionId);
+  if (!s) return sendFail(res, 'request_not_found', 'session not found');
+  if (s.state !== 'ranked') return sendFail(res, 'invalid_state', `cannot verify draft from ${s.state}`);
+  const drafts = ctx.registry.getDrafts(sessionId);
+  const draft = drafts?.items.find((d) => d.id === draftId) as (PipelineDraft & { id: string }) | undefined;
+  if (!draft) return sendFail(res, 'validation_failed', `unknown draftId ${draftId}`);
+  if (!draft.filePath) return sendFail(res, 'validation_failed', '该草稿无可测文件(静态未通过或写盘失败)');
+
+  const requestId = newRequestId();
+  // 用 type 'pipeline'(非 'verify'):draft/verify 内部已用 verifyDraftSync 代理 daemon 并把整形后的
+  // 结果 finalize 进 registry。若标 type='verify',handleRequestStatus 会再次代理 daemon 拿 runner 原始
+  // 结果覆盖我们整形的 {draftId,usable,verify},故走 be-内结果直返的 'pipeline' 生命周期。
+  ctx.registry.createRequest({ requestId, type: 'pipeline', sessionId, contextId: s.contextId, profileId: s.profileId, pollAfterMs: ctx.config.current().REQUEST_POLL_AFTER_MS });
+  json(res, 202, ok({ accepted: true, sessionId, type: 'verify' }, requestId));
+  void (async () => {
+    try {
+      const summary = await verifyDraftSync(ctx, { name: `${draft.site}/${draft.name}`, adapterPath: draft.filePath!, verifyArgs: draft.verifyArgs ?? {}, sessionId });
+      const verify: VerifyOutcome = meetsExpectation(summary, draft.verifyExpectation);
+      ctx.registry.updateDraftVerify(sessionId, draftId, verify as never);
+      ctx.registry.finalizeRequest(requestId, { status: 'succeeded', result: { sessionId, draftId, verify, usable: verify.ok } });
+    } catch (e) {
+      ctx.registry.finalizeRequest(requestId, { status: 'failed', error: { code: 'network_error', message: String((e as Error).message || e) } });
+    }
+  })();
 }
 
 // GET-like POST /recorder/pipeline/preview:**不调用 LLM、不外发、不改状态**,只构建并返回将要发给 LLM 的
@@ -952,11 +1152,17 @@ function handlePipelinePreview(ctx: Ctx, body: Record<string, unknown>, res: Ser
   // 透明展示:用真实 selectCandidatesForLlm(cap=5 + junk 预过滤)算出会被喂 LLM 的候选 id,
   // 供前端表格初始化默认勾选(top-N,N=cap)。
   const sentCandidateIds = selectCandidatesForLlm(candidates, ctx.cfg.RECORDER_LLM_CANDIDATE_CAP).map((c) => c.id);
+  // generate 提示词预览:score 阶段已存 genCands(含 LLM 语义层)。按用户选中过滤——用**共享**
+  // selectGenCands(与 handlePipelineGenerate 同一规则,防漂移:candidateIds/selectedCandidateId、空→全部)。
+  // 还没 score(无 genStage)→ generate 留空(依赖评分结果)。交集空 → 空 prompt(preview 不报错,前端据空态禁用生成)。
+  const genStage = ctx.registry.getGenStage(sessionId);
+  const genCands = selectGenCands(body, (genStage?.genCands ?? []) as RankCandidate[]);
+  const generatePrompt = genCands.length ? buildGenPrompt({ candidates: genCands, samples }) : '';
   json(res, 200, ok({
     sessionId,
     prompts: {
       score: buildScorePrompt({ candidates, samples }),
-      generate: '', // 依赖评分结果,运行后才知;预览阶段留空
+      generate: generatePrompt,
       screenshotCount,
     },
     sentCandidateIds,
@@ -1002,16 +1208,14 @@ async function handleSave(ctx: Ctx, body: Record<string, unknown>, res: ServerRe
     saved.push({ draftId: item.draftId, site: String(draft.site ?? ''), name: String(draft.name ?? ''), adapterPath: data.adapterPath });
   }
 
-  // 至少存成功一个才推进 done + 清草稿;全失败则保持 ranked 让用户重试。
-  if (saved.length) {
-    ctx.registry.advance(sessionId, 'saveAdapter', 'done', s.stateVersion);
-    if (drafts?.dir) cleanupDraftDir(drafts.dir);
-  } else {
+  // 拆步流程:保存成功后**停留 ranked**(用户可逐个保存其他脚本),不推进 done、不清草稿目录
+  // (草稿清理移到 cancel/会话终止,见 handleCancel)。全失败则保持 ranked 让用户重试。
+  if (!saved.length) {
     return sendFail(res, 'validation_failed', failed[0]?.reason ?? 'all saves failed');
   }
   json(res, 200, ok({
     sessionId,
-    state: 'done',
+    state: 'ranked',
     saved,
     ...(failed.length ? { failed } : {}),
     // 向后兼容:单存调用方仍读 adapterPath。
@@ -1089,6 +1293,9 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
       case '/recorder/init': return await handleInit(ctx, body, res);
       case '/recorder/pipeline': return await handlePipeline(ctx, body, res);
       case '/recorder/pipeline/preview': return handlePipelinePreview(ctx, body, res);
+      case '/recorder/pipeline/score': return await handlePipelineScore(ctx, body, res);
+      case '/recorder/pipeline/generate': return await handlePipelineGenerate(ctx, body, res);
+      case '/recorder/draft/verify': return await handleDraftVerify(ctx, body, res);
       case '/recorder/save': return await handleSave(ctx, body, res);
       case '/recorder/verify': return await handleVerify(ctx, body, res);
       case '/recorder/admin/log-level':
@@ -1145,7 +1352,9 @@ export function createApp(cfg: RecorderConfig, loggerOverride?: Logger, metricsO
       model: cfg.LLM_MODEL,
       timeoutMs: cfg.LLM_TIMEOUT_MS,
       // 把 score() 内被捕获的错误经结构化 logger 暴露(不破坏 null 契约):超时/网络/解析失败可诊断。
-      onError: (err) => logger.warn('recorder.rank.llm_score_error', { status: 'error', stage: String((err as Error)?.message || err) }),
+      // 收到的可能是 Error 也可能是结构化观测对象(score_prompt_degraded),统一 stringifyLlmError 序列化,
+      // 避免旧写法把无-message 对象记成 "[object Object]"。
+      onError: (err) => logger.warn('recorder.rank.llm_score_error', { status: 'error', stage: stringifyLlmError(err) }),
     }),
     generator: createGenerator({
       apiKey: cfg.LLM_SYNTHESIS_ENABLED ? cfg.LLM_API_KEY : undefined,
@@ -1153,7 +1362,7 @@ export function createApp(cfg: RecorderConfig, loggerOverride?: Logger, metricsO
       model: cfg.LLM_MODEL,
       timeoutMs: cfg.LLM_TIMEOUT_MS,
       // 逐候选生成/预算降级/repair 的错误经结构化 logger 暴露(不破坏 null 契约):可诊断超时/降级/单候选失败。
-      onError: (err) => logger.warn('recorder.pipeline.llm_generate_error', { status: 'error', stage: String((err as Error)?.message || (err as { kind?: string })?.kind || err) }),
+      onError: (err) => logger.warn('recorder.pipeline.llm_generate_error', { status: 'error', stage: stringifyLlmError(err) }),
     }),
     vnc: createVncOrchestrator({ logger }),
     vncBridges: new Map(),

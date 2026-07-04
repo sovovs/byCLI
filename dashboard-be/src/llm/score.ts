@@ -62,7 +62,7 @@ export interface ScoredCandidate {
   /** core 聚拢进该接口的候选/请求 id(debug/provenance)。 */
   mergedCandidateIds?: string[];
 }
-export interface ScoreResult { candidates: ScoredCandidate[] }
+export interface ScoreResult { candidates: ScoredCandidate[]; /** LLM 返回的原始 interfaces JSON 文本(透明展示用;解析失败/无返回时缺省)。 */ rawInterfacesJson?: string }
 export interface Scorer { score(input: ScoreInput): Promise<ScoreResult | null> }
 
 // 喂 LLM 的候选**软上限**:≤CAP 全量喂,>CAP 才按启发式分截断(排序提示)。
@@ -83,17 +83,25 @@ export function isConfirmedJunk(c: RankCandidate): boolean {
   return !hasDataShape && !hasParams;
 }
 
-/** 选要喂给 LLM 的候选:用户显式选集优先(按选中顺序,仍去确定垃圾) → 否则去垃圾+按分降序+软上限截断。
+/** core 已一票否决(hardReject:埋点/静态/mutation)的候选 —— 带 `hard_reject:` risk。这类不该占 LLM
+ *  名额(core 规则层已确定拒绝,送 LLM 是浪费 + 挤掉真候选)。注:低分 rejected(score<LOW_MIN)不在此列
+ *  (无 hard_reject risk),仍可进 LLM 被救回。 */
+function isHardRejected(c: RankCandidate): boolean {
+  return (c.risks ?? []).some((r) => r.startsWith('hard_reject:'));
+}
+
+/** 选要喂给 LLM 的候选:用户显式选集优先(按选中顺序,仍去确定垃圾/硬拒) → 否则去垃圾+去硬拒+按分降序+软上限截断。
  *  全垃圾时回退原集(永不喂空)。 */
 export function selectCandidatesForLlm(candidates: RankCandidate[], cap = LLM_CANDIDATE_CAP, candidateIds?: string[]): RankCandidate[] {
-  // 用户手选:只保留选中的(过滤确定垃圾仍生效,防误选 beacon);保持降序便于 prompt 稳定。
+  // 用户手选:只保留选中的(过滤确定垃圾/硬拒仍生效,防误选 beacon/埋点);保持降序便于 prompt 稳定。
   if (candidateIds && candidateIds.length) {
     const want = new Set(candidateIds);
-    const picked = candidates.filter((c) => want.has(c.id) && !isConfirmedJunk(c));
+    const picked = candidates.filter((c) => want.has(c.id) && !isConfirmedJunk(c) && !isHardRejected(c));
     if (picked.length) return [...picked].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     // 选集全是垃圾/不存在 → 落到自动选(永不喂空)。
   }
-  const usable = candidates.filter((c) => !isConfirmedJunk(c));
+  // 去确定垃圾 + 去 core 硬拒(埋点/静态/mutation),再按分降序取 top-cap。
+  const usable = candidates.filter((c) => !isConfirmedJunk(c) && !isHardRejected(c));
   const pool = usable.length ? usable : candidates;
   return [...pool].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, cap);
 }
@@ -214,90 +222,103 @@ function bandFor(score: number, hardReject: string | null, p: ScoringProfile): S
 }
 
 const PROMPT_A = [
-  '你是 byCLI recorder 的数据接口评审器。你会收到一次浏览器任务的 A/B 录制摘要(两个 sample 用不同输入)。',
+  '你是 byCLI recorder 的数据接口评审器。收到一次浏览器任务的 A/B 录制摘要(两个 sample 用不同输入)。',
+  '每个候选是 recorder-core 已按 (method+host+pathname) **聚拢好的 endpoint group**;你**不重新聚拢/拆分/质疑聚拢**,',
+  '只在给定事实上做语义推断。只输出一个原始 JSON 对象(无 markdown/正文/解释)。',
   '',
-  '🔴 重要前提:下面每个候选都是 recorder-core 已经按 (method + host + pathname) **聚拢好的一个 endpoint group**。',
-  '`paramObservations` 是 core 产出的**确定性观测事实**(每个参数:observedVariation 值是否变过、valueKinds 运行时',
-  '类型、dynamicLike/cursorLike 名字命中模式、observedCount/totalCalls/observedSamples 覆盖)。',
-  '你**不要再自己按 URL 聚拢/拆分**,也不要质疑聚拢;你的工作是在这些事实之上做**语义推断**。',
+  '## 读表说明(paramObservations 用 TOON 表格)',
+  '`paramObservations[N]{列名...}:` 声明行数与列序,其后每行按列序取值。约定:',
+  '- 空单元 = 该列对本行不适用/未命中;`dynamicLike/signedLike/cacheBusterLike/cursorLike` 命中为 `1`、否则空。',
+  '- `observedVariation` 是**三态**:`true`(值跨调用变过)/`false`(值稳定)/`unknown`(只见一次或未捕获值)。',
+  '  **`unknown` 不等于 `false`** —— 别把"没判过"当成"值稳定"。`coverage`="出现次数/总调用次数"。',
+  '- evidence(navigations/actions/endpointCalls/responseSummary)仍是 JSON;endpointCalls 无原始响应体。',
   '',
-  '只输出一个原始 JSON 对象(不要 markdown/正文/解释)。',
+  '## 1. 接口功能',
+  '`inferredFunction`:一句平实中文,说明这个 endpoint 做什么/返回什么数据(例:"按关键词搜索文章并返回结果列表")。',
   '',
-  '## 1. 接口功能(给用户看)',
-  '`inferredFunction`:一句平实中文,说明这个 endpoint 做什么 / 返回什么数据(例:"按关键词搜索文章并返回结果列表")。',
+  '## 2. 参数角色推断(paramUnion,逐个参数输出)',
+  '每参数输出 `paramRole` ∈ {pagination, dynamic, infrastructure_constant, query_dimension, seed_argument,',
+  '  auth_session, unknown_constant}、`exposeAsArg` ∈ {yes, optional_candidate, no}、`inferredMeaning`。铁律:',
+  '- observedVariation=false **不等于** fixed/infrastructure(可能只是 A/B 恰好同值);unknown 更不是。',
+  '- type/category_id/sort/tab/order 这类**查询维度**即使没变也是 query_dimension(exposeAsArg=optional_candidate)。',
+  '- seed_argument 仅当**值确实随用户输入变化**(observedVariation=true 且对应 A/B 不同输入,或页面 URL 的 seed 参数)。',
+  '- dynamicLike → paramRole=dynamic、exposeAsArg=no(进 risks);cursorLike → paramRole=pagination;',
+  '  cookie/session 鉴权参数 → auth_session、exposeAsArg=no。',
   '',
-  '## 2. 参数角色推断(paramUnion,逐个 paramObservation 输出)',
-  '对每个观测到的参数,输出 `paramRole` ∈ {pagination, dynamic, infrastructure_constant, query_dimension,',
-  '  seed_argument, auth_session, unknown_constant}、`exposeAsArg` ∈ {yes, optional_candidate, no}、`inferredMeaning`。',
-  '铁律(必须遵守):',
-  '- **不要把 observedVariation=false 等同于 "fixed / infrastructure"。** 值没变可能只是 A/B 恰好用了同一个值。',
-  '- type / category_id / sort / tab / order 这类**查询维度**即使本次没变,也是 query_dimension(exposeAsArg=optional_candidate),不是 infrastructure_constant。',
-  '- seed_argument 只能用于**值确实随用户输入变化**(observedVariation=true 且能对应到用户在 A/B 输入的不同值,或页面 URL 的 seed 参数)。值没真正跟随输入就不是 seed_argument。',
-  '- dynamicLike=true(_t/ts/nonce/sign/token/csrf/cb/rand)→ paramRole=dynamic、exposeAsArg=no(同时进 risks)。',
-  '- cursorLike=true(cursor/offset/page/page_token/limit)→ paramRole=pagination。',
-  '- 依赖 cookie/session 的鉴权类参数 → auth_session、exposeAsArg=no。',
-  '',
-  '## 3. 双轨信号',
-  'A) ruleSignals(可审计确定性事实,每条 present:true/false + why,只用下列固定名):',
+  '## 3. 双轨信号(只用下列固定名)',
+  'A) ruleSignals(确定性事实,每条 present:true/false + why):',
   '- stable_json_shape: 响应是 array/object 的稳定列表/对象数据(非 HTML/静态)。',
-  '- seed_arg_maps_to_param: A/B 证明用户输入映射到某 query/body/path/header 参数(或 A/B 页面 URL 仅 seed 参数不同,如 /search?q=apple vs ?q=banana,即使 XHR 未体现也算成立)。',
-  '- response_echoes_seed: 响应体里**字面回显**了 seed 输入值(确定性可见,非语义判断)。',
+  '- seed_arg_maps_to_param: A/B 证明用户输入映射到某 query/body/path/header 参数(或 A/B 页面 URL 仅 seed 参数不同,如 /search?q=apple vs ?q=banana,XHR 未体现也算)。',
+  '- response_echoes_seed: 响应体**字面回显** seed 输入值(确定性,非语义)。',
   '- requires_session: 依赖 cookie/session/authSignals 且读用户自有数据。',
-  '- dynamic_field: 含 dynamicLike 参数(_t/ts/timestamp/nonce/uuid/sign/csrf/token/cb/rand)。',
+  '- dynamic_field: 含 dynamicLike 参数。',
   '- weak_html_static: 响应像 HTML/静态资源/脚本/样式/图片/字体。',
   '- suspected_mutation: 写方法 POST/PUT/PATCH/DELETE 且响应不是读列表 array。',
-  'B) semanticSignals(语义判断,每条 strength:strong|medium|weak + why,只用下列固定名):',
-  '- response_varies_with_seed: A/B 响应随输入变化且可解释为查询结果(语义判断,与 rule 的字面 echo 区分;不要同时报成 ruleSignal)。',
-  '- rich_business_data: 响应字段丰富 / 列表规模可观,是有价值的业务数据(不只是空壳/单标志)。',
+  'B) semanticSignals(语义判断,每条 strength:strong|medium|weak + why):',
+  '- response_varies_with_seed: A/B 响应随输入变化且可解释为查询结果(与 rule 的字面 echo 区分,别两处都报)。',
+  '- rich_business_data: 响应字段丰富/列表规模可观,是有价值业务数据(非空壳/单标志)。',
   '- endpoint_semantic_data: 路径/参数/响应语义指向真实数据接口(非埋点/监控)。',
   '- query_dimensions_available: 存在可暴露的查询维度参数(type/category/sort 等)。',
   '- param_interpretable: 参数语义可解释、能映射成命令入参。',
   '- pagination_supported: 支持分页(cursor/offset/page)。',
   '',
-  '## 4. hardReject(三类,优先于一切分数,直接拒)',
-  '- confirmed_analytics:埋点/监控域名或路径(含字节 Slardar `/monitor_web/`、track、beacon、log、stat 等)。',
-  '- confirmed_static:确认静态资源(html/js/css/字体/图片)。',
+  '## 4. hardReject(优先于一切分数,直接拒)',
+  '- confirmed_analytics:埋点/监控域名或路径(字节 Slardar `/monitor_web/`、track、beacon、log、stat 等)。',
+  '- confirmed_static:静态资源(html/js/css/字体/图片)。',
   '- mutation:写方法且响应不是读列表 array。',
-  '**无参数据命令不杀**:稳定可读的列表/排行数据,即使用户输入未映射任何参数、A/B 基本相同,仍是有价值的',
-  '无参数据命令 → isDataEndpoint=true、不要 hardReject、stable_json_shape=present;input_independent_across_ab 只进 risks。',
+  '**无参数据命令不杀**:稳定可读的列表/排行数据,即使输入未映射任何参数、A/B 基本相同,仍 isDataEndpoint=true、',
+  '不 hardReject、stable_json_shape=present;input_independent_across_ab 只进 risks。',
   '',
-  '## 5. 效用分(辅助,非权威 —— be 会用固定 delta 双轨重算)',
+  '## 5. 效用分(辅助,非权威 —— be 用固定 delta 双轨重算,别自行调权)',
   '`llmUtilityScore` 0-100、`llmUtilityBand` ∈ {high, medium, low, reject}。',
   '',
   '## 输出 JSON 结构',
+  '⚠️ interfaces 与输入候选**一一对应、同序、同数量**:逐个候选各一条,不重排/遗漏/合并/新增。只用上面的固定信号名。',
   '{ "interfaces": [ {',
-  '  "candidateId": 必须原样回传输入候选的 candidateId(下游按它映射回原始候选,务必一致),',
-  '  "mergedCandidateIds": [可选,聚拢进来的 id],',
-  '  "method", "pathname",',
+  '  "candidateId": 原样回传输入的 candidateId(下游按它映射,顺序也须一致),',
+  '  "mergedCandidateIds": [可选], "method", "pathname",',
   '  "inferredFunction": "一句话",',
   '  "paramUnion": [ { "name","in","requiredness","observedVariation","paramRole","exposeAsArg","inferredMeaning","why" } ],',
   '  "isDataEndpoint": bool,',
-  '  "hardReject": null 或 "confirmed_analytics"|"confirmed_static"|"mutation",',
-  '  "ruleSignals": [ { "name":固定名,"present":bool,"why" } ],',
-  '  "semanticSignals": [ { "name":固定名,"strength":"strong"|"medium"|"weak","why" } ],',
+  '  "hardReject": null | "confirmed_analytics"|"confirmed_static"|"mutation",',
+  '  "ruleSignals": [ { "name","present":bool,"why" } ],',
+  '  "semanticSignals": [ { "name","strength":"strong"|"medium"|"weak","why" } ],',
   '  "llmUtilityScore": 0-100, "llmUtilityBand": "...",',
   '  "risks": [ ... ], "scoreRationale": "一句话"',
   '} ] }',
-  '只用上面列出的固定信号名。',
   '',
-  '## 证据形状(evidence,每候选一个数组,A/B 各一条)',
-  '为控 prompt 体积,score 阶段**不再喂原始响应体**,改喂**结构摘要**(不含样本值,仅键/形状):',
-  '- navigations: A/B 页面 URL 序列(仅 path+query,已去 origin、query 值截断);A/B 导航 diff 可暴露 seed 藏在 URL 里。',
-  '- actions: endpoint 调用附近的用户操作(type/selector/valueShape/key)。',
-  '- endpointCalls: 每条匹配调用 `{ urlParams(已解析的 query 键值), status, triggeredBy }`(不含原始响应体)。',
-  '- responseSummary: 该 endpoint 代表调用的响应结构摘要 `{ status, kind(array/object/scalar/html/unknown),',
-  '  topKeys(顶层键), arrayPaths[{path,count}], rowPath(行数据数组路径), rowKeys(行字段点分路径),',
-  '  businessFieldHints(像业务数据的字段名) }`。据此判 stable_json_shape / rich_business_data:',
-  '  rowKeys 丰富 + businessFieldHints 命真实数据(title/name/view/like/count…)= 有价值的业务列表。',
-  '  解析失败时 responseSummary 为 `{ parse:"failed", kind, textPrefix }`(只有短前缀,无完整体)。',
-  '输入候选(已聚拢,含 paramObservations 事实 + 上述 evidence)如下:',
+  '## 证据字段速览(evidence,每候选 A/B 各一条;不含原始响应体)',
+  '- navigations: A/B 页面 URL(path+query);A/B 导航 diff 可暴露 seed 藏在 URL 里。',
+  '- actions: endpoint 调用附近用户操作(type/valueShape/key;valueShape.len 的 A/B 差异是 seed 线索)。',
+  '- endpointCalls: `{urlParams,status,triggeredBy}`。urlParams **只列证明性键**(值随 A/B 变的 seed / 分页 cursor);',
+  '  稳定常量键不重复(其名字与稳定性已在 paramObservations 表里)—— urlParams 里没有的键即"稳定常量",非缺失。',
+  '- responseSummary: `{status,kind,topKeys,arrayPaths[{path,count}],rowPath,rowKeys,businessFieldHints}`。',
+  '  rowKeys 丰富 + businessFieldHints 命真实数据(title/name/view/like/count…)= 有价值业务列表 → stable_json_shape/rich_business_data。',
+  '  解析失败时为 `{parse:"failed",kind,textPrefix}`(仅短前缀)。',
+  '输入候选如下:',
 ].join('\n');
 
 // ── prompt 全局预算闸门(第1步核心)──
 // 根因:候选 × 样本 × 响应体在旧路径下相乘、无全局上限 → 真机 98KB。改喂结构摘要后单份已小,
 // 但仍加硬上限做兜底:超预算就按「信息价值从低到高」逐级降级,直到 < MAX_SCORE_PROMPT_CHARS。
 // 铁律:**绝不降 rowPath/topKeys/kind**(判接口性质的核心结构信息)。
-const MAX_SCORE_PROMPT_CHARS = 10_000;
+//
+// 2026-07-01 由 10_000 提到 40_000(修 scored=1/N 根因)。旧值 10_000 是「原始响应体」时代的兜底,
+// 改喂结构摘要 + cap 20→5 后从未重调:实测 PROMPT_A 基座 ~4.3KB,单个 juejin 富数据候选完全降级后仍 ~8KB,
+// 于是 2 个候选(~11.7KB)就超 10_000 → 候选降级把 cap=5 一路 pop 到 1 → LLM 只收到 1 个候选 →
+// 只回 1 个 interface → 合并回 scored=1/N(其余 N-1 被静默丢在预算闸门,非 LLM 失败)。
+// 2026-07-02 由 40_000 提到 68_000(修 /search 被 pop + ②③ 匹配):真机诊断 cap=8 时预算把 8 pop 到 2。
+// paramObservations 精简(compactParamObs)后单候选实测 ~6.1KB(原 6.9KB),cap=10 → 基座 2.9KB + 10×6.1KB
+// ≈ 64KB;预算 68_000 给足余量让 cap=10 富数据候选全进 LLM、不再 pop。红线:98KB 级撞过网关超时;
+// 68_000 chars ≈ 17K tokens,远低于超时线。降级阶梯仍保留兜底病态输入。真机以 score_candidate_selection
+// 的 sent 数 == selected 数为准(全进,无 pop)。
+const MAX_SCORE_PROMPT_CHARS = 68_000;
+// 分批并发(破 CF 120s 硬墙):LLM 网关 api.ikuncode.cc 前套 Cloudflare,120s Proxy Read Timeout 硬限。
+// 候选多→输出 token 多→逐 token 生成 >120s → CF 524 掐断 → 全走规则分。实测 2 候选 87s(<120s ok)、
+// 7 候选 371s(524 失败)。故把候选切成小批,每批独立调 LLM,并发跑;墙钟≈最慢单批而非串行和。
+// 每批 SCORE_BATCH_SIZE 个候选控制单批输出量 <120s;并发度限 SCORE_BATCH_CONCURRENCY 防网关 QPS 限流。
+const SCORE_BATCH_SIZE = 3;
+const SCORE_BATCH_CONCURRENCY = 3;
 // 降级各级的裁剪量。
 const DEGRADE_ACTIONS_CAP = 2;   // 步骤(2):actions 5→2
 const DEGRADE_ROWKEYS_CAP = 10;  // 步骤(3):rowKeys 20→10
@@ -308,6 +329,12 @@ export interface ScorePromptStat {
   chars: number;
   candidates: number;
   degraded: string[];
+  /** 实际发送给 LLM 的候选 id(post-degradation,按 prompt 内顺序);score() 用于回填 id 位置对齐兜底。 */
+  sentIds: string[];
+  /** cap 选中(去垃圾+降序+软上限)但**降级前**的候选 id;与 sentIds 对比可看谁被预算 pop。 */
+  selectedIds: string[];
+  /** 全部候选 id + rank 规则分(降序);诊断某接口是没被提取、还是 cap 截断(看排第几)、还是预算 pop。 */
+  allScored: Array<{ id: string; score: number }>;
 }
 
 type EvidenceList = ScoreEvidence[];
@@ -323,6 +350,66 @@ interface PerCand {
   evidence: EvidenceList;
 }
 
+/** score 专用精简 paramObservations(②b 压体积):只留 LLM 判角色的核心信号,砍冗余观测子字段。
+ *  保留 name/in/observedVariation + 名字命中标志(dynamic/signed/cacheBuster/cursorLike)+ 覆盖率
+ *  (observedCount/totalCalls 合成 "n/m")。砍 observedSamples(A/B 数组)、valueKinds、observedAlways
+ *  (可由覆盖率推)。只在信号为 true 时带该键(false/空不占字符)。core 原 paramObservations 不变。 */
+function compactParamObs(obs: unknown): CompactParamObs[] | unknown {
+  if (!Array.isArray(obs)) return obs;
+  return obs.map((p: Record<string, unknown>) => {
+    const out: CompactParamObs = { name: String(p.name ?? ''), in: String(p.in ?? '') };
+    // observedVariation 是**三态** true|false|'unknown'(core aggregate.ts):unknown 不能当 false,
+    // 否则 LLM 会把"只出现一次/body 未捕获值"误判成"值稳定"。原样透传三态。
+    if (p.observedVariation !== undefined) out.observedVariation = p.observedVariation as boolean | 'unknown';
+    if (typeof p.observedCount === 'number' && typeof p.totalCalls === 'number') out.coverage = `${p.observedCount}/${p.totalCalls}`;
+    for (const flag of ['dynamicLike', 'signedLike', 'cacheBusterLike', 'cursorLike'] as const) {
+      if (p[flag]) out[flag] = true;
+    }
+    return out;
+  });
+}
+
+/** compactParamObs 单行形状(TOON 编码器输入)。 */
+interface CompactParamObs {
+  name: string;
+  in: string;
+  observedVariation?: boolean | 'unknown';
+  coverage?: string;
+  dynamicLike?: true;
+  signedLike?: true;
+  cacheBusterLike?: true;
+  cursorLike?: true;
+}
+
+// TOON(Token-Oriented Object Notation)表格列序 —— 表头声明一次,逐行按此序取值,消除每行重复的字段名。
+// 顺序固定 = 表头即 schema;endpointCalls/rowKeys 不 TOON 化(codex A2/A3:urlParams 嵌套键随接口变、
+// rowKeys 收益小),仅 paramObservations 这种**同构 + 字段稳定**的数组表格化。
+const TOON_PARAM_COLS = ['name', 'in', 'observedVariation', 'coverage', 'dynamicLike', 'signedLike', 'cacheBusterLike', 'cursorLike'] as const;
+
+/**
+ * 把 compactParamObs 数组编码成 TOON 表格(表头 + 逐行)。零字段丢失:每参数每信号位都逐行保留。
+ * 编码约定(须与 PROMPT_A 的"读表说明"一致):
+ * - 首行 `paramObservations[N]{col,col,...}:` 声明行数 + 列序。
+ * - observedVariation **保留三态**字面量(true/false/unknown),绝不压成 1/空 —— unknown≠false(codex 红线)。
+ * - 布尔命中列(dynamicLike/signedLike/cacheBusterLike/cursorLike):命中→`1`,未命中/缺省→空单元。
+ * - coverage 原样 "n/m";空单元 = 该列对本行不适用。
+ * 非数组(异常输入)→ 退回 JSON 串(不抛,保证 renderPrompt 永不崩)。
+ */
+export function toonParamObservations(compacted: unknown): string {
+  if (!Array.isArray(compacted)) return JSON.stringify(compacted);
+  const header = `paramObservations[${compacted.length}]{${TOON_PARAM_COLS.join(',')}}:`;
+  // 命中列(布尔):命中→1、缺省→空。observedVariation 是三态列,绝不用 1/空,始终写字面量 true/false/unknown。
+  const FLAG_COLS = new Set(['dynamicLike', 'signedLike', 'cacheBusterLike', 'cursorLike']);
+  const cell = (p: CompactParamObs, col: (typeof TOON_PARAM_COLS)[number]): string => {
+    const v = (p as unknown as Record<string, unknown>)[col];
+    if (col === 'observedVariation') return v === undefined ? '' : String(v); // 三态字面量:true/false/unknown
+    if (FLAG_COLS.has(col)) return v === true ? '1' : '';                     // 命中列:1 / 空
+    return v === undefined ? '' : String(v);                                   // name/in/coverage 原样
+  };
+  const rows = compacted.map((p) => '  ' + TOON_PARAM_COLS.map((c) => cell(p as CompactParamObs, c)).join(','));
+  return [header, ...rows].join('\n');
+}
+
 function buildPerCand(top: RankCandidate[], samples: ScoreSample[]): PerCand[] {
   return top.map((c) => ({
     candidateId: c.id,
@@ -335,37 +422,62 @@ function buildPerCand(top: RankCandidate[], samples: ScoreSample[]): PerCand[] {
       authRequired: c.endpoint?.authRequired,
     },
     // core 聚拢事实:LLM 在其上判语义角色(14-plan 核心架构原则)。
-    paramObservations: c.paramObservations,
+    // score 专用精简(②b 压体积):保留 LLM 判 paramRole 的核心信号位(observedVariation + dynamic/signed/
+    // cacheBuster/cursorLike 名字命中 + 覆盖率),砍冗余(observedSamples 数组、valueKinds、observedCount/
+    // totalCalls/observedAlways 三个可合成一个 coverage)。实测单候选大头是这些每参数一整套字段的累积。
+    paramObservations: compactParamObs(c.paramObservations),
     responseShapeVariants: c.responseShapeVariants,
     mergedRequestIds: c.mergedRequestIds,
     prior: { heuristicScore: c.score, heuristicConfidence: c.confidence, scoreExplanation: c.scoreExplanation },
     args: c.args,
     responseShape: c.responseShape,
-    evidence: samples.map((s) => buildScoreEvidenceSummary(s, c)),
+    // 逐样本、逐候选隔离 evidence 构建:某个候选(或其某个 sample)在摘要构建中抛错,
+    // **绝不能**让整批 buildScorePromptWithStat 抛出 → score() 外层 catch → 返回 null → 所有候选丢分。
+    // 该候选降级为空 evidence(仍带 endpoint/paramObservations 事实,LLM 仍能判性质),其余候选照常。
+    evidence: samples
+      .map((s) => {
+        try {
+          return buildScoreEvidenceSummary(s, c);
+        } catch {
+          return null;
+        }
+      })
+      .filter((e): e is ScoreEvidence => e != null),
   }));
 }
 
+/**
+ * 渲染 perCand 数组为 prompt 数据段。paramObservations **表格化为 TOON**(表头+行,省重复字段名);
+ * 其余字段(endpoint/evidence/endpointCalls/responseSummary/rowKeys)保持 JSON(codex A2/A3:
+ * urlParams 嵌套键随接口变、rowKeys 收益小,不 TOON 化)。
+ *
+ * 实现:每候选先把 paramObservations 从对象里摘出、其余字段 minified-JSON(无缩进),再把 TOON 表格块拼在该候选后。
+ * 这样 degradeToBudget 就地改 perCand(actions/rowKeys/候选数)后重新 renderPrompt 仍成立。
+ */
 function renderPrompt(perCand: PerCand[]): string {
-  return `${PROMPT_A}\n${JSON.stringify(perCand, null, 2)}`;
+  const blocks = perCand.map((pc) => {
+    const { paramObservations, ...rest } = pc;
+    // minify(不带缩进):JSON 语义不变、LLM 解析等价,但省掉所有换行/缩进空格(实测数据段省 ~38%)。
+    const restJson = JSON.stringify(rest);
+    const toon = toonParamObservations(paramObservations);
+    // 候选块:其余字段 JSON(单行)+ 一段 TOON paramObservations(表头+行)。用 --- 分隔让 LLM 明确二者同属一个候选。
+    return `${restJson}\n${toon}`;
+  });
+  return `${PROMPT_A}\n[\n${blocks.join('\n---\n')}\n]`;
 }
 
 /**
  * 逐级降级(就地修改 perCand),每步后重算体积,直到 < MAX_SCORE_PROMPT_CHARS 或降无可降。
- * 顺序(信息价值从低到高):(1)去 action selector →(2)actions 5→2 →(3)rowKeys 20→10 →(4)候选 3→2。
+ * 顺序(信息价值从低到高):(1)actions 5→2 →(2)rowKeys 20→10 →(3)候选 3→2。
  * 绝不动 rowPath/topKeys/kind。返回体积统计(含降级步骤)。
+ * 注:score 侧 actions 已不带 selector(见 buildScoreEvidenceSummary),旧的"去 selector"降级步已删。
  */
 function degradeToBudget(perCand: PerCand[]): { prompt: string; stat: ScorePromptStat } {
   const degraded: string[] = [];
   let prompt = renderPrompt(perCand);
   const under = () => prompt.length <= MAX_SCORE_PROMPT_CHARS;
 
-  // (1) 去 action selector
-  if (!under()) {
-    for (const pc of perCand) for (const ev of pc.evidence) ev.actions = ev.actions.map(({ selector: _s, ...rest }) => rest);
-    degraded.push('drop_action_selectors');
-    prompt = renderPrompt(perCand);
-  }
-  // (2) actions 5→2
+  // (1) actions 5→2
   if (!under()) {
     for (const pc of perCand) for (const ev of pc.evidence) ev.actions = ev.actions.slice(-DEGRADE_ACTIONS_CAP);
     degraded.push(`actions_to_${DEGRADE_ACTIONS_CAP}`);
@@ -392,14 +504,20 @@ function degradeToBudget(perCand: PerCand[]): { prompt: string; stat: ScorePromp
     prompt = renderPrompt(perCand);
   }
 
-  return { prompt, stat: { chars: prompt.length, candidates: perCand.length, degraded } };
+  return { prompt, stat: { chars: prompt.length, candidates: perCand.length, degraded, sentIds: perCand.map((pc) => pc.candidateId), selectedIds: [], allScored: [] } };
 }
 
 /** 构建 score prompt + 预算闸门统计(供调用方记日志)。 */
 export function buildScorePromptWithStat(input: ScoreInput): { prompt: string; stat: ScorePromptStat } {
   const top = selectCandidatesForLlm(input.candidates, input.cap, input.candidateIds);
   const perCand = buildPerCand(top, input.samples);
-  return degradeToBudget(perCand);
+  const { prompt, stat } = degradeToBudget(perCand);
+  // 诊断:全部候选(id+rank分,降序)+ cap 选中集,供定位某接口死在「未提取 / cap 截断 / 预算 pop」哪一关。
+  stat.selectedIds = top.map((c) => c.id);
+  stat.allScored = [...input.candidates]
+    .map((c) => ({ id: c.id, score: c.score ?? 0 }))
+    .sort((a, b) => b.score - a.score);
+  return { prompt, stat };
 }
 
 export function buildScorePrompt(input: ScoreInput): string {
@@ -417,163 +535,176 @@ export function createScorer(opts: { apiKey?: string; baseURL?: string; model: s
       if (!client) return null;
       const profile = input.profile ?? fallbackProfile;
       const deltas = signalDeltas(profile);
-      try {
-        // 评分只靠请求/响应证据判断接口性质,**不发截图**(省一大块 token 提速;截图留给 generate 阶段)。
-        const { prompt, stat } = buildScorePromptWithStat(input);
-        // 预算闸门降级可诊断:降过级就经 onError 报一条(非错误,是观测)。
-        if (stat.degraded.length) {
-          opts.onError?.({ kind: 'score_prompt_degraded', ...stat });
-        }
-        const content: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
-        const res = await client.messages.create({ model: opts.model, max_tokens: 8000, messages: [{ role: 'user', content }] });
-        const text = res.content.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
-        const json = extractJson(text);
-        if (!json) return null;
-        // 新 PROMPT_A 输出 `interfaces`(ruleSignals/semanticSignals/paramUnion/inferredFunction);
-        // 兼容旧形状 `candidates`(signals)。任一为数组即可解析。
-        const parsed = JSON.parse(json) as {
-          interfaces?: Array<Record<string, unknown>>;
-          candidates?: Array<Record<string, unknown>>;
-        };
-        const rows = Array.isArray(parsed.interfaces)
-          ? parsed.interfaces
-          : Array.isArray(parsed.candidates)
-            ? parsed.candidates
-            : null;
-        if (!rows) return null;
-        // candidateId → 输入候选(取 paramObservations 事实,用于按参数分级动态惩罚)。
-        const inputById = new Map(input.candidates.map((c) => [c.id, c]));
-        const out: ScoredCandidate[] = rows
-          .map((c) => {
-            const candidateId = typeof c.candidateId === 'string' ? c.candidateId : '';
-            const hardReject = typeof c.hardReject === 'string' && c.hardReject ? c.hardReject : null;
-            // ruleSignals(新)优先,回退 signals(旧);两者形状相同 {name,present,why}。
-            const rawRuleArr = Array.isArray(c.ruleSignals)
-              ? (c.ruleSignals as Array<Record<string, unknown>>)
-              : Array.isArray(c.signals)
-                ? (c.signals as Array<Record<string, unknown>>)
+      // 全量候选索引:动态惩罚(computeDynamicPenalty)按参数事实算,须用**原始**候选(非分批子集/compact)。
+      const inputById = new Map(input.candidates.map((c) => [c.id, c]));
+
+      /** 单批评分:对一批候选独立 buildPrompt→调 LLM→解析→逐行求分(位置对齐按**本批** sentIds)。
+       *  失败(CF 524/超时/解析失败)→ 返回 null(该批候选保留规则分,不拖垮其余批)。 */
+      const scoreBatch = async (batchCands: RankCandidate[]): Promise<{ out: ScoredCandidate[]; rawJson: string } | null> => {
+        try {
+          // 用本批候选构建 prompt(candidateIds 锁定本批,cap 给足不再截断——批已够小)。
+          const batchInput: ScoreInput = { candidates: batchCands, samples: input.samples, profile, cap: batchCands.length, candidateIds: batchCands.map((c) => c.id) };
+          const { prompt, stat } = buildScorePromptWithStat(batchInput);
+          if (stat.degraded.length) {
+            opts.onError?.({ kind: 'score_prompt_degraded', chars: stat.chars, candidates: stat.candidates, degraded: stat.degraded, sentIds: stat.sentIds });
+          }
+          const content: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
+          const tLlm = Date.now();
+          const res = await client.messages.create({ model: opts.model, max_tokens: 8000, messages: [{ role: 'user', content }] });
+          const text = res.content.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
+          // 诊断:每批 LLM 墙钟 + 输入/输出量。破 CF 120s 硬墙看这条——单批 ms 必须 <120s。
+          opts.onError?.({
+            kind: 'score_llm_timing', ms: Date.now() - tLlm,
+            promptChars: prompt.length, outChars: text.length, sent: stat.sentIds.length,
+            ...(res.usage ? { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens } : {}),
+            ...(res.stop_reason ? { stopReason: res.stop_reason } : {}),
+          });
+          const json = extractJson(text);
+          if (!json) return null;
+          const parsed = JSON.parse(json) as { interfaces?: Array<Record<string, unknown>>; candidates?: Array<Record<string, unknown>> };
+          const rows = Array.isArray(parsed.interfaces) ? parsed.interfaces : Array.isArray(parsed.candidates) ? parsed.candidates : null;
+          if (!rows) return null;
+          // 位置对齐兜底(按本批 sentIds):LLM 漏填/改写 candidateId 时按发送顺序 + endpoint 交叉校验归位。
+          const sentIds = stat.sentIds;
+          const alignByPosition = rows.length === sentIds.length && new Set(sentIds).size === sentIds.length;
+          if (rows.length !== sentIds.length) opts.onError?.({ kind: 'score_rows_count_mismatch', rows: rows.length, sent: sentIds.length });
+          const rowMatchesSlot = (row: Record<string, unknown>, slotId: string): boolean => {
+            const cand = inputById.get(slotId);
+            if (!cand) return false;
+            const rm = typeof row.method === 'string' ? row.method.toUpperCase() : '';
+            const rp = typeof row.pathname === 'string' ? row.pathname : '';
+            const cm = (cand.endpoint?.method ?? '').toUpperCase();
+            const cp = cand.endpoint?.pathname ?? '';
+            if (!rm && !rp) return true;
+            return (!rm || rm === cm) && (!rp || rp === cp);
+          };
+          let matchedById = 0, matchedByPos = 0, posMismatch = 0;
+          const out: ScoredCandidate[] = rows
+            .map((c, i) => {
+              const rawId = typeof c.candidateId === 'string' ? c.candidateId : '';
+              const idHit = rawId && inputById.has(rawId);
+              let candidateId = rawId;
+              if (idHit) { matchedById++; }
+              else if (alignByPosition && sentIds[i] && rowMatchesSlot(c, sentIds[i])) { candidateId = sentIds[i]; matchedByPos++; }
+              else if (alignByPosition && sentIds[i]) { posMismatch++; }
+              const hardReject = typeof c.hardReject === 'string' && c.hardReject ? c.hardReject : null;
+              const rawRuleArr = Array.isArray(c.ruleSignals) ? (c.ruleSignals as Array<Record<string, unknown>>) : Array.isArray(c.signals) ? (c.signals as Array<Record<string, unknown>>) : [];
+              const ruleSignals: ScoredSignal[] = rawRuleArr
+                .filter((x) => x && typeof x.name === 'string')
+                .map((x) => ({ name: x.name as string, present: x.present !== false, why: typeof x.why === 'string' ? x.why : undefined }));
+              const seenRuleNames = new Set<string>();
+              const present = ruleSignals.filter((x) => {
+                if (!x.present || seenRuleNames.has(x.name)) return false;
+                seenRuleNames.add(x.name);
+                return true;
+              });
+              const presentRuleNames = seenRuleNames;
+              const baseRuleScore = present.reduce((sum, x) => sum + (deltas[x.name] ?? 0), 0);
+              const dynamicPenalty = computeDynamicPenalty(inputById.get(candidateId)?.paramObservations);
+              const deterministicRuleScore = baseRuleScore + dynamicPenalty.delta;
+              const has = (n: string) => presentRuleNames.has(n);
+              const isDataEndpoint = c.isDataEndpoint !== false && !hardReject;
+              const semanticSignals: SemanticSignal[] = Array.isArray(c.semanticSignals)
+                ? (c.semanticSignals as Array<Record<string, unknown>>)
+                    .filter((x) => x && typeof x.name === 'string')
+                    .map((x) => ({ name: x.name as string, strength: x.strength === 'strong' || x.strength === 'medium' || x.strength === 'weak' ? x.strength : 'weak', why: typeof x.why === 'string' ? x.why : undefined }))
                 : [];
-            const ruleSignals: ScoredSignal[] = rawRuleArr
-              .filter((x) => x && typeof x.name === 'string')
-              .map((x) => ({ name: x.name as string, present: x.present !== false, why: typeof x.why === 'string' ? x.why : undefined }));
-            // 去重(Codex P2):布尔 ruleSignal 按名首现为准,重复只计一次。LLM 输出不保证名唯一,
-            // 若把 stable_json_shape 报两次(都 present),+30 profile delta 会叠成 +60——与语义信号
-            // 「每类一次」同理(computeSemanticBonus 已 dedup,rule 轨此前漏了)。去重同时影响求和 +
-            // scoreExplanation + signals,保证三处一致。
-            const seenRuleNames = new Set<string>();
-            const present = ruleSignals.filter((x) => {
-              if (!x.present || seenRuleNames.has(x.name)) return false;
-              seenRuleNames.add(x.name);
-              return true;
-            });
-            const presentRuleNames = seenRuleNames;
-            // ① 确定性 rule 分 = be 用固定 profile delta 对成立 ruleSignal 求和(可复现,LLM 自报分忽略)。
-            //    注:`dynamic_field` 的 profile delta 现为 0(见 signalDeltas 注释);真正的动态惩罚在下面
-            //    按 ParamObservation 事实分级计算,避免误伤读接口缓存破坏参数。
-            const baseRuleScore = present.reduce((sum, x) => sum + (deltas[x.name] ?? 0), 0);
-            // 按参数事实分级的动态惩罚(signed -15 / unknown -5 / cacheBuster 0,取最严一次)。
-            const dynamicPenalty = computeDynamicPenalty(inputById.get(candidateId)?.paramObservations);
-            const deterministicRuleScore = baseRuleScore + dynamicPenalty.delta;
-            const has = (n: string) => presentRuleNames.has(n);
-            const isDataEndpoint = c.isDataEndpoint !== false && !hardReject;
-            // 语义层透传(LLM 推断;双轨据此加分 + 前端展示)。先解析,供 semanticBonus 求和。
-            const semanticSignals: SemanticSignal[] = Array.isArray(c.semanticSignals)
-              ? (c.semanticSignals as Array<Record<string, unknown>>)
-                  .filter((x) => x && typeof x.name === 'string')
-                  .map((x) => ({
-                    name: x.name as string,
-                    strength: x.strength === 'strong' || x.strength === 'medium' || x.strength === 'weak' ? x.strength : 'weak',
-                    why: typeof x.why === 'string' ? x.why : undefined,
-                  }))
-              : [];
-            // ② 语义加分(allowlist + 每类一次 + cap 25 + seed_arg 去重)。
-            const { bonus: rawSemanticBonus, items: semanticItems } = computeSemanticBonus(semanticSignals, presentRuleNames);
-            // ③ hardReject 一票否决:finalScore=0、semanticBonus 不翻案(Codex Moderate 1)。
-            const semanticBonus = hardReject ? 0 : rawSemanticBonus;
-            // finalScore = clamp(deterministicRuleScore + semanticBonus, hardReject→0)。
-            const score = hardReject ? 0 : deterministicRuleScore + semanticBonus;
-            // B(2026-06-27):稳定可读的「无参数据接口」(列表/排行)即使 seed 未映射、A/B 基本相同,
-            // 也值得做成无参数据命令 → 允许进 generate(seed 分够不到 MEDIUM 阈值时也放行,verify 兜底质量)。
-            // 判据:数据接口 + 稳定 JSON 列表 + 非写 + 非 HTML/静态。hardReject(埋点/静态/写)仍一票否决;
-            // dynamic_field(_t/时间戳缓存破坏)不否决。
-            const noArgDataCommand = isDataEndpoint && has('stable_json_shape') && !has('suspected_mutation') && !has('weak_html_static');
-            let confidence = bandFor(score, hardReject, profile);
-            if (noArgDataCommand && confidence === 'rejected') confidence = 'low'; // 可用数据接口,只是无参
-            const decision: ScoredCandidate['decision'] =
-              confidence === 'rejected' ? 'reject'
-                : noArgDataCommand ? 'generate'
-                : confidence === 'low' ? 'review'
-                : 'generate';
-            // 真 delta 评分依据(Codex Moderate 2):rule signal=profile delta、semantic signal=bonus delta。
-            // hardReject 时只留语义层为空、rule 仍展示其原始 delta(透明:为何被拒)。
-            // 动态惩罚(signed/unknown)作为 rule 项进 explanation(cacheBuster 仅 risk、无 delta 项)。
-            const scoreExplanation: ScoreExplanationItem[] = [
-              ...present.map((x) => ({ signal: x.name, delta: deltas[x.name] ?? 0, ...(x.why ? { detail: x.why } : {}) })),
-              ...(!hardReject && dynamicPenalty.explanation ? [dynamicPenalty.explanation] : []),
-              ...(hardReject ? [] : semanticItems),
-            ];
-            const paramUnion: ParamUnionItem[] = Array.isArray(c.paramUnion)
-              ? (c.paramUnion as Array<Record<string, unknown>>)
-                  .filter((p) => p && typeof p.name === 'string')
-                  .map((p) => {
-                    const inVal = p.in === 'query' || p.in === 'body' || p.in === 'path' || p.in === 'header' ? p.in : 'query';
-                    const requiredness = p.requiredness === 'always' || p.requiredness === 'optional' ? p.requiredness : undefined;
-                    const exposeAsArg = p.exposeAsArg === 'yes' || p.exposeAsArg === 'optional_candidate' || p.exposeAsArg === 'no' ? p.exposeAsArg : undefined;
-                    return {
-                      name: p.name as string,
-                      in: inVal,
-                      ...(requiredness ? { requiredness } : {}),
-                      ...(p.observedVariation === true || p.observedVariation === false ? { observedVariation: p.observedVariation } : {}),
-                      ...(typeof p.paramRole === 'string' ? { paramRole: p.paramRole } : {}),
-                      ...(exposeAsArg ? { exposeAsArg } : {}),
-                      ...(typeof p.inferredMeaning === 'string' ? { inferredMeaning: p.inferredMeaning } : {}),
-                      ...(typeof p.why === 'string' ? { why: p.why } : {}),
-                    };
-                  })
-              : [];
-            const mergedCandidateIds = Array.isArray(c.mergedCandidateIds)
-              ? (c.mergedCandidateIds as unknown[]).filter((x): x is string => typeof x === 'string')
-              : undefined;
-            // reason 向后兼容:新字段是 scoreRationale,旧字段是 reason。
-            const reason = typeof c.scoreRationale === 'string' ? c.scoreRationale : typeof c.reason === 'string' ? c.reason : '';
-            // risks = LLM 报的 + 动态惩罚分级 risk(signed/unknown/cacheBuster 均记 risk,去重)。
-            const llmRisks = Array.isArray(c.risks) ? (c.risks as unknown[]).map(String) : [];
-            const risks = dynamicPenalty.risk && !llmRisks.includes(dynamicPenalty.risk)
-              ? [...llmRisks, dynamicPenalty.risk]
-              : llmRisks;
-            return {
-              candidateId,
-              score,
-              uiScore: Math.max(0, Math.min(100, score)),
-              confidence,
-              decision,
-              isDataEndpoint,
-              signals: present.map((x) => ({ name: x.name, present: true, why: x.why })),
-              scoreExplanation,
-              semanticBonus,
-              risks,
-              reason,
-              inferredFunction: typeof c.inferredFunction === 'string' ? c.inferredFunction : undefined,
-              paramUnion: paramUnion.length ? paramUnion : undefined,
-              ruleSignals,
-              semanticSignals: semanticSignals.length ? semanticSignals : undefined,
-              llmUtilityScore: typeof c.llmUtilityScore === 'number' ? c.llmUtilityScore : undefined,
-              llmUtilityBand: typeof c.llmUtilityBand === 'string' ? c.llmUtilityBand : undefined,
-              mergedCandidateIds,
-            };
-          })
-          .filter((c) => c.candidateId);
+              const { bonus: rawSemanticBonus, items: semanticItems } = computeSemanticBonus(semanticSignals, presentRuleNames);
+              const semanticBonus = hardReject ? 0 : rawSemanticBonus;
+              const score = hardReject ? 0 : deterministicRuleScore + semanticBonus;
+              const noArgDataCommand = isDataEndpoint && has('stable_json_shape') && !has('suspected_mutation') && !has('weak_html_static');
+              let confidence = bandFor(score, hardReject, profile);
+              if (noArgDataCommand && confidence === 'rejected') confidence = 'low';
+              const decision: ScoredCandidate['decision'] =
+                confidence === 'rejected' ? 'reject' : noArgDataCommand ? 'generate' : confidence === 'low' ? 'review' : 'generate';
+              const scoreExplanation: ScoreExplanationItem[] = [
+                ...present.map((x) => ({ signal: x.name, delta: deltas[x.name] ?? 0, ...(x.why ? { detail: x.why } : {}) })),
+                ...(!hardReject && dynamicPenalty.explanation ? [dynamicPenalty.explanation] : []),
+                ...(hardReject ? [] : semanticItems),
+              ];
+              const paramUnion: ParamUnionItem[] = Array.isArray(c.paramUnion)
+                ? (c.paramUnion as Array<Record<string, unknown>>)
+                    .filter((p) => p && typeof p.name === 'string')
+                    .map((p) => {
+                      const inVal = p.in === 'query' || p.in === 'body' || p.in === 'path' || p.in === 'header' ? p.in : 'query';
+                      const requiredness = p.requiredness === 'always' || p.requiredness === 'optional' ? p.requiredness : undefined;
+                      const exposeAsArg = p.exposeAsArg === 'yes' || p.exposeAsArg === 'optional_candidate' || p.exposeAsArg === 'no' ? p.exposeAsArg : undefined;
+                      return {
+                        name: p.name as string, in: inVal,
+                        ...(requiredness ? { requiredness } : {}),
+                        ...(p.observedVariation === true || p.observedVariation === false ? { observedVariation: p.observedVariation } : {}),
+                        ...(typeof p.paramRole === 'string' ? { paramRole: p.paramRole } : {}),
+                        ...(exposeAsArg ? { exposeAsArg } : {}),
+                        ...(typeof p.inferredMeaning === 'string' ? { inferredMeaning: p.inferredMeaning } : {}),
+                        ...(typeof p.why === 'string' ? { why: p.why } : {}),
+                      };
+                    })
+                : [];
+              const mergedCandidateIds = Array.isArray(c.mergedCandidateIds) ? (c.mergedCandidateIds as unknown[]).filter((x): x is string => typeof x === 'string') : undefined;
+              const reason = typeof c.scoreRationale === 'string' ? c.scoreRationale : typeof c.reason === 'string' ? c.reason : '';
+              const llmRisks = Array.isArray(c.risks) ? (c.risks as unknown[]).map(String) : [];
+              const risks = dynamicPenalty.risk && !llmRisks.includes(dynamicPenalty.risk) ? [...llmRisks, dynamicPenalty.risk] : llmRisks;
+              return {
+                candidateId, score, uiScore: Math.max(0, Math.min(100, score)), confidence, decision, isDataEndpoint,
+                signals: present.map((x) => ({ name: x.name, present: true, why: x.why })),
+                scoreExplanation, semanticBonus, risks, reason,
+                inferredFunction: typeof c.inferredFunction === 'string' ? c.inferredFunction : undefined,
+                paramUnion: paramUnion.length ? paramUnion : undefined,
+                ruleSignals,
+                semanticSignals: semanticSignals.length ? semanticSignals : undefined,
+                llmUtilityScore: typeof c.llmUtilityScore === 'number' ? c.llmUtilityScore : undefined,
+                llmUtilityBand: typeof c.llmUtilityBand === 'string' ? c.llmUtilityBand : undefined,
+                mergedCandidateIds,
+              };
+            })
+            .filter((c) => c.candidateId);
+          opts.onError?.({ kind: 'score_id_alignment', matchedById, matchedByPos, posMismatch, rows: rows.length, sent: sentIds.length });
+          return { out, rawJson: json };
+        } catch (e) {
+          opts.onError?.(e);
+          return null;
+        }
+      };
+
+      try {
+        // 先选定要评分的候选(cap + 去垃圾/硬拒),诊断照打(all/selected/sent 三集)。
+        const selected = selectCandidatesForLlm(input.candidates, input.cap, input.candidateIds);
+        opts.onError?.({
+          kind: 'score_candidate_selection',
+          total: input.candidates.length,
+          selected: selected.map((c) => c.id),
+          sent: selected.map((c) => c.id), // 分批后全部选中候选都会被送(不再有预算 pop);保留字段兼容诊断
+          all: [...input.candidates].map((c) => ({ id: c.id, score: c.score ?? 0 })).sort((a, b) => b.score - a.score).map((a) => `${a.id}:${a.score}`),
+        });
+        if (!selected.length) return null;
+        // 切批:每 SCORE_BATCH_SIZE 个一批,破 CF 120s(候选多→输出多→单次 >120s 524)。
+        const batches: RankCandidate[][] = [];
+        for (let i = 0; i < selected.length; i += SCORE_BATCH_SIZE) batches.push(selected.slice(i, i + SCORE_BATCH_SIZE));
+        // 受限并发跑各批(并发度 SCORE_BATCH_CONCURRENCY,防网关 QPS 限流);合并所有批的 ScoredCandidate[]。
+        const results: Array<{ out: ScoredCandidate[]; rawJson: string } | null> = new Array(batches.length);
+        let cursor = 0;
+        const worker = async (): Promise<void> => {
+          while (cursor < batches.length) {
+            const idx = cursor++;
+            const batch = batches[idx];
+            if (batch) results[idx] = await scoreBatch(batch);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(SCORE_BATCH_CONCURRENCY, batches.length) }, worker));
+        const merged = results.filter((r): r is { out: ScoredCandidate[]; rawJson: string } => r != null);
+        // 全批失败 → null(调用方退回规则分,契约不变);部分失败 → 成功批照常,失败批候选保留规则分。
+        if (!merged.length) return null;
+        const out = merged.flatMap((r) => r.out);
         out.sort(
           (a, b) =>
             (a.confidence === 'rejected' ? 1 : 0) - (b.confidence === 'rejected' ? 1 : 0) ||
             b.score - a.score ||
             a.candidateId.localeCompare(b.candidateId),
         );
-        return { candidates: out };
+        // rawInterfacesJson:合并各批原始 JSON(前端「LLM 返回内容」展示);多批用数组包裹。
+        const rawInterfacesJson = merged.length === 1 ? merged[0]!.rawJson : JSON.stringify(merged.map((r) => { try { return JSON.parse(r.rawJson); } catch { return r.rawJson; } }));
+        return { candidates: out, rawInterfacesJson };
       } catch (e) {
-        // 不破坏 null-fallback 契约(调用方退回规则分,rank 永不失败),但**不再静默吞**:
-        // 经 onError 把错误暴露给注入方(be 用结构化 logger 记 status:"error")。超时/网络/解析失败
-        // 从此可诊断——此前 bare catch 让 618s 超时与「无 key」都表现为 null,日志误报「no key」。
         opts.onError?.(e);
         return null;
       }

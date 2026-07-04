@@ -115,8 +115,8 @@ describe('C1 be→真浏览器 navigate/capture(真 Chrome,nightly)', () => {
       return;
     }
     expect(rank.ok, JSON.stringify(rank.error)).toBe(true);
-    if (!rank.data?.length) { console.warn('skipped — rank 无候选'); return; }
-    const cand = rank.data[0]; const name = deriveAdapterName(cand as never);
+    if (!rank.data?.candidates?.length) { console.warn('skipped — rank 无候选'); return; }
+    const cand = rank.data.candidates[0]; const name = deriveAdapterName(cand as never);
     expect(name).toMatch(/^[a-z0-9-]+\/[a-z0-9-]+$/); // 派生名合法
     const prev = await client.init(name, cand.id, 'dry-run'); // 不写盘
     expect(prev.ok, JSON.stringify(prev.error)).toBe(true);

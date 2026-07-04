@@ -74,6 +74,54 @@ describe('buildGenPrompt', () => {
     expect(prompt).toContain('cand_1');
     expect(typeof prompt).toBe('string');
   });
+
+  it('paramUnion 表格化为 TOON(表头+行),零字段丢失', () => {
+    const gi: GenerateInput = {
+      candidates: [{
+        id: 'cand_1', endpoint: { method: 'GET', pathname: '/api/search' },
+        paramUnion: [
+          { name: 'q', in: 'query', paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '搜索词' },
+          { name: 'cursor', in: 'query', paramRole: 'pagination', exposeAsArg: 'optional_candidate', inferredMeaning: '翻页' },
+        ],
+      } as unknown as RankCandidate],
+      samples: [{ sampleName: 'A', entries: [] }],
+    };
+    const prompt = buildGenPrompt(gi);
+    // 数据段有 TOON 表头(区别于 PROMPT_B 读表说明里的 `paramUnion[N]{列名...}` 占位)
+    expect(prompt).toContain('paramUnion[2]{name,in,paramRole,exposeAsArg,inferredMeaning}:');
+    // 逐行值都在(零丢失);单元是 JSON 字符串(带引号,逗号安全)
+    expect(prompt).toContain('"q","query","seed_argument","yes","搜索词"');
+    expect(prompt).toContain('"cursor","query","pagination","optional_candidate","翻页"');
+    // paramUnion 已从 JSON 抠出(JSON 段不再有 "paramUnion":[{...}] 对象数组)
+    expect(prompt).not.toContain('"paramUnion":[{');
+  });
+
+  it('JSON-cell 编码:inferredMeaning 含逗号也不破坏列(codex Q1 修复)', () => {
+    const gi: GenerateInput = {
+      candidates: [{
+        id: 'cand_1', endpoint: { method: 'GET', pathname: '/api/search' },
+        paramUnion: [{ name: 'q', in: 'query', paramRole: 'seed_argument', exposeAsArg: 'yes', inferredMeaning: '搜索词,支持多关键词' }],
+      } as unknown as RankCandidate],
+      samples: [{ sampleName: 'A', entries: [] }],
+    };
+    const prompt = buildGenPrompt(gi);
+    // 含逗号的中文被 JSON.stringify 包进引号 → 该行仍是 5 个 JSON 单元,不错位
+    expect(prompt).toContain('"q","query","seed_argument","yes","搜索词,支持多关键词"');
+  });
+
+  it('paramUnion 缺省字段 → TOON 空单元 ""(不塞 undefined/null)', () => {
+    const gi: GenerateInput = {
+      candidates: [{
+        id: 'cand_1', endpoint: { method: 'GET', pathname: '/api/search' },
+        paramUnion: [{ name: 'q', in: 'query' }], // 无 paramRole/exposeAsArg/inferredMeaning
+      } as unknown as RankCandidate],
+      samples: [{ sampleName: 'A', entries: [] }],
+    };
+    const prompt = buildGenPrompt(gi);
+    expect(prompt).toContain('paramUnion[1]{name,in,paramRole,exposeAsArg,inferredMeaning}:');
+    expect(prompt).toContain('"q","query","","",""'); // 缺省列=空 JSON 串
+    expect(prompt).not.toContain('undefined');
+  });
 });
 
 // 第2步:generate 喂详细 responseSchema(非原始响应体)。
@@ -99,14 +147,20 @@ describe('buildGenPrompt · responseSchema(非原始响应体)', () => {
 });
 
 describe('buildGenPromptForCandidateWithStat · 预算闸门', () => {
-  it('超 15KB → 逐级降级到预算内', () => {
-    // 造一个巨大响应体:很多行 + 每行很多长字符串字段。
+  it('巨大响应体 → 仍在 15KB 预算内(bounded schema + minify),命脉字段保留', () => {
+    // 造一个巨大响应体:很多行 + 每行很多长字符串字段。generate 的 responseSchema 是**有界**的
+    // (merged 摘要 ~3200 + itemFields 上限),叠加 minify(2026-07-03,JSON 不缩进)后单候选 prompt
+    // 天然稳在 ~10.7KB < 15KB —— 响应体再大也被摘要压住,故降级机制通常不触发(它是防御性兜底)。
+    // 本测试验证:巨响应体下 prompt 仍 ≤15KB 且命脉字段(recommendedRowPath/columns)保留。
     const row: Record<string, unknown> = {};
     for (let i = 0; i < 80; i++) row['field_' + i] = 'value_' + i + '_' + 'z'.repeat(60);
     const big = JSON.stringify({ data: Array.from({ length: 50 }, () => row) });
-    const { prompt, stat } = buildGenPromptForCandidateWithStat(cand(), [sampleWith(big)]);
+    const samples = [
+      { sampleName: 'A' as const, entries: [{ method: 'GET', url: 'https://x.com/api/search?q=cat', responseStatus: 200, responsePreview: big, timestamp: 1 }] },
+      { sampleName: 'B' as const, entries: [{ method: 'GET', url: 'https://x.com/api/search?q=dog', responseStatus: 200, responsePreview: big, timestamp: 2 }] },
+    ];
+    const { prompt } = buildGenPromptForCandidateWithStat(cand(), samples);
     expect(prompt.length).toBeLessThanOrEqual(15_000);
-    expect(stat.degraded.length).toBeGreaterThan(0); // 确实降过级
     // 命脉保留:recommendedRowPath/recommendedColumns 仍在
     expect(prompt).toContain('recommendedRowPath');
     expect(prompt).toContain('recommendedColumns');

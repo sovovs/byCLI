@@ -8,7 +8,7 @@
 // ① verify-runner 子进程隔离执行 ② 前端 dry-run 人工审阅关卡 ③ provenance 标注 AI 生成。
 import Anthropic from '@anthropic-ai/sdk';
 import { correlateTimeline, type RawAction, type RawNetEntry, type RankCandidate } from '@sovovs/bycli-recorder-core';
-import { buildResponseSummary, type ResponseSummary } from './responseSummary.js';
+import { buildMergedResponseSummary, type ResponseSummary } from './responseSummary.js';
 
 export interface SynthesisSample {
   sampleName: 'A' | 'B';
@@ -42,7 +42,13 @@ export interface SynthesisResult {
 /** 最小客户端接缝:便于测试注入 fake,不绑定完整 SDK 类型(0.106 的 output_config 类型未必齐)。 */
 export interface LlmClient {
   messages: {
-    create(params: Record<string, unknown>): Promise<{ content: Array<{ type: string; text?: string }> }>;
+    // usage/stop_reason:Anthropic 兼容网关通常回传,用于诊断输出瓶颈(stop_reason='max_tokens' → 输出打满)。
+    // 可选,不保证有(不同网关差异);诊断代码需 optional 读取。
+    create(params: Record<string, unknown>): Promise<{
+      content: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      stop_reason?: string;
+    }>;
   };
 }
 
@@ -137,6 +143,49 @@ function entryMatchesEndpoint(
 }
 
 /**
+ * 收集一个候选 endpoint(method+host+pathname 精确匹配)的组内调用响应体,供 buildMergedResponseSummary 做
+ * bounded-union。core 已按 endpoint 聚拢 → 组内多次调用(type=hot vs new / 不同 category_id/sort)返回**互补**
+ * 字段;合并才能让 columns 覆盖全字段。跨所有 sample 收集,每条带 status + query-param 签名(去重用:同参重复
+ * 折叠、不同参保留)。WebSocket(kind='cdp-websocket')排除。有界:最多 limit 条(默认 6,合并器再各自设上限)。
+ */
+export function collectEndpointResponseBodies(
+  samples: SynthesisSample[],
+  candidate: RankCandidate,
+  limit = 6,
+): Array<{ body: string; status?: number; paramSig?: string }> {
+  const ep = candidate.endpoint;
+  const out: Array<{ body: string; status?: number; paramSig?: string }> = [];
+  for (const sample of samples) {
+    const entries = ((sample.entries ?? []) as RawEntry[]).filter(
+      (e) => (e as { kind?: string }).kind !== 'cdp-websocket',
+    );
+    for (const e of entries) {
+      if (out.length >= limit) return out;
+      const url = typeof e.url === 'string' ? e.url : '';
+      if (!entryMatchesEndpoint(e.method, url, ep)) continue;
+      if (typeof e.responsePreview !== 'string') continue;
+      out.push({
+        body: e.responsePreview,
+        status: typeof e.responseStatus === 'number' ? e.responseStatus : undefined,
+        paramSig: paramSignature(url),
+      });
+    }
+  }
+  return out;
+}
+
+/** query-param 去重签名:排序后的 key=value 串(去 origin);解析失败 → undefined(合并器按结构签名兜底)。 */
+function paramSignature(url: string): string | undefined {
+  try {
+    const u = new URL(url);
+    const pairs = [...u.searchParams.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return pairs.map(([k, v]) => `${k}=${v}`).join('&');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 把一个样本组织成「因果时间线摘要」:用户操作序列 + 与候选 endpoint 同 path 的请求(标 triggeredBy)。
  * 用 correlateTimeline 把 network 关联到触发它的操作(ts 邻近 × initiator 权重),让模型看到因果链。
  *
@@ -225,7 +274,7 @@ export function buildSampleSummary(sample: SynthesisSample, candidate: RankCandi
 const SCORE_MAX_NAVS = 3;        // A/B 差异导航,末 ≤3 条
 const SCORE_MAX_ACTIONS = 5;     // endpoint 调用附近末 ≤5 个操作
 const SCORE_MAX_QUERY_VAL_LEN = 40; // 导航 query value 截断
-const SCORE_MAX_SELECTOR_LEN = 60;  // 操作 selector 截断
+// (SCORE_MAX_SELECTOR_LEN 已删:score 侧 actions 不再带 selector,见 buildScoreEvidenceSummary)
 
 /** 只留 path+query(去 origin),query value 截断 —— 供 score 侧导航序列。 */
 function stripToPathQuery(url: string | undefined): string | undefined {
@@ -262,7 +311,7 @@ export interface ScoreEvidence {
   navigations: string[];
   actions: Array<{ type?: string; selector?: string; valueShape?: unknown; key?: string }>;
   endpointCalls: Array<{ urlParams: Record<string, string>; status?: unknown; triggeredBy: string | null }>;
-  /** endpoint 代表调用的响应结构摘要(每 endpoint 一份,非每 call —— core 已按 endpoint 聚拢)。 */
+  /** endpoint 组内多次调用 bounded-union 合并的响应结构摘要(每 endpoint 一份;覆盖组内互补字段)。 */
   responseSummary?: ResponseSummary;
 }
 
@@ -312,43 +361,61 @@ export function buildScoreEvidenceSummary(sample: SynthesisSample, candidate: Ra
     .filter((u): u is string => !!u)
     .slice(-SCORE_MAX_NAVS);
 
-  // 操作:末 ≤5(靠近 endpoint 调用的最近操作),selector 截断。
+  // 操作:末 ≤5(靠近 endpoint 调用的最近操作)。**不带 selector**(15-doc 阶段二 #1):CSS selector 对
+  // score 阶段 LLM 判信号完全无用(seed 判定靠 A/B urlParams/navigations 差异,非 CSS 路径),是纯冗余大头。
+  // generate 侧 PROMPT_B 也不引用 selector(靠 responseSchema/paramUnion 写脚本),故两侧都砍。
+  // 只留 type/valueShape/key —— valueShape.len 承载 A/B 输入长度差异(seed 线索),key 承载 Enter 等提交语义。
   const actionSeq = corr.actions.slice(-SCORE_MAX_ACTIONS).map((a) => {
     const idx = corr.actions.findIndex((x) => x.id === a.id);
     const raw = idx >= 0 ? interactions[idx] ?? {} : {};
-    const selector = typeof a.selector === 'string' && a.selector.length > SCORE_MAX_SELECTOR_LEN
-      ? a.selector.slice(0, SCORE_MAX_SELECTOR_LEN) + '…'
-      : a.selector;
     return {
       ...(a.type ? { type: a.type } : {}),
-      ...(selector ? { selector } : {}),
       ...(raw.valueShape ? { valueShape: raw.valueShape } : {}),
       ...(typeof raw.key === 'string' ? { key: raw.key } : {}),
     };
   });
 
-  // endpoint 匹配调用:无 responseBody,只 urlParams/status/triggeredBy。responseSummary 只出一份(代表调用)。
+  // endpoint 匹配调用:无 responseBody,只 urlParams/status/triggeredBy。
+  // responseSummary:对该 endpoint group 的**多次调用**做 bounded-union 合并(覆盖组内互补字段),而非单代表体。
+  //
+  // 15-doc 阶段二 #2:urlParams 只留**证明性键**(省重复)。paramObservations(TOON)已覆盖每参数的名字 +
+  // observedVariation + 命中标志,urlParams 再列**证实稳定(observedVariation=false)**常量的值是纯重复
+  // (那些值对判 seed 映射/分页无证明力)。保守规则:**只删 observedVariation===false 的键**;保留
+  //   - true(A/B 值不同 = seed 映射证据,LLM 要看到 apple/java 差异)
+  //   - 'unknown'(判不准,不敢删)
+  //   - cursorLike(分页证据,要看到 cursor=0 vs 20_... 差异)
+  //   - 不在 paramObservations 里的键(无从判断稳定性)
+  // 这样 seed_arg_maps_to_param / pagination_supported / response_varies_with_seed 的证明值都保留。
+  const obsByName = new Map<string, { observedVariation?: unknown; cursorLike?: unknown }>();
+  for (const p of (candidate.paramObservations ?? []) as unknown as Array<Record<string, unknown>>) {
+    if (typeof p.name === 'string') obsByName.set(p.name, { observedVariation: p.observedVariation, cursorLike: p.cursorLike });
+  }
+  const keepProofParams = (params: Record<string, string>): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      const o = obsByName.get(k);
+      // 只删「明确稳定(observedVariation===false)且非 cursor」的常量键;其余一律保留。
+      if (o && o.observedVariation === false && !o.cursorLike) continue;
+      out[k] = v;
+    }
+    return out;
+  };
   const ep = candidate.endpoint;
   const endpointCalls: ScoreEvidence['endpointCalls'] = [];
-  let responseSummary: ResponseSummary | undefined;
   entries.forEach((e, i) => {
     const url = typeof e.url === 'string' ? e.url : '';
     if (!entryMatchesEndpoint(e.method, url, ep)) return;
     const c = corr.entries[i];
     endpointCalls.push({
-      urlParams: parseUrlParams(url),
+      urlParams: keepProofParams(parseUrlParams(url)),
       status: e.responseStatus,
       triggeredBy: actionLabel(c?.triggeredBy ?? null),
     });
-    // 每 endpoint 一份结构摘要:取首条带响应体的匹配调用作代表。
-    if (!responseSummary && typeof e.responsePreview === 'string') {
-      responseSummary = buildResponseSummary(
-        e.responsePreview,
-        'score',
-        typeof e.responseStatus === 'number' ? e.responseStatus : undefined,
-      );
-    }
   });
+  const bodies = collectEndpointResponseBodies([sample], candidate);
+  const responseSummary: ResponseSummary | undefined = bodies.length
+    ? buildMergedResponseSummary(bodies, 'score')
+    : undefined;
 
   return {
     sample: sample.sampleName,
@@ -373,7 +440,7 @@ export interface GenerateEvidence {
   navigations: string[];
   actions: Array<{ type?: string; selector?: string; valueShape?: unknown; key?: string }>;
   endpointCalls: Array<{ urlParams: Record<string, string>; status?: unknown; triggeredBy: string | null }>;
-  /** endpoint 代表调用的**详细**响应 schema(带样本值 + itemFields + recommendedColumns,每 endpoint 一份)。 */
+  /** endpoint 组内多次调用 bounded-union 合并的**详细**响应 schema(带样本值 + 类型并集 itemFields + 覆盖率 + recommendedColumns)。 */
   responseSchema?: ResponseSummary;
 }
 
@@ -471,10 +538,10 @@ export function buildGenerateEvidenceSummary(
     };
   });
 
-  // endpoint 匹配调用:无 responseBody,只 urlParams/status/triggeredBy。responseSchema 只出一份(代表调用)。
+  // endpoint 匹配调用:无 responseBody,只 urlParams/status/triggeredBy。
+  // responseSchema:对该 endpoint group 的**多次调用**做 bounded-union 合并(覆盖组内互补字段 → columns 覆盖全字段)。
   const ep = candidate.endpoint;
   const endpointCalls: GenerateEvidence['endpointCalls'] = [];
-  let responseSchema: ResponseSummary | undefined;
   entries.forEach((e, i) => {
     const url = typeof e.url === 'string' ? e.url : '';
     if (!entryMatchesEndpoint(e.method, url, ep)) return;
@@ -484,16 +551,11 @@ export function buildGenerateEvidenceSummary(
       status: e.responseStatus,
       triggeredBy: actionLabel(c?.triggeredBy ?? null),
     });
-    // 每 endpoint 一份详细 schema:取首条带响应体的匹配调用作代表。
-    if (!responseSchema && typeof e.responsePreview === 'string') {
-      responseSchema = buildResponseSummary(
-        e.responsePreview,
-        'generate',
-        typeof e.responseStatus === 'number' ? e.responseStatus : undefined,
-        opts?.schema,
-      );
-    }
   });
+  const bodies = collectEndpointResponseBodies([sample], candidate);
+  const responseSchema: ResponseSummary | undefined = bodies.length
+    ? buildMergedResponseSummary(bodies, 'generate', opts?.schema)
+    : undefined;
 
   return {
     sample: sample.sampleName,
@@ -528,14 +590,14 @@ function buildPrompt(input: SynthesisInput): string {
     'A byCLI adapter calls one HTTP data endpoint and returns an array of plain row objects.',
     '',
     'The recorder ranker already selected this endpoint as the data source:',
-    JSON.stringify({ method: ep?.method, urlTemplate: ep?.urlTemplate, queryParams: ep?.queryParams, args: c.args, responseShape: c.responseShape }, null, 2),
+    JSON.stringify({ method: ep?.method, urlTemplate: ep?.urlTemplate, queryParams: ep?.queryParams, args: c.args, responseShape: c.responseShape }),
     '',
     'Causal timeline per recording (A and B used different inputs so you can tell which query params are',
     'dynamic args vs fixed). Each sample lists `navigations` (the page URL sequence — address-bar/SPA route',
     'changes; the seed often appears here, e.g. /search?q=apple vs /search?q=banana — use A/B navigation diff',
     'to map the user input to a param even when the XHR hides it), the user action sequence, and the',
     'candidate-endpoint calls, with `triggeredBy` linking a request to the user action that caused it:',
-    JSON.stringify(input.samples.map((s) => buildSampleSummary(s, input.candidate)), null, 2),
+    JSON.stringify(input.samples.map((s) => buildSampleSummary(s, input.candidate))),
     '',
     'Screenshots of the page at the end of each recording may be attached as images.',
     '',

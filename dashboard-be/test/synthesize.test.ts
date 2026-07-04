@@ -217,7 +217,7 @@ describe('buildScoreEvidenceSummary · score 侧压缩', () => {
     expect(Array.isArray(ev.responseSummary)).toBe(false);
   });
 
-  it('导航去 origin 只留 path+query;selector 截断', async () => {
+  it('导航去 origin 只留 path+query;score 侧 actions 不带 selector(只留 type/valueShape/key)', async () => {
     const { buildScoreEvidenceSummary } = await import('../src/llm/synthesize.js');
     const longSel = '#' + 'a'.repeat(100);
     const sample = {
@@ -225,15 +225,57 @@ describe('buildScoreEvidenceSummary · score 侧压缩', () => {
       entries: [],
       actions: [
         { type: 'navigate', ts: 1, url: 'https://x.com/search?q=apple&extra=1' },
-        { type: 'input', selector: longSel, ts: 2 },
+        { type: 'input', selector: longSel, ts: 2, valueShape: { len: 5, kind: 'text' } },
+        { type: 'keydown', selector: longSel, ts: 3, key: 'Enter' },
       ],
     };
     const ev = buildScoreEvidenceSummary(sample as never, ep());
     expect(ev.navigations[0]).toBe('/search?q=apple&extra=1');
     expect(ev.navigations[0]).not.toContain('https://x.com');
-    const sel = ev.actions.find((a) => a.selector)?.selector ?? '';
-    expect(sel.length).toBeLessThanOrEqual(61); // 60 + 省略号
-    expect(sel.endsWith('…')).toBe(true);
+    // 15-doc 阶段二 #1:score 侧 evidence 不再带 selector(对判信号无用,是纯冗余大头)。
+    expect(ev.actions.every((a) => a.selector === undefined)).toBe(true);
+    // 但保留信号线索:valueShape.len(seed 长度差异)+ key(Enter 等提交语义)。
+    expect(ev.actions.find((a) => a.valueShape)?.valueShape).toEqual({ len: 5, kind: 'text' });
+    expect(ev.actions.find((a) => a.key)?.key).toBe('Enter');
+  });
+
+  it('15-doc 阶段二 #2:urlParams 只留证明性键(删证实稳定的常量,留 seed/cursor/unknown)', async () => {
+    const { buildScoreEvidenceSummary } = await import('../src/llm/synthesize.js');
+    // paramObservations:query 变(seed)、cursor 变+cursorLike(分页)、aid/spider 稳定常量、cat unknown。
+    const cand = {
+      id: 'c', endpoint: { method: 'GET', host: 'x.com', pathname: '/api/s' }, args: [], responseShape: { kind: 'object' },
+      paramObservations: [
+        { name: 'query', in: 'query', observedVariation: true },
+        { name: 'cursor', in: 'query', observedVariation: true, cursorLike: true },
+        { name: 'aid', in: 'query', observedVariation: false },
+        { name: 'spider', in: 'query', observedVariation: false },
+        { name: 'cat', in: 'query', observedVariation: 'unknown' },
+      ],
+    } as unknown as RankCandidate;
+    const sample = {
+      sampleName: 'A' as const,
+      entries: [{ method: 'GET', url: 'https://x.com/api/s?query=apple&cursor=0&aid=2608&spider=0&cat=hot', responseStatus: 200, responsePreview: '{"data":[{"t":1}]}', timestamp: 1 }],
+    };
+    const ev = buildScoreEvidenceSummary(sample as never, cand);
+    const up = ev.endpointCalls[0].urlParams;
+    // 保留:seed(query)、分页(cursor)、unknown(cat) —— 都是证明性/判不准
+    expect(up.query).toBe('apple');
+    expect(up.cursor).toBe('0');
+    expect(up.cat).toBe('hot');
+    // 删:证实稳定的常量(aid/spider),其名字与稳定性已在 paramObservations 表
+    expect(up.aid).toBeUndefined();
+    expect(up.spider).toBeUndefined();
+  });
+
+  it('15-doc 阶段二 #2:无 paramObservations 时全保留(安全兜底,不误删)', async () => {
+    const { buildScoreEvidenceSummary } = await import('../src/llm/synthesize.js');
+    const cand = { id: 'c', endpoint: { method: 'GET', host: 'x.com', pathname: '/api/s' }, args: [], responseShape: { kind: 'object' } } as unknown as RankCandidate;
+    const sample = {
+      sampleName: 'A' as const,
+      entries: [{ method: 'GET', url: 'https://x.com/api/s?a=1&b=2', responseStatus: 200, responsePreview: '{"data":[]}', timestamp: 1 }],
+    };
+    const ev = buildScoreEvidenceSummary(sample as never, cand);
+    expect(ev.endpointCalls[0].urlParams).toEqual({ a: '1', b: '2' });
   });
 });
 

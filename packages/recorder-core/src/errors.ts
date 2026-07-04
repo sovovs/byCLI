@@ -23,6 +23,7 @@ export type ErrorCode =
   | 'idempotency_conflict'
   | 'temp_store_full'
   | 'verify_timeout'
+  | 'pipeline_timeout'
   | 'analyze_timeout'
   | 'adapter_runtime_error'
   | 'runner_protocol_error'

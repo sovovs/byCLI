@@ -48,6 +48,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   extension_disconnected: 503,
   network_error: 503,
   verify_timeout: 504,
+  pipeline_timeout: 504,
   analyze_timeout: 504,
   runner_protocol_error: 500,
   adapter_runtime_error: 500,

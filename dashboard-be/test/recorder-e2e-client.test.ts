@@ -117,12 +117,12 @@ describe('端到端:真 httpRecorderClient → 真 be → 桩 daemon(8 步全链
     expect((await client.captureStart('B')).ok).toBe(true);
     expect((await client.captureRead('B')).ok).toBe(true);
 
-    // rank → client 从 envelope 拆出候选数组
+    // rank → client 从 envelope 拆出 {candidates, scorePrompt}(scorePrompt 仅 LLM 启用时有;此处桩无 key → undefined)
     const rank = await client.rank();
     expect(rank.ok, JSON.stringify(rank.error)).toBe(true);
-    expect(Array.isArray(rank.data)).toBe(true);
-    expect(rank.data!.length).toBeGreaterThan(0);
-    const candidateId = rank.data![0].id;
+    expect(Array.isArray(rank.data?.candidates)).toBe(true);
+    expect(rank.data!.candidates.length).toBeGreaterThan(0);
+    const candidateId = rank.data!.candidates[0].id;
 
     // init dry-run 预览(不推进会话)→ 同步 200 回 {report,dryRun}
     const preview = await client.init('x-com/search', candidateId, 'dry-run');

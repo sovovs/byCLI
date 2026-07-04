@@ -22,6 +22,22 @@ export interface FieldSchema {
 }
 
 /**
+ * bounded-union 合并模式的字段 schema(buildMergedResponseSummary 产出)。
+ * 在 FieldSchema 之上带跨调用的类型并集 + 覆盖率元数据:
+ * - `type` = **类型并集**(多类型时 `number|string`),供生成器判「这列跨调用类型不一致」;
+ * - `primaryType` = 出现最频繁的类型(平票偏 'string'),recommendedColumns 用它作单一类型;
+ * - `occurrence` = 有几个已采样(且属 winner rowPath)的响应体带这个路径;
+ * - `total` = 成功解析的响应体总数;`occurrenceRate` = occurrence/total(覆盖率过滤用)。
+ */
+export interface MergedFieldSchema extends FieldSchema {
+  primaryType?: string;
+  types?: string[];
+  occurrence?: number;
+  total?: number;
+  occurrenceRate?: number;
+}
+
+/**
  * 响应结构摘要。
  * - score 模式:目标 ≤800 字符/候选,只判「是不是数据命令」,**不含样本值**(topKeys/rowPath/rowKeys)。
  * - generate 模式:目标 ≤2500 字符,更详细(带样本值 + itemFields + recommendedColumns),供生成器直接写
@@ -60,10 +76,26 @@ export interface ResponseSummary {
   recommendedRowPath?: string;
   /** 推荐列(name/path/type),供生成器直接写 columns。 */
   recommendedColumns?: Array<{ name: string; path: string; type: string }>;
+
+  // ── merged 模式专用(buildMergedResponseSummary,bounded-union)──
+  /** 采样并合并的响应体条数(总采样，含解析失败的)。 */
+  mergedBodyCount?: number;
+  /** 成功解析的响应体条数(rowPath 投票 / 覆盖率的分母)。 */
+  parsedBodyCount?: number;
+  /** rowPath 投票命中率(winnerVotes / parsedBodyCount)。 */
+  rowPathWinnerRate?: number;
+  /** 多个 rowPath 都带业务字段且 winnerRate < 0.6:winner 只用于合并,其余数组不并入 recommendedColumns。 */
+  mixedRowPath?: boolean;
+  /** 需人工复核(mixedRowPath 等低置信情形置真)。 */
+  reviewRequired?: boolean;
 }
 
 // 行字段点分路径的展开深度(score 侧保持浅,省 token)。
 const ROW_KEY_MAX_DEPTH = 3;
+// 数组路径「发现」深度(仅定位 list 在哪,不展开字段):比 ROW_KEY_MAX_DEPTH 深,
+// 覆盖 GraphQL 类深嵌套(data.viewer.repositories.nodes = 深度 4)。字段展开仍受
+// ROW_KEY_MAX_DEPTH(score)/ GEN_MAX_DEPTH(generate)限制,故加深发现不放大 token。
+const ARRAY_PATH_MAX_DEPTH = 6;
 // 行字段上限(超出截断)。
 const MAX_ROW_KEYS = 20;
 // 顶层键上限。
@@ -91,6 +123,26 @@ const GEN_MAX_COLUMNS = 40;         // 推荐列上限
 // 保证指标(content_counter.*)+ 作者(author.*)+ 主体(content.*)都能被推荐到。
 // 仅当行元素存在**多个**子对象分组时才生效;扁平行(单分组)不受限。
 const PER_SUBOBJECT_COLUMN_CAP = 4;
+
+// ── merged 模式(bounded-union across an endpoint group's calls)──
+// core 已按 (method+host+pathname) 把一个候选聚成 endpoint group,组内多次调用(type=hot vs new、
+// 不同 category_id/sort…)返回**互补**的字段:单一代表响应体会漏掉只在别的调用出现的字段。
+// bounded-union 在少数几个采样体上合并字段并集 + 覆盖率投票,让 columns 覆盖 endpoint 全字段,但**有界**
+// (绝不遍历所有调用)。
+const MERGE_MAX_BODIES = 6;            // 参与合并的采样体硬上限(有界)
+const MERGE_MAX_BODIES_PER_SAMPLE = 3; // 单个 query-param 签名最多取几条(去重:同参重复只留首条)——实为「每签名」上限
+const MERGE_WINNER_RATE = 0.6;         // rowPath 投票命中率阈值:≥ 用 winner;< 且多 rowPath 带业务字段 → mixedRowPath
+const MERGE_LOW_COVERAGE_RATE = 0.5;   // total>2 时字段进 columns 的最低覆盖率
+const MERGE_HIGH_VALUE_COVERAGE_RATE = 0.33; // 高业务价值字段的放宽覆盖率下限
+const MERGE_HIGH_VALUE_LOW_COVERAGE_CAP = 5; // 低覆盖率高价值字段的补入上限
+const MERGE_MAX_ITEM_FIELDS = 80;      // 合并后 itemFields 上限(MAX_ITEM_FIELDS_GENERATE)
+const MERGE_MAX_ROW_KEYS_SCORE = 30;   // score 模式合并后 rowKeys 上限
+const MERGE_MAX_CHARS = 3200;          // 合并摘要字符预算(超出按降级顺序收窄)
+const GEN_DEGRADE_MERGE_SAMPLE = 12;   // 预算收窄:sample 字符串 30→12
+
+// 噪音黑名单:叶子字段名命中即**永不**进 recommendedColumns(即使 100% 覆盖);仍可留在 itemFields/wrappers。
+// 诊断/埋点/实验位/信封错误码/原始扩展字段等——对数据表无业务价值。
+const NOISE_LEAF_RE = /^(debug|trace|log|error|err_msg|err_no|errno|stack|exception|request_id|req_id|abtest|experiment|gray|test|raw|extra)$/i;
 
 // 业务字段启发式:名字看起来像真实数据(非 err_no/status 这类信封字段)。
 const BUSINESS_FIELD_RE = /^(title|name|url|link|href|id|content|text|desc|description|summary|brief|author|user|nick|view|read|like|star|collect|favorite|comment|reply|count|num|total|rank|hot|score|price|amount|time|date|created|updated|publish|cover|avatar|image|img|thumb|tag|category|label|status_name)$/i;
@@ -125,9 +177,9 @@ function unionKeysOfArray(arr: unknown[]): string[] {
   return [...seen];
 }
 
-/** 收集所有数组路径 + 长度(遍历深度 ≤ ROW_KEY_MAX_DEPTH,避免爆栈/爆 token)。 */
+/** 收集所有数组路径 + 长度(遍历深度 ≤ ARRAY_PATH_MAX_DEPTH,覆盖深嵌套 GraphQL;仅定位不展开字段)。 */
 function collectArrayPaths(node: unknown, path: string, depth: number, out: Array<{ path: string; count: number }>): void {
-  if (depth > ROW_KEY_MAX_DEPTH) return;
+  if (depth > ARRAY_PATH_MAX_DEPTH) return;
   if (Array.isArray(node)) {
     out.push({ path: path || '$', count: node.length });
     // 数组元素里也可能嵌套数组(取首个 object 元素往下看)。
@@ -265,6 +317,40 @@ function subObjectGroup(path: string): string {
 }
 
 /**
+ * 收集「行数组的同级标量字段」= 分页/信封元数据(total/cursor/has_more/page/count/next…)。
+ *
+ * 根因(Bug A):`wrappers` 只收**顶层**标量。当 rowPath 是 `X.items`(数组嵌在某个 wrapper 对象 X 下,
+ * 与之并列的标量如 data.total/data.cursor/data.has_more 是分页元数据)时,这些同级标量既不在顶层、也不在
+ * 行元素内 → 旧逻辑整个丢掉。行列来自数组**元素内部**,不会把同级标量误当列(已验证不泄漏),所以这里只需
+ * 把它们**捕获进 wrappers**(带点分父路径,如 `data.total`),让生成器识别分页字段。
+ *
+ * rowPath='$'(顶层数组)无父对象 → 无同级;rowPath='data'(数组直接在根下)其同级就是顶层标量,已被
+ * 顶层 wrapper 收过 → 跳过避免重复。仅当 rowPath 含 `.`(嵌套数组)时收父对象里的标量同级。
+ */
+function collectPaginationSiblings(parsed: unknown, rowPath: string, maxStr: number): FieldSchema[] {
+  const dot = rowPath.lastIndexOf('.');
+  if (dot === -1) return []; // 顶层数组 / 根下数组:同级即顶层标量(已收)或无
+  const parentPath = rowPath.slice(0, dot);
+  const arrayKey = rowPath.slice(dot + 1);
+  let cur: unknown = parsed;
+  for (const seg of parentPath.split('.')) {
+    if (isPlainObject(cur)) cur = cur[seg];
+    else return [];
+  }
+  if (!isPlainObject(cur)) return [];
+  const out: FieldSchema[] = [];
+  for (const [k, v] of Object.entries(cur)) {
+    if (k === arrayKey) continue; // 行数组本身
+    if (isPlainObject(v) || Array.isArray(v)) continue; // 只收标量同级
+    const s = sampleOf(v, maxStr);
+    out.push({ path: `${parentPath}.${k}`, type: scalarType(v), ...(s !== undefined ? { sample: s } : {}) });
+    if (out.length >= GEN_MAX_WRAPPERS) break;
+  }
+  return out;
+}
+
+
+/**
  * generate 模式 recommendedColumns 选择:业务价值排序 + 跨子对象均衡。
  *
  * 根因(真机 juejin article_rank):行元素是 {content:{...}, content_counter:{view,like}, author:{name}, …},
@@ -309,6 +395,11 @@ function selectRecommendedColumns(itemFields: FieldSchema[]): Array<{ name: stri
     if (used >= PER_SUBOBJECT_COLUMN_CAP) continue;
     perGroup.set(c.group, used + 1);
     picked.push(c);
+  }
+  // Bug B 兜底:非英文/拼音字段全部 neutral/low 权重,排序不影响入选;但若未来加入语义门控导致
+  // 入选为空,而确有标量行字段 → 退回「按发现序取前 N」,保证非英文 API 也拿得到列(绝不丢字段)。
+  if (!picked.length && scalars.length) {
+    return scalars.slice(0, GEN_MAX_COLUMNS).map((f) => ({ name: f.path.split('.').pop()!.replace(/\[\]$/, ''), path: f.path, type: f.type }));
   }
   return picked.map(strip);
 }
@@ -368,6 +459,20 @@ function buildGenerateSummary(parsed: unknown, base: ResponseSummary, opts?: { m
   if (rowPath) {
     summary.rowPath = rowPath;
     summary.recommendedRowPath = rowPath;
+    // Bug A:捕获行数组的同级标量(分页/信封元数据 total/cursor/has_more…)进 wrappers。
+    // 行列只来自数组元素内部,故这些同级标量不会误入 recommendedColumns —— 仅作 wrapper 提示。
+    const paginationSiblings = collectPaginationSiblings(parsed, rowPath, maxStr);
+    if (paginationSiblings.length) {
+      const existing = summary.wrappers ?? [];
+      const seen = new Set(existing.map((w) => w.path));
+      const merged = [...existing];
+      for (const w of paginationSiblings) {
+        if (seen.has(w.path)) continue;
+        merged.push(w);
+        if (merged.length >= GEN_MAX_WRAPPERS) break;
+      }
+      summary.wrappers = merged;
+    }
     const rowArr = arrays.find((a) => a.path === rowPath);
     if (rowArr) {
       const cols = selectRecommendedColumns(rowArr.itemFields);
@@ -724,7 +829,10 @@ export function buildResponseSummary(
     collectArrayPaths(parsed, '', 0, arrayPaths);
     const rowPath = pickRowPath(parsed, arrayPaths);
     const summary: ResponseSummary = { ...base, kind: 'array', topKeys: topKeys.slice(0, MAX_TOP_KEYS) };
-    if (arrayPaths.length) summary.arrayPaths = arrayPaths;
+    // 15-doc 阶段二 #3:LLM-facing arrayPaths 过滤 count:0 空数组(对"判是否数据接口/定位列表"无信息量)。
+    // pickRowPath 仍看全量(上一行已算),只精简喂 LLM 的那份。
+    const nonEmptyPaths = arrayPaths.filter((p) => p.count > 0);
+    if (nonEmptyPaths.length) summary.arrayPaths = nonEmptyPaths;
     if (rowPath) {
       summary.rowPath = rowPath;
       const rowObj = resolveArrayFirstObject(parsed, rowPath);
@@ -745,7 +853,9 @@ export function buildResponseSummary(
     collectArrayPaths(parsed, '', 0, arrayPaths);
     const rowPath = pickRowPath(parsed, arrayPaths);
     const summary: ResponseSummary = { ...base, kind: 'object', topKeys };
-    if (arrayPaths.length) summary.arrayPaths = arrayPaths;
+    // 15-doc 阶段二 #3:同上,过滤 count:0 空数组(pickRowPath 已看全量)。
+    const nonEmptyPaths = arrayPaths.filter((p) => p.count > 0);
+    if (nonEmptyPaths.length) summary.arrayPaths = nonEmptyPaths;
     if (rowPath) {
       summary.rowPath = rowPath;
       const rowObj = resolveArrayFirstObject(parsed, rowPath);
@@ -763,6 +873,325 @@ export function buildResponseSummary(
   // scalar(string/number/boolean/null)
   return markRepaired({ ...base, kind: 'scalar' });
 }
+
+// ── bounded-union 合并(buildMergedResponseSummary)helpers ──
+
+/** 解析一个响应体(失败走 repairTruncatedJsonPrefix 兜底)。返回 {parsed,repaired} 或 null(不可解析)。 */
+function parseBodyWithRepair(body: string): { parsed: unknown; repaired: boolean } | null {
+  const trimmed = (body ?? '').trim();
+  if (!trimmed) return null;
+  try {
+    return { parsed: JSON.parse(trimmed), repaired: false };
+  } catch {
+    const r = repairTruncatedJsonPrefix(trimmed);
+    if (r === null) return null;
+    try {
+      return { parsed: JSON.parse(r), repaired: true };
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** 一个已解析值的 rowPath(业务字段最丰富的数组路径)。 */
+function rowPathOf(parsed: unknown): string | undefined {
+  const aps: Array<{ path: string; count: number }> = [];
+  collectArrayPaths(parsed, '', 0, aps);
+  return pickRowPath(parsed, aps);
+}
+
+/** 叶子字段名(点分末段,去尾 `[]`)。 */
+function leafName(path: string): string {
+  return path.split('.').pop()!.replace(/\[\]$/, '');
+}
+
+/** 某解析体在 rowPath 下首个 object 元素的字段 schema(单体逻辑,复用 dottedFields)。 */
+function itemFieldsAt(parsed: unknown, rowPath: string, maxStr: number, cap: number): FieldSchema[] {
+  const firstObj = resolveArrayFirstObject(parsed, rowPath);
+  if (!firstObj) return [];
+  const out: FieldSchema[] = [];
+  dottedFields(firstObj, '', 1, GEN_MAX_DEPTH, maxStr, out, cap);
+  return out;
+}
+
+/** 采样体(内部形状):原始体 + status + 去重签名(caller 可注入 query-param 签名)。 */
+interface MergeSampleBody {
+  body: string;
+  status?: number;
+  /** query-param 签名(caller 从 URL 算好);缺省时按 body 结构签名兜底去重。 */
+  paramSig?: string;
+}
+
+/**
+ * bounded-union 采样:2xx 优先 → 可解析且有 rowPath 优先 → 按 query-param 签名去重(同参重复丢到首条)。
+ * 精确 body 完全一致先折叠;再按签名分桶(每桶 ≤ maxBodiesPerSample),全局 ≤ maxBodies。
+ * 无 paramSig 时用「顶层键 + rowPath + rowKeys 结构」当签名 —— 不同字段集的体保留(union 有增益),纯重复折叠。
+ */
+function sampleMergeBodies(
+  calls: MergeSampleBody[],
+  maxBodies: number,
+  maxBodiesPerSample: number,
+): Array<{ body: string; status?: number; parsed: unknown; repaired: boolean; rowPath?: string }> {
+  // 预解析 + 打分(供稳定优先排序;不改变原始顺序作为次序 tiebreak)。
+  const scored = calls.map((c, i) => {
+    const pr = parseBodyWithRepair(c.body);
+    const rowPath = pr ? rowPathOf(pr.parsed) : undefined;
+    // 优先级:有 rowPath 的可解析体(2) > 可解析(1) > 不可解析(0);2xx 再加权。
+    let rank = pr ? (rowPath ? 2 : 1) : 0;
+    const is2xx = typeof c.status === 'number' ? c.status >= 200 && c.status < 300 : true;
+    if (is2xx) rank += 3;
+    return { call: c, idx: i, pr, rowPath, rank };
+  });
+  // 稳定排序:rank 降序,原序 tiebreak(保留录制先后)。
+  const ordered = scored
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => b.s.rank - a.s.rank || a.i - b.i)
+    .map((x) => x.s);
+
+  const perSig = new Map<string, number>();
+  const out: Array<{ body: string; status?: number; parsed: unknown; repaired: boolean; rowPath?: string }> = [];
+  for (const s of ordered) {
+    if (out.length >= maxBodies) break;
+    if (!s.pr) continue; // 只并入可解析体(不可解析不贡献字段;单体兜底另处理)
+    // 去重签名:caller 注入的 query-param 签名优先(不同 type/category_id/sort 保留、同参重复折叠);
+    // 无 paramSig 时用结构签名(顶层键 + rowPath + 首行字段路径集)兜底 —— 结构相同的纯重复才折叠。
+    let sig = s.call.paramSig;
+    if (sig === undefined) {
+      const parsed = s.pr.parsed;
+      const topKeys = isPlainObject(parsed) ? Object.keys(parsed).sort() : Array.isArray(parsed) ? unionKeysOfArray(parsed).sort() : [];
+      const rk = s.rowPath ? itemFieldsAt(parsed, s.rowPath, 0, MERGE_MAX_ITEM_FIELDS).map((f) => f.path).sort() : [];
+      sig = `${topKeys.join(',')}|${s.rowPath ?? ''}|${rk.join(',')}`;
+    }
+    const used = perSig.get(sig) ?? 0;
+    if (used >= maxBodiesPerSample) continue; // 同签名重复丢到首(几)条
+    perSig.set(sig, used + 1);
+    out.push({ body: s.call.body, status: s.call.status, parsed: s.pr.parsed, repaired: s.pr.repaired, rowPath: s.rowPath });
+  }
+  return out;
+}
+
+/**
+ * bounded-union 响应摘要:把一个 endpoint group 的**多次调用**响应体合并成覆盖全字段的结构摘要。
+ *
+ * 根因:core 按 (method+host+pathname) 聚拢候选,一个候选=一个 endpoint group,组内多次调用(type=hot vs new、
+ * 不同 category_id/sort…)返回**互补**字段。旧的单代表体只 proto 一次调用 → 漏掉只在别的调用出现的字段(如
+ * body-A 有 content_counter.view、body-B 才有 content_counter.share)。本函数在少数采样体上做**有界并集**:
+ *  - 采样(2xx/可解析/有 rowPath 优先 + 按 query-param 签名去重),≤ maxBodies=6,每签名 ≤ maxBodiesPerSample=3;
+ *  - rowPath 投票:winner=最高票;winnerRate≥0.6 用 winner 合并;<0.6 且多 rowPath 带业务字段 → mixedRowPath;
+ *  - 字段并集 + 覆盖率(occurrence/total)+ 噪音黑名单 + businessWeight 门槛 → recommendedColumns。
+ *
+ * 单体 buildResponseSummary 保持不变(repair/fallback/测试仍用它)。generate 模式产 itemFields(带类型并集 +
+ * primaryType + 覆盖率);score 模式产合并 rowKeys。字符预算超限按降级顺序收窄。
+ */
+export function buildMergedResponseSummary(
+  calls: Array<{ body: string; status?: number; paramSig?: string }>,
+  mode: 'score' | 'generate',
+  opts?: { maxFieldPaths?: number; maxSampleStr?: number; maxBodies?: number; maxBodiesPerSample?: number },
+): ResponseSummary {
+  const maxBodies = opts?.maxBodies ?? MERGE_MAX_BODIES;
+  const maxPerSample = opts?.maxBodiesPerSample ?? MERGE_MAX_BODIES_PER_SAMPLE;
+  const maxStr = opts?.maxSampleStr ?? GEN_MAX_SAMPLE_STR_LEN;
+  const maxFieldPaths = opts?.maxFieldPaths ?? GEN_MAX_FIELD_PATHS;
+
+  // 空输入 → unknown。
+  if (!calls || calls.length === 0) return { kind: 'unknown' };
+
+  const sampled = sampleMergeBodies(calls, maxBodies, maxPerSample);
+  const firstStatus = calls.find((c) => typeof c.status === 'number')?.status;
+
+  // 全不可解析 → 退回单体逻辑(parse:failed 兜底,由 buildResponseSummary 负责)。
+  if (sampled.length === 0) {
+    return buildResponseSummary(calls[0]!.body, mode, calls[0]!.status ?? firstStatus);
+  }
+
+  // rowPath 投票。
+  const votes = new Map<string, number>();
+  for (const b of sampled) if (b.rowPath) votes.set(b.rowPath, (votes.get(b.rowPath) ?? 0) + 1);
+  let winner: string | undefined;
+  let winnerVotes = 0;
+  for (const [p, v] of votes) if (v > winnerVotes) { winner = p; winnerVotes = v; }
+  const parsedCount = sampled.length;
+  const winnerRate = winner ? winnerVotes / parsedCount : 0;
+
+  // 多个 rowPath 都带业务字段?(判 mixedRowPath)
+  let rowPathsWithBusiness = 0;
+  for (const p of votes.keys()) {
+    const rep = sampled.find((b) => b.rowPath === p);
+    const obj = rep ? resolveArrayFirstObject(rep.parsed, p) : null;
+    if (obj && businessScore(obj) > 0) rowPathsWithBusiness += 1;
+  }
+  const mixedRowPath = winner !== undefined && winnerRate < MERGE_WINNER_RATE && rowPathsWithBusiness >= 2;
+
+  // 代表体:winner 桶里第一条(与 winner rowPath 一致);无 winner(无数组行)→ 首个采样体。
+  const winnerBodies = winner ? sampled.filter((b) => b.rowPath === winner) : [];
+  const repBody = (winnerBodies[0] ?? sampled[0])!;
+  const repStatus = repBody.status ?? firstStatus;
+
+  // 基础摘要:对代表体跑单体逻辑(拿 topKeys/kind/wrappers/arrays/rowPath 骨架),随后覆盖合并结果。
+  const base = buildResponseSummary(repBody.body, mode, repStatus, mode === 'generate' ? { maxFieldPaths, maxSampleStr: maxStr } : undefined);
+  base.mergedBodyCount = sampled.length;
+  base.parsedBodyCount = parsedCount;
+  if (winner) base.rowPathWinnerRate = Math.round(winnerRate * 100) / 100;
+  if (mixedRowPath) { base.mixedRowPath = true; base.reviewRequired = true; }
+  if (repBody.repaired) { base.truncated = true; base.repaired = true; }
+
+  // 无 winner rowPath(无行数组)→ 就用代表体的单体摘要(加合并元数据)。
+  if (!winner) return base;
+
+  // ── 字段并集(仅 winner rowPath 的采样体)──
+  const mergeSet = winnerBodies; // winnerRate≥0.6 与 mixed 都只并 winner 桶
+  const mergeCount = mergeSet.length;
+  interface Acc { path: string; typeCounts: Map<string, number>; sample?: SampleValue; occurrence: number }
+  const fieldMap = new Map<string, Acc>();
+  for (const b of mergeSet) {
+    const fields = itemFieldsAt(b.parsed, winner, maxStr, MERGE_MAX_ITEM_FIELDS * 2);
+    const seen = new Set<string>();
+    for (const f of fields) {
+      if (seen.has(f.path)) continue; // 同体内路径去重(occurrence 计「体」不计「行」)
+      seen.add(f.path);
+      let acc = fieldMap.get(f.path);
+      if (!acc) { acc = { path: f.path, typeCounts: new Map(), occurrence: 0 }; fieldMap.set(f.path, acc); }
+      acc.typeCounts.set(f.type, (acc.typeCounts.get(f.type) ?? 0) + 1);
+      acc.occurrence += 1;
+      if (acc.sample === undefined && f.sample !== undefined) acc.sample = f.sample;
+    }
+  }
+
+  // 合并字段 schema(带类型并集 + primaryType + 覆盖率),保持发现序,截到 MERGE_MAX_ITEM_FIELDS。
+  const merged: MergedFieldSchema[] = [];
+  for (const acc of fieldMap.values()) {
+    const types = [...acc.typeCounts.keys()];
+    // primaryType:出现最多的类型;平票偏 'string'。
+    let primaryType = types[0]!;
+    let bestCount = -1;
+    for (const t of types) {
+      const cnt = acc.typeCounts.get(t)!;
+      if (cnt > bestCount || (cnt === bestCount && t === 'string')) { primaryType = t; bestCount = cnt; }
+    }
+    const occurrenceRate = mergeCount > 0 ? acc.occurrence / mergeCount : 0;
+    merged.push({
+      path: acc.path,
+      type: types.length > 1 ? types.join('|') : types[0]!,
+      primaryType,
+      types,
+      ...(acc.sample !== undefined ? { sample: acc.sample } : {}),
+      occurrence: acc.occurrence,
+      total: mergeCount,
+      occurrenceRate: Math.round(occurrenceRate * 100) / 100,
+    });
+    if (merged.length >= MERGE_MAX_ITEM_FIELDS) break;
+  }
+
+  base.recommendedRowPath = winner;
+  base.rowPath = winner;
+
+  if (mode === 'score') {
+    // score:合并 rowKeys(并集),截到 30;不产 recommendedColumns。
+    const rowKeys = merged.map((f) => (f.primaryType === 'array' ? `${f.path}[]` : f.path)).slice(0, MERGE_MAX_ROW_KEYS_SCORE);
+    base.rowKeys = rowKeys;
+    const hints = merged.map((f) => f.path).filter((p) => BUSINESS_FIELD_RE.test(leafName(p)));
+    if (hints.length) base.businessFieldHints = hints.slice(0, 8);
+    degradeMergedToBudget(base, mode);
+    return base;
+  }
+
+  // ── generate:覆盖 winner 数组的 itemFields = 合并结果,并重算 recommendedColumns ──
+  if (!base.arrays) base.arrays = [];
+  const winnerArr = base.arrays.find((a) => a.path === winner);
+  const winnerCount = winnerArr?.count ?? mergeCount;
+  const mergedItemFields: FieldSchema[] = merged.map((f) => ({
+    path: f.path,
+    type: f.type,
+    ...(f.sample !== undefined ? { sample: f.sample } : {}),
+  }));
+  if (winnerArr) winnerArr.itemFields = mergedItemFields;
+  else base.arrays.unshift({ path: winner, count: winnerCount, itemFields: mergedItemFields });
+
+  // recommendedColumns:覆盖率 + 噪音黑名单 + 高价值放宽,再走既有跨子对象均衡 + 排序 + MAX_RECOMMENDED_COLUMNS。
+  base.recommendedColumns = selectMergedRecommendedColumns(merged);
+  if (!base.recommendedColumns.length) delete base.recommendedColumns;
+
+  // businessFieldHints(从合并字段)。
+  const hints = merged.map((f) => f.path).filter((p) => BUSINESS_FIELD_RE.test(leafName(p)));
+  if (hints.length) base.businessFieldHints = hints.slice(0, 8);
+
+  degradeMergedToBudget(base, mode);
+  return base;
+}
+
+/**
+ * merged recommendedColumns 选择:先按覆盖率 + 噪音黑名单 + 高价值放宽过滤,再交给既有
+ * selectRecommendedColumns(跨子对象均衡 + businessWeight 排序 + MAX 40)。type 用 primaryType。
+ */
+function selectMergedRecommendedColumns(merged: MergedFieldSchema[]): Array<{ name: string; path: string; type: string }> {
+  const scalars = merged.filter((f) => (f.primaryType ?? f.type) !== 'array');
+  const passed: FieldSchema[] = [];
+  const lowCovHighVal: Array<{ f: MergedFieldSchema; rate: number }> = [];
+  for (const f of scalars) {
+    const leaf = leafName(f.path);
+    if (NOISE_LEAF_RE.test(leaf)) continue; // 噪音黑名单:永不进 columns(即使 100% 覆盖)
+    const total = f.total ?? 1;
+    const rate = f.occurrenceRate ?? 1;
+    const asField: FieldSchema = { path: f.path, type: f.primaryType ?? f.type, ...(f.sample !== undefined ? { sample: f.sample } : {}) };
+    if (total <= 2) {
+      if ((f.occurrence ?? 1) >= 1) passed.push(asField);
+      continue;
+    }
+    // total > 2:需 occurrenceRate ≥ 0.5;高业务价值字段可在 ≥ 0.33 进入(低覆盖高价值补入上限 5)。
+    if (rate >= MERGE_LOW_COVERAGE_RATE) { passed.push(asField); continue; }
+    if (businessWeight(leaf) === 3 && rate >= MERGE_HIGH_VALUE_COVERAGE_RATE) lowCovHighVal.push({ f, rate });
+  }
+  // 低覆盖高价值:按覆盖率降序补入,上限 5。
+  lowCovHighVal.sort((a, b) => b.rate - a.rate);
+  for (const { f } of lowCovHighVal.slice(0, MERGE_HIGH_VALUE_LOW_COVERAGE_CAP)) {
+    passed.push({ path: f.path, type: f.primaryType ?? f.type, ...(f.sample !== undefined ? { sample: f.sample } : {}) });
+  }
+  return selectRecommendedColumns(passed);
+}
+
+/**
+ * merged 摘要字符预算收窄(超 MERGE_MAX_CHARS 时按信息价值从低到高逐级降级):
+ * ① sample 字符串 30→12 → ② itemFields 80→50→30 → ③ 先丢低覆盖可选字段 → ④ columns 40→25(保高权重)。
+ * recommendedRowPath/recommendedColumns 命脉尽量保。
+ */
+function degradeMergedToBudget(summary: ResponseSummary, mode: 'score' | 'generate'): void {
+  const over = () => JSON.stringify(summary).length > MERGE_MAX_CHARS;
+  if (!over()) return;
+
+  const winnerArr = mode === 'generate' && summary.recommendedRowPath
+    ? summary.arrays?.find((a) => a.path === summary.recommendedRowPath)
+    : undefined;
+
+  // ① sample 字符串截到 12(itemFields + wrappers)。
+  const clampSample = (f: FieldSchema) => {
+    if (typeof f.sample === 'string' && f.sample.length > GEN_DEGRADE_MERGE_SAMPLE) {
+      f.sample = f.sample.slice(0, GEN_DEGRADE_MERGE_SAMPLE) + '…';
+    }
+  };
+  summary.arrays?.forEach((a) => a.itemFields.forEach(clampSample));
+  summary.wrappers?.forEach(clampSample);
+  if (!over()) return;
+
+  // ② itemFields 80→50→30(仅 winner 数组;保 recommendedColumns 已选路径)。
+  if (winnerArr) {
+    for (const cap of [50, 30]) {
+      if (winnerArr.itemFields.length > cap) winnerArr.itemFields = winnerArr.itemFields.slice(0, cap);
+      if (!over()) return;
+    }
+  }
+
+  // ③ 先丢低覆盖可选字段(rowKeys / winner itemFields 里 occurrenceRate < 0.5 的)。
+  if (mode === 'score' && summary.rowKeys && summary.rowKeys.length > MERGE_MAX_ROW_KEYS_SCORE / 2) {
+    summary.rowKeys = summary.rowKeys.slice(0, Math.floor(MERGE_MAX_ROW_KEYS_SCORE / 2));
+    if (!over()) return;
+  }
+
+  // ④ columns 40→25(保高权重:selectRecommendedColumns 已按业务价值排序,取前 25)。
+  if (summary.recommendedColumns && summary.recommendedColumns.length > 25) {
+    summary.recommendedColumns = summary.recommendedColumns.slice(0, 25);
+  }
+}
+
 
 /**
  * 取 rowPath 下**首个元素**的原始 JSON(≤maxLen 字符)。用于 verify-repair 唯一的「渐进披露」:

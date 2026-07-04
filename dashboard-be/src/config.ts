@@ -48,7 +48,11 @@ const ConfigSchema = z.object({
   REQUEST_TERMINAL_STATUS_TTL_MS: intFromEnv(1_800_000, 60_000, 86_400_000),
   REQUEST_POLL_AFTER_MS: intFromEnv(1000, 250, 10_000),
   // 喂 LLM 评分/生成的候选软上限(决定默认勾选 top-N + 无手选时自动截断数)。越大召回越多但 prompt 越大越慢。
-  RECORDER_LLM_CANDIDATE_CAP: intFromEnv(5, 1, 20),
+  // 默认 8(比旧 5 略提召回),上限放宽到 100(本地工具,不人为锁 20;防爆靠 prompt budget+单候选隔离+手选)。
+  // **手选 candidateIds 不受此 cap 截断**(手选优先)——见 selectCandidatesForLlm。
+  // 2026-07-02 由 8 提到 10:配合 MAX_SCORE_PROMPT_CHARS 60000 + paramObservations 精简,让 ~10 个候选
+  // 都能进 LLM(真机诊断 cap=8 时 /search 等被预算 pop);富数据候选精简后单个 ~3-4KB,10 个仍在 60KB 内。
+  RECORDER_LLM_CANDIDATE_CAP: intFromEnv(10, 1, 100),
   // LLM 合成(MVP):接 Anthropic(兼容)API 用 A/B 痕迹+截图生成 adapter func/columns。默认关。
   // 须 FEATURE_LLM_SYNTHESIS=1 且有 RECORDER_LLM_API_KEY 才启用;否则 init 退回空模板(行为不变)。
   // **刻意用 RECORDER_LLM_* 项目命名空间,不用 ANTHROPIC_API_KEY/ANTHROPIC_BASE_URL** —— 避免与

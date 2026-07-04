@@ -104,6 +104,8 @@ const PROMPT_B = [
   '  仍找不到抛 EmptyResultError 不静默 return []。URL 字段用 new URL(rel,base).toString() 规范化。',
   '- 🔢 字段兜底值按 itemFields[].type 保持类型一致:number 型列缺失用数值兜底(0 或 null),string 型列用 "";',
   '  **别混用**(如 Number(x) 的列不要写 `== null ? "" : Number(x)` —— 数值列的空值应是 0/null,不是空串)。boolean 型用 false/null。',
+  '  ⚠️ 若某 itemField 的 type 含 `|`(类型并集,如 "number|string" —— 该字段在组内不同调用里类型不一致),',
+  '  **别强制转换**该列:原样返回 `value ?? ""` 或 `String(value ?? "")`,不要 Number()/parseInt(),避免把合法字符串值转成 NaN。',
   '',
   '策略:PUBLIC→browser:false,Node fetch;COOKIE→Strategy.COOKIE 通常 browser:true,浏览器上下文 page.evaluate',
   '同 origin fetch + credentials:"include";UI 尽量不用。分页:证据(urlParams/wrappers)有 page/offset/cursor 才生成对应逻辑,',
@@ -113,7 +115,15 @@ const PROMPT_B = [
   '  "strategy":"PUBLIC|COOKIE|UI","browser":bool,"scriptKind":"func|pipeline","args":[{"name","type","required":bool,"help"}],',
   '  "columns":[...],"source":"完整文件源码","verifyExpectation":{"commandName":"site/name","verifyArgs":{占位/默认,不放真实密钥},',
   '  "minRows":int,"expectedFieldCount":int,"allowedOrigins":[...],"expectedStage":"execute"},"risks":[...],"notes":[...] } ],',
-  '  "skipped":[{"candidateId","reason"}] }。source 必须是完整文件(不要只给 funcBody)。输入候选如下:',
+  '  "skipped":[{"candidateId","reason"}] }。source 必须是完整文件(不要只给 funcBody)。',
+  '',
+  '## 读表说明(paramUnion / recommendedColumns 用 TOON 表格)',
+  '候选 JSON 后可能跟 `paramUnion[N]{列名...}:` 与 `recommendedColumns(sample=X)[N]{name,path,type}:` 两种表格:',
+  '首行声明行数与列序,其后每行按列序取值。**每个单元是 JSON 字符串**(带引号,如 "q"、"搜索词,支持多关键词"):',
+  '按 JSON 字符串边界读单元(逗号只在引号外才是列分隔),空单元为 ""。它们是从候选 JSON 抠出的紧凑表示,',
+  '语义等同 JSON 里的同名数组:paramUnion 等于顶层 paramUnion;recommendedColumns(sample=X) 等于',
+  'JSON 中 evidence[].sample===X 的 responseSchema.recommendedColumns。arrays[].itemFields 仍是 JSON。',
+  '输入候选如下:',
 ].join('\n');
 
 // ── prompt 全局预算闸门(第2步,与第1步 score 侧同构)──
@@ -160,8 +170,60 @@ function buildPerCand(candidate: RankCandidate, evidence: GenerateEvidence[]): R
   };
 }
 
+/**
+ * 通用 TOON(Token-Oriented Object Notation)编码器:同构对象数组 → `label[N]{col,...}:` 表头 + 逐行。
+ * 消除逐行重复的字段名。**每个单元是 JSON 标量**(`JSON.stringify(值)`):逗号/换行/引号/中文都安全转义 ——
+ * paramUnion.inferredMeaning 是 LLM 生成的中文含义,可能含逗号(codex 复审 Q1:裸逗号分隔会行列错位)。
+ * 缺省字段 → `""`。读表方按 JSON 字符串边界读单元,不按裸逗号切。非数组/空 → null(调用方退回 JSON)。
+ */
+function toonObjectArray(arr: unknown, cols: string[], label: string): string | null {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const header = `${label}[${arr.length}]{${cols.join(',')}}:`;
+  const rows = arr.map((x) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    return '  ' + cols.map((c) => {
+      const v = o[c];
+      return v === undefined || v === null ? '""' : JSON.stringify(String(v));
+    }).join(',');
+  });
+  return [header, ...rows].join('\n');
+}
+
+// paramUnion / recommendedColumns 的 TOON 列序(表头即 schema)。
+const TOON_PARAM_UNION_COLS = ['name', 'in', 'paramRole', 'exposeAsArg', 'inferredMeaning'];
+const TOON_REC_COLUMNS_COLS = ['name', 'path', 'type'];
+
+/**
+ * 渲染单候选 prompt。paramUnion + evidence[].responseSchema.recommendedColumns **表格化为 TOON**(值都是
+ * 标识符、无逗号,安全;多候选时线性省字符);其余字段(含 itemFields —— sample 是响应值可能含逗号,不 TOON)
+ * 保持 minified-JSON。抠出 TOON 后原字段从 JSON 里删除,末尾追加 TOON 块并标注归属。
+ */
 function renderCandPrompt(perCand: Record<string, unknown>): string {
-  return `${PROMPT_B}\n${JSON.stringify(perCand, null, 2)}`;
+  const clone: Record<string, unknown> = { ...perCand };
+  const toonBlocks: string[] = [];
+
+  // paramUnion(顶层)→ TOON。
+  const puToon = toonObjectArray(clone.paramUnion, TOON_PARAM_UNION_COLS, 'paramUnion');
+  if (puToon) { delete clone.paramUnion; toonBlocks.push(puToon); }
+
+  // recommendedColumns(嵌 evidence[].responseSchema)→ 每 sample 一块,标注 sample 归属。抠出后从 JSON 删。
+  if (Array.isArray(clone.evidence)) {
+    clone.evidence = (clone.evidence as Array<Record<string, unknown>>).map((ev) => {
+      const rs = ev.responseSchema as Record<string, unknown> | undefined;
+      if (rs && Array.isArray(rs.recommendedColumns) && rs.recommendedColumns.length) {
+        const label = `recommendedColumns(sample=${ev.sample ?? '?'})`;
+        const rcToon = toonObjectArray(rs.recommendedColumns, TOON_REC_COLUMNS_COLS, label);
+        if (rcToon) { const rs2 = { ...rs }; delete rs2.recommendedColumns; toonBlocks.push(rcToon); return { ...ev, responseSchema: rs2 }; }
+      }
+      return ev;
+    });
+  }
+
+  // minify JSON(其余字段)+ 末尾 TOON 块(--- 分隔,让 LLM 明确表格归属该候选)。
+  const json = JSON.stringify(clone);
+  return toonBlocks.length
+    ? `${PROMPT_B}\n${json}\n${toonBlocks.join('\n')}`
+    : `${PROMPT_B}\n${json}`;
 }
 
 /**

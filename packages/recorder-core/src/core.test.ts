@@ -132,6 +132,60 @@ describe('M4 core engine · fixture corpus (10/10)', () => {
     expect(r.candidates[0].risks).toEqual(expect.arrayContaining(['hard_reject:confirmed_analytics']));
   });
 
+  it('path-analytics → first-party host but /monitor_web/ 路径埋点 rejected (hard reject)', () => {
+    // 字节 Slardar 埋点:host 是第一方(juejin.cn),但路径是 /monitor_web/ → 应按路径判 confirmed_analytics。
+    const track = (url: string) => ({
+      requestId: `net_${url}`, method: 'GET', url,
+      responseStatus: 200, responseContentType: 'application/json', responsePreview: JSON.stringify({ ok: 1 }),
+      startedAt: 0, durationMs: 5,
+    });
+    const r = rankSamples(run([
+      sample('A', [track('https://juejin.cn/monitor_web/settings/browser-setting?bid=1&kw=cat')], { kw: { placeholder: 'kw_1', type: 'string' } }),
+      sample('B', [track('https://juejin.cn/monitor_web/settings/browser-setting?bid=1&kw=dog')], { kw: { placeholder: 'kw_2', type: 'string' } }),
+    ]));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates[0].confidence).toBe('rejected');
+    expect(r.candidates[0].risks).toEqual(expect.arrayContaining(['hard_reject:confirmed_analytics']));
+  });
+
+  it('path-analytics 不误杀:/api/log/list 这类"日志列表"数据接口不被路径正则命中', () => {
+    // log 是路径中段名词(数据接口:查日志列表),非独立监控端点段 → 不该 hardReject。
+    const list = (kw: string) => ({
+      requestId: `net_${kw}`, method: 'GET', url: `https://x.com/api/log/list?keyword=${kw}`,
+      responseStatus: 200, responseContentType: 'application/json',
+      responsePreview: JSON.stringify([{ id: 1, title: 't', ts: 1 }, { id: 2, title: 'u', ts: 2 }]),
+      startedAt: 0, durationMs: 20,
+    });
+    const r = rankSamples(run([
+      sample('A', [list('cat')], { keyword: { placeholder: 'kw_1', type: 'string' } }),
+      sample('B', [list('dog')], { keyword: { placeholder: 'kw_2', type: 'string' } }),
+    ]));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 不被判 confirmed_analytics(可能因其他信号得低分,但不是 hard reject)。
+    expect(r.candidates[0].risks ?? []).not.toContain('hard_reject:confirmed_analytics');
+  });
+
+  it('path-analytics 不误杀:含通用词的真数据接口(/api/collect/items 收藏、/report/list 报表)不被 hardReject', () => {
+    // collect/report/log/rum 是通用词,可能是真数据接口(收藏夹/报表/日志列表)→ 正则刻意不含,不该 hardReject。
+    const list = (path: string, kw: string) => ({
+      requestId: `net_${path}_${kw}`, method: 'GET', url: `https://x.com${path}?keyword=${kw}`,
+      responseStatus: 200, responseContentType: 'application/json',
+      responsePreview: JSON.stringify([{ id: 1, title: 't' }, { id: 2, title: 'u' }]),
+      startedAt: 0, durationMs: 20,
+    });
+    for (const path of ['/api/collect/items', '/report/list', '/rum_data/query']) {
+      const r = rankSamples(run([
+        sample('A', [list(path, 'cat')], { keyword: { placeholder: 'kw_1', type: 'string' } }),
+        sample('B', [list(path, 'dog')], { keyword: { placeholder: 'kw_2', type: 'string' } }),
+      ]));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.candidates[0].risks ?? [], `${path} 不该被 hardReject`).not.toContain('hard_reject:confirmed_analytics');
+    }
+  });
+
   it('missing-request-body → no body args inferred, capped at medium', () => {
     // GET list but response body missing → cap medium; no request body → no body args.
     const noResp = (kw: string) => ({

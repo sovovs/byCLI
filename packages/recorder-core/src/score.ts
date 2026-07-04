@@ -46,6 +46,12 @@ export interface ScoreResult {
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Confirmed third-party analytics/tracking hosts (hard reject, not the weak -25 delta).
 const ANALYTICS_HOST_RE = /(google-analytics|googletagmanager|doubleclick|segment\.io|mixpanel|sentry\.io|hotjar|facebook\.com\/tr|stats\.|analytics\.|track(ing)?\.)/i;
+// Path-based analytics/telemetry (host looks first-party but the path is埋点/监控 —— e.g. ByteDance
+// Slardar `/monitor_web/`, `/slardar/`, RUM/beacon endpoints). Matched against pathname.
+// 保守:只列**埋点专名段**(不会是数据接口的词);锚定路径段(前 `/`、后 `/`|$|`?`)。
+// 刻意**不含** collect/report/log 等通用词 —— `/api/collect/items`(收藏)、`/report/list`(报表)、
+// `/log/list`(日志列表)都是真数据接口,含这些词会误杀。core hardReject 是一票否决,从严宁漏勿杀。
+const ANALYTICS_PATH_RE = /\/(monitor_web|slardar|rgpv|sdk-log|apmplus|track_event|log_report|web_report|__log|sensorsdata|log-report)(\/|$|\?)/i;
 
 export interface ScoreContext {
   entry: RecorderNetworkEntry;
@@ -81,7 +87,7 @@ export function scoreCandidate(ctx: ScoreContext, profile: ScoringProfile): Scor
   let hardReject: HardReject | undefined;
   const host = entry.host ?? '';
   const respKind = entry.response?.bodyShape?.kind;
-  if (ANALYTICS_HOST_RE.test(host)) hardReject = 'confirmed_analytics';
+  if (ANALYTICS_HOST_RE.test(host) || ANALYTICS_PATH_RE.test(entry.pathname ?? '')) hardReject = 'confirmed_analytics';
   else if (normalized.signals.suspectedStatic && /\.(js|css|png|jpg|svg|woff2?|ico)(\?|$)/i.test(entry.pathname ?? '')) {
     hardReject = 'confirmed_static';
   } else if (MUTATION_METHODS.has(entry.method) && respKind !== 'array') {

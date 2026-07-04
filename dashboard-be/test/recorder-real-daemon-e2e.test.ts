@@ -227,12 +227,12 @@ describe('Tier A 端到端:真 client → 真 be → 真 daemon 子进程 → �
     expect((await client.captureStart('B')).ok, 'captureStart B').toBe(true);
     expect((await client.captureRead('B')).ok).toBe(true);
 
-    // rank → 候选数组
+    // rank → {candidates, scorePrompt}
     const rank = await client.rank();
     expect(rank.ok, JSON.stringify(rank.error)).toBe(true);
-    expect(Array.isArray(rank.data)).toBe(true);
-    expect(rank.data!.length).toBeGreaterThan(0);
-    const candidate = rank.data![0];
+    expect(Array.isArray(rank.data?.candidates)).toBe(true);
+    expect(rank.data!.candidates.length).toBeGreaterThan(0);
+    const candidate = rank.data!.candidates[0];
     const candidateId = candidate.id;
     // 用 UI model 的真实派生逻辑从真候选派生名(而非传死名),把"派生名→init/verify"路径纳入回归。
     // 抓包 url 是 x.com/api/search → 候选 endpoint host=x.com/pathname=/api/search → 派生 'x-com/search'。
@@ -307,7 +307,7 @@ describe('Tier A 端到端:真 client → 真 be → 真 daemon 子进程 → �
       await client2.navigate('https://x.com');
       await client2.captureStart('B'); await client2.captureRead('B');
       const rank = await client2.rank();
-      const cand = rank.data![0];
+      const cand = rank.data!.candidates[0];
       const name = deriveAdapterName(cand);
       const [site, command] = name.split('/');
 

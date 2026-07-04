@@ -1,7 +1,7 @@
 // responseSummary 单测:结构摘要压缩(score 模式)。覆盖 juejin article_rank 形状、解析失败兜底、
 // object/array/scalar 分支、rowPath 业务字段偏好、体积上限。
 import { describe, it, expect } from 'vitest';
-import { buildResponseSummary, extractRowSample, repairTruncatedJsonPrefix, makeStructureAwareResponsePreview } from '../src/llm/responseSummary.js';
+import { buildResponseSummary, buildMergedResponseSummary, extractRowSample, repairTruncatedJsonPrefix, makeStructureAwareResponsePreview } from '../src/llm/responseSummary.js';
 
 // juejin article_rank 缩样:{ err_no, err_msg, data:[ { content:{title,...}, author:{name,...}, content_counter:{view,like} } ] }
 const juejinRankBody = JSON.stringify({
@@ -63,6 +63,21 @@ describe('buildResponseSummary · score 模式', () => {
     expect(s.kind).toBe('array');
     expect(s.rowPath).toBe('$');
     expect(s.rowKeys).toEqual(expect.arrayContaining(['title', 'name', 'view']));
+  });
+
+  it('15-doc 阶段二 #3:arrayPaths 过滤 count:0 空数组(pickRowPath 仍看全量,rowPath 不受影响)', () => {
+    const body = JSON.stringify({
+      data: [{ title: 't1', view: 1, tags: ['a'], empty_arr: [], theme_list: [] }],
+      other_empty: [],
+    });
+    const s = buildResponseSummary(body, 'score');
+    expect(s.rowPath).toBe('data'); // pickRowPath 用全量,rowPath 正常
+    const paths = (s.arrayPaths ?? []).map((p) => p.path);
+    // 非空数组保留(data、data[].tags),空数组过滤(other_empty、data[].empty_arr、data[].theme_list)
+    expect(paths).toContain('data');
+    expect((s.arrayPaths ?? []).every((p) => p.count > 0)).toBe(true);
+    expect(paths).not.toContain('other_empty');
+    expect(paths.some((p) => p.includes('empty_arr') || p.includes('theme_list'))).toBe(false);
   });
 
   it('解析失败 → { parse:"failed", textPrefix(≤160), truncated:true },不喂长文本', () => {
@@ -428,5 +443,203 @@ describe('makeStructureAwareResponsePreview · fix C 结构感知预览', () => 
     const body = JSON.stringify({ a: { b: { c: { d: { e: { f: { g: 'deep' } } } } } }, pad: 'p'.repeat(200) });
     const r = makeStructureAwareResponsePreview({ body, contentType: 'application/json', maxChars: 150, maxDepth: 2 });
     expect(() => JSON.parse(r.responsePreview)).not.toThrow();
+  });
+});
+
+describe('buildMergedResponseSummary · bounded-union 跨调用字段合并', () => {
+  // 同 endpoint(article_rank 形状)两次调用:body-A 只有 content_counter.view,body-B 额外有 content_counter.share。
+  const bodyA = JSON.stringify({
+    err_no: 0, err_msg: 'success',
+    data: [{ content: { content_id: '1', title: 'A 篇' }, content_counter: { view: 100, like: 5 }, author: { name: '作者甲' } }],
+  });
+  const bodyB = JSON.stringify({
+    err_no: 0, err_msg: 'success',
+    data: [{ content: { content_id: '2', title: 'B 篇' }, content_counter: { view: 200, like: 8, share: 3 }, author: { name: '作者乙' } }],
+  });
+
+  it('字段并集:body-A 有 view、body-B 额外有 share → 合并 recommendedColumns 含二者(+ author.name)', () => {
+    const s = buildMergedResponseSummary(
+      [{ body: bodyA, status: 200, paramSig: 'type=hot' }, { body: bodyB, status: 200, paramSig: 'type=new' }],
+      'generate',
+    );
+    expect(s.recommendedRowPath).toBe('data');
+    expect(s.parsedBodyCount).toBe(2);
+    const paths = s.recommendedColumns!.map((c) => c.path);
+    // union:两次调用的指标都进 columns(view 在两体、share 只在 B)
+    expect(paths).toContain('content_counter.view');
+    expect(paths).toContain('content_counter.share');
+    // 作者跨子对象也在
+    expect(paths).toContain('author.name');
+    // itemFields 也体现并集
+    const dataArr = s.arrays!.find((a) => a.path === 'data')!;
+    const itemPaths = dataArr.itemFields.map((f) => f.path);
+    expect(itemPaths).toEqual(expect.arrayContaining(['content_counter.view', 'content_counter.share']));
+  });
+
+  it('覆盖率过滤:低业务价值字段仅 1/6 体出现(total>2, rate<0.5)→ 排除出 recommendedColumns', () => {
+    // 6 个体:全部有 note(中性/低价值),仅 1 个额外有 misc_meta(低价值罕见字段)。
+    const withMeta = JSON.stringify({ data: [{ note: 'x', misc_meta: 'rare' }] });
+    const plain = JSON.stringify({ data: [{ note: 'x' }] });
+    const calls = [
+      { body: withMeta, status: 200, paramSig: 'p=0' },
+      ...Array.from({ length: 5 }, (_, i) => ({ body: plain, status: 200, paramSig: `p=${i + 1}` })),
+    ];
+    const s = buildMergedResponseSummary(calls, 'generate');
+    expect(s.parsedBodyCount).toBe(6);
+    const paths = s.recommendedColumns!.map((c) => c.path);
+    expect(paths).toContain('note');           // 6/6 覆盖 → 保留
+    expect(paths).not.toContain('misc_meta');  // 1/6 覆盖 + 低价值 → 覆盖率过滤剔除
+    // 但 itemFields 仍保留(只是不推荐成列)
+    const itemPaths = s.arrays!.find((a) => a.path === 'data')!.itemFields.map((f) => f.path);
+    expect(itemPaths).toContain('misc_meta');
+    const metaField = s.arrays!.find((a) => a.path === 'data')!.itemFields.find((f) => f.path === 'misc_meta');
+    // occurrence 元数据在 itemFields 上不带(FieldSchema),覆盖率语义体现在过滤结果里
+    expect(metaField).toBeDefined();
+  });
+
+  it('高业务价值字段低覆盖(rate≥0.33)可破例进入,受 cap=5 限制', () => {
+    // 6 个体,仅 2 个(2/6≈0.33)带 like_count(高价值)。应破 0.5 门槛进入。
+    const withLike = JSON.stringify({ data: [{ title: 't', like_count: 9 }] });
+    const plain = JSON.stringify({ data: [{ title: 't' }] });
+    const calls = [
+      { body: withLike, status: 200, paramSig: 'p=0' },
+      { body: withLike, status: 200, paramSig: 'p=1' },
+      ...Array.from({ length: 4 }, (_, i) => ({ body: plain, status: 200, paramSig: `p=${i + 2}` })),
+    ];
+    const s = buildMergedResponseSummary(calls, 'generate');
+    const paths = s.recommendedColumns!.map((c) => c.path);
+    expect(paths).toContain('like_count'); // 高价值 2/6=0.33 破例进入
+  });
+
+  it('噪音黑名单:err_no/debug 字段 100% 覆盖仍排除出 recommendedColumns', () => {
+    const body = JSON.stringify({ data: [{ title: 't', view: 1, debug: 'trace-info', err_no: 0, request_id: 'abc' }] });
+    const s = buildMergedResponseSummary(
+      [{ body, status: 200, paramSig: 'p=0' }, { body, status: 200, paramSig: 'p=1' }, { body, status: 200, paramSig: 'p=2' }],
+      'generate',
+    );
+    const paths = s.recommendedColumns!.map((c) => c.path);
+    expect(paths).toContain('title');
+    expect(paths).not.toContain('debug');
+    expect(paths).not.toContain('err_no');
+    expect(paths).not.toContain('request_id');
+    // 但仍留在 itemFields(只是不推荐成列)
+    const itemPaths = s.arrays!.find((a) => a.path === 'data')!.itemFields.map((f) => f.path);
+    expect(itemPaths).toEqual(expect.arrayContaining(['debug', 'err_no', 'request_id']));
+  });
+
+  it('rowPath 投票:多数体 rowPath=data,少数噪音 rowPath=logs → winner=data', () => {
+    const dataBody = JSON.stringify({ data: [{ title: 't', view: 1 }] });
+    const logsBody = JSON.stringify({ logs: [{ ts: 1, level: 'info' }] });
+    const calls = [
+      { body: dataBody, status: 200, paramSig: 'p=0' },
+      { body: dataBody, status: 200, paramSig: 'p=1' },
+      { body: dataBody, status: 200, paramSig: 'p=2' },
+      { body: logsBody, status: 200, paramSig: 'p=3' },
+    ];
+    const s = buildMergedResponseSummary(calls, 'generate');
+    expect(s.recommendedRowPath).toBe('data');
+    expect(s.rowPathWinnerRate).toBeGreaterThanOrEqual(0.6);
+    expect(s.mixedRowPath).toBeFalsy();
+  });
+
+  it('rowPath 投票 <0.6 且多 rowPath 带业务字段 → mixedRowPath + reviewRequired,winner 单用', () => {
+    // 两组各带业务字段的 rowPath,票数 1:1(rate=0.5 < 0.6)。
+    const usersBody = JSON.stringify({ users: [{ name: 'u', follower: 3 }] });
+    const postsBody = JSON.stringify({ posts: [{ title: 'p', like: 5 }] });
+    const s = buildMergedResponseSummary(
+      [{ body: usersBody, status: 200, paramSig: 'p=0' }, { body: postsBody, status: 200, paramSig: 'p=1' }],
+      'generate',
+    );
+    expect(s.mixedRowPath).toBe(true);
+    expect(s.reviewRequired).toBe(true);
+    // 另一组数组仍列在 arrays 但不并入 recommendedColumns(只用 winner)
+    expect(s.recommendedRowPath).toBeDefined();
+  });
+
+  it('类型冲突 number|string:type=并集、primaryType 取多数(平票偏 string);itemFields 保并集', () => {
+    // 3 个体:count 两次是 number、一次是 string → primaryType=number、type="number|string"。
+    const numBody = JSON.stringify({ data: [{ title: 't', count: 42 }] });
+    const strBody = JSON.stringify({ data: [{ title: 't', count: 'N/A' }] });
+    const s = buildMergedResponseSummary(
+      [{ body: numBody, status: 200, paramSig: 'p=0' }, { body: numBody, status: 200, paramSig: 'p=1' }, { body: strBody, status: 200, paramSig: 'p=2' }],
+      'generate',
+    );
+    const countField = s.arrays!.find((a) => a.path === 'data')!.itemFields.find((f) => f.path === 'count')!;
+    expect(countField.type).toBe('number|string'); // itemFields 保类型并集
+    // recommendedColumns 用 primaryType(多数 number)
+    const countCol = s.recommendedColumns!.find((c) => c.path === 'count');
+    expect(countCol?.type).toBe('number');
+  });
+
+  it('平票类型冲突偏 string:count 一次 number 一次 string → primaryType=string', () => {
+    const numBody = JSON.stringify({ data: [{ title: 't', count: 42 }] });
+    const strBody = JSON.stringify({ data: [{ title: 't', count: 'x' }] });
+    const s = buildMergedResponseSummary(
+      [{ body: numBody, status: 200, paramSig: 'p=0' }, { body: strBody, status: 200, paramSig: 'p=1' }],
+      'generate',
+    );
+    const countCol = s.recommendedColumns!.find((c) => c.path === 'count');
+    expect(countCol?.type).toBe('string');
+  });
+
+  it('采样上限:>6 个不同调用 → 最多合并 6 个体', () => {
+    const calls = Array.from({ length: 12 }, (_, i) => ({
+      body: JSON.stringify({ data: [{ title: `t${i}`, view: i }] }),
+      status: 200,
+      paramSig: `p=${i}`, // 全不同签名,避免去重折叠
+    }));
+    const s = buildMergedResponseSummary(calls, 'generate');
+    expect(s.mergedBodyCount).toBeLessThanOrEqual(6);
+    expect(s.parsedBodyCount).toBeLessThanOrEqual(6);
+  });
+
+  it('同 query-param 签名重复 → 折叠到首(几)条(去重)', () => {
+    const body = JSON.stringify({ data: [{ title: 't', view: 1 }] });
+    const calls = Array.from({ length: 8 }, () => ({ body, status: 200, paramSig: 'type=hot' })); // 全同签名
+    const s = buildMergedResponseSummary(calls, 'generate');
+    // 每签名上限 3(MERGE_MAX_BODIES_PER_SAMPLE)
+    expect(s.mergedBodyCount).toBeLessThanOrEqual(3);
+  });
+
+  it('score 模式:合并 rowKeys 并集,无 recommendedColumns', () => {
+    const s = buildMergedResponseSummary(
+      [{ body: bodyA, status: 200, paramSig: 'type=hot' }, { body: bodyB, status: 200, paramSig: 'type=new' }],
+      'score',
+    );
+    expect(s.rowPath).toBe('data');
+    expect(s.recommendedColumns).toBeUndefined();
+    expect(s.rowKeys).toEqual(expect.arrayContaining(['content_counter.view', 'content_counter.share', 'author.name']));
+  });
+
+  it('2xx 优先:非 2xx 体不当代表(status 透传)', () => {
+    const errBody = JSON.stringify({ err_no: 1, err_msg: 'fail' });
+    const okBody = JSON.stringify({ data: [{ title: 't', view: 1 }] });
+    const s = buildMergedResponseSummary(
+      [{ body: errBody, status: 500, paramSig: 'p=0' }, { body: okBody, status: 200, paramSig: 'p=1' }],
+      'generate',
+    );
+    // 2xx 的 data 体被选为 winner rowPath
+    expect(s.recommendedRowPath).toBe('data');
+  });
+
+  it('全不可解析 → 退回单体 parse:failed 兜底', () => {
+    const s = buildMergedResponseSummary(
+      [{ body: '<html>oops', status: 200 }, { body: 'not json', status: 200 }],
+      'generate',
+    );
+    expect(s.parse).toBe('failed');
+  });
+
+  it('空输入 → kind=unknown', () => {
+    expect(buildMergedResponseSummary([], 'generate').kind).toBe('unknown');
+  });
+
+  it('单体等价:一个体的合并结果 ≈ 单体 buildResponseSummary(recommendedColumns 一致)', () => {
+    const single = buildResponseSummary(bodyA, 'generate', 200);
+    const merged = buildMergedResponseSummary([{ body: bodyA, status: 200 }], 'generate');
+    expect(merged.recommendedRowPath).toBe(single.recommendedRowPath);
+    const mPaths = merged.recommendedColumns!.map((c) => c.path).sort();
+    const sPaths = single.recommendedColumns!.map((c) => c.path).sort();
+    expect(mPaths).toEqual(sPaths);
   });
 });
