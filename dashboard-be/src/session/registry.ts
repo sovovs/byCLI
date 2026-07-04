@@ -37,6 +37,8 @@ export interface Session {
   synthesis?: { candidateId: string; result: SynthesisResult };
   /** N4:pipeline 产出的多脚本草稿(verify 后)+ 0700 草稿目录,供前端展示 + 保存复用。 */
   drafts?: { dir: string; items: Array<{ id: string; [k: string]: unknown }> };
+  /** 拆步流程:score 阶段选中生成的候选(genCands,已 merge 语义层)+ 评分结果,供 generate 阶段复用不重复评分。 */
+  genStage?: { genCands: unknown[]; scored: unknown };
 }
 
 export type RequestType = 'analyze' | 'init' | 'verify' | 'capture' | 'rank' | 'pipeline';
@@ -62,6 +64,8 @@ export interface RequestStatus {
   error: unknown;
   /** 阶段进度(pipeline 用);轮询时实时更新,前端据此显示 score✓12s/generate…/verify…。 */
   progress?: ProgressPhase[];
+  /** 阶段性结果(pipeline 分阶段 prompt):score 完先出 generate prompt,让分析过渡页按阶段展示提示词。 */
+  partialResult?: { prompts?: { score?: string; generate?: string; screenshotCount?: number } };
 }
 
 /** Internal request ledger: RequestStatus + be-only fields (never returned to the UI). */
@@ -240,6 +244,29 @@ export class Registry {
     return this.sessions.get(sessionId)?.drafts;
   }
 
+  /** 拆步流程:存 score 阶段的 genCands + 评分结果,供 generate 阶段复用(不重复评分)。 */
+  storeGenStage(sessionId: string, genCands: unknown[], scored: unknown): void {
+    const s = this.sessions.get(sessionId);
+    if (!s) return;
+    s.genStage = { genCands, scored };
+    s.updatedAt = Date.now();
+  }
+
+  getGenStage(sessionId: string): { genCands: unknown[]; scored: unknown } | undefined {
+    return this.sessions.get(sessionId)?.genStage;
+  }
+
+  /** 拆步流程:单草稿 verify 完把结果回写对应草稿(更新 verify/usable),供保存判断 + 刷新展示。 */
+  updateDraftVerify(sessionId: string, draftId: string, verify: { ok: boolean; [k: string]: unknown }): boolean {
+    const s = this.sessions.get(sessionId);
+    const draft = s?.drafts?.items.find((d) => d.id === draftId);
+    if (!draft) return false;
+    draft.verify = verify;
+    draft.usable = verify.ok;
+    s!.updatedAt = Date.now();
+    return true;
+  }
+
   /** 缓存某候选的 LLM 合成结果(dry-run 生成,write 复用)。 */
   storeSynthesis(sessionId: string, candidateId: string, result: SynthesisResult): void {
     const s = this.sessions.get(sessionId);
@@ -312,6 +339,26 @@ export class Registry {
     const ph = rec.progress.find((p) => p.stage === stage);
     if (ph) { ph.status = 'done'; ph.durationMs = durationMs; if (detail) ph.detail = detail; }
     else rec.progress.push({ stage, status: 'done', durationMs, ...(detail ? { detail } : {}) });
+    rec.updatedAt = Date.now();
+  }
+
+  /** Heartbeat:长阶段 pending 时 bump updatedAt(+可选给 running 阶段写 detail),让轮询方(前端 idle-timeout)见活动不误判卡死。 */
+  touchRequest(requestId: string, detail?: string): void {
+    const rec = this.requests.get(requestId);
+    if (!rec || TERMINAL_REQUEST.includes(rec.status)) return;
+    if (detail && rec.progress) {
+      const running = rec.progress.find((p) => p.status === 'running');
+      if (running) running.detail = detail;
+    }
+    rec.updatedAt = Date.now();
+  }
+
+  /** 阶段性结果(pipeline 分阶段 prompt):score 完写 generate prompt,让分析过渡页按当前阶段展示对应提示词。 */
+  setPartialResult(requestId: string, patch: { prompts?: { score?: string; generate?: string; screenshotCount?: number } }): void {
+    const rec = this.requests.get(requestId);
+    if (!rec || TERMINAL_REQUEST.includes(rec.status)) return;
+    const prev = (rec.partialResult ?? {}) as { prompts?: Record<string, unknown> };
+    rec.partialResult = { ...prev, prompts: { ...(prev.prompts ?? {}), ...(patch.prompts ?? {}) } };
     rec.updatedAt = Date.now();
   }
 

@@ -145,7 +145,7 @@ describe('render', () => {
     expect(render('https://api.example.com/search?q=${{ args.keyword }}', { args: { keyword: 'test' } })).toBe('https://api.example.com/search?q=test');
   });
   it('renders inline helper expressions', () => {
-    expect(render('https://example.com/search?q=${{ encodeURIComponent(args.keyword) }}', { args: { keyword: 'hello world' } })).toBe('https://example.com/search?q=hello%20world');
+    expect(render('https://juejin.cn/?q=${{ encodeURIComponent(args.keyword) }}', { args: { keyword: 'hello world' } })).toBe('https://juejin.cn/?q=hello%20world');
   });
   it('renders full multiline expressions', () => {
     expect(render("${{\n  args.topic ? `https://medium.com/tag/${args.topic}` : 'https://medium.com/tag/technology'\n}}", { args: { topic: 'ai' } })).toBe('https://medium.com/tag/ai');
