@@ -53,3 +53,13 @@ podman-verify/
 
 # 内部设计文档(不开源;契约 schema 已迁至 dashboard/schemas/)
 dashboard-docs/
+
+# 内部 benchmark/评测实验(产品代码零引用)
+autoresearch/
+# 个人 AI 工作偏好配置(非贡献者文档)
+AGENT.md
+# 内部评审/计划/审计过程产物
+outputs/
+dashboard-be/IMPLEMENTATION_PLAN.md
+docs/superpowers/
+docs/developer/documentation-audit-2026-05.md
