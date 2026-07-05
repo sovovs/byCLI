@@ -15,8 +15,8 @@
  */
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import { getUserClisDir, getSitesDir, getSiteRecorderDir } from '../../config-paths.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   validateAdapterName, renderAdapterTemplate, buildProvenanceHeader, computeDryRunDiff,
@@ -78,7 +78,7 @@ const DEFAULT_SNAPSHOT: ConfigSnapshot = {
 };
 
 function clisDir(site: string): string {
-  return path.join(os.homedir(), '.bycli', 'clis', site);
+  return path.join(getUserClisDir(), site);
 }
 
 function sha256(s: string): string {
@@ -144,7 +144,7 @@ export function createAdapterDraft(
 
   const dir = clisDir(site);
   const adapterPath = path.join(dir, `${command}.js`);
-  const reportPath = path.join(os.homedir(), '.bycli', 'sites', site, 'recorder', `${command}-report.json`);
+  const reportPath = path.join(getSiteRecorderDir(site), `${command}-report.json`);
 
   const warnings: string[] = [];
   // shadow/overwrite check (mandatory, 07:64): refuse to silently clobber.
@@ -222,7 +222,7 @@ export function saveAdapterSource(input: SaveAdapterInput): SaveAdapterResult {
   }
   const { site, command } = v.parts;
   const adapterPath = path.join(clisDir(site), `${command}.js`);
-  const reportPath = path.join(os.homedir(), '.bycli', 'sites', site, 'recorder', `${command}-report.json`);
+  const reportPath = path.join(getSiteRecorderDir(site), `${command}-report.json`);
   const txnId = randomUUID();
   const report = { adapterPath, reportPath, source: 'llm-generated', llmModel: input.llmModel ?? null, savedAt: Date.now() };
   const reportJson = JSON.stringify(report, null, 2);
@@ -293,7 +293,7 @@ function quarantineAdapter(m: InitTxnManifest, log: (msg: string) => void): void
  * Designed to run once at daemon startup (extends the verify reap).
  */
 export function recoverInitTransactions(opts: { sitesRoot?: string; log?: (msg: string) => void } = {}): InitRecoveryResult {
-  const sitesRoot = opts.sitesRoot ?? path.join(os.homedir(), '.bycli', 'sites');
+  const sitesRoot = opts.sitesRoot ?? getSitesDir();
   const log = opts.log ?? (() => {});
   const result: InitRecoveryResult = { scanned: 0, committed: 0, rolledForward: 0, rolledBack: 0, quarantined: 0 };
 

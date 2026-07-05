@@ -9,7 +9,6 @@
  */
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { type InternalCliCommand, Strategy, registerCommand } from './registry.js';
@@ -17,12 +16,15 @@ import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 import type { ManifestEntry } from './manifest-types.js';
 import { findPackageRoot, getCliManifestPath } from './package-paths.js';
+import { getConfigDir, getUserClisDir } from './config-paths.js';
 
-/** User runtime directory: ~/.bycli */
-export const USER_BYCLI_DIR = path.join(os.homedir(), '.bycli');
-/** User CLIs directory: ~/.bycli/clis */
-export const USER_CLIS_DIR = path.join(USER_BYCLI_DIR, 'clis');
-/** Plugins directory: ~/.bycli/plugins/ */
+/** User runtime directory: BYCLI_CONFIG_DIR or ~/.bycli.
+ * Resolved once at module load; the entry process fixes BYCLI_CONFIG_DIR before import. */
+export const USER_BYCLI_DIR = getConfigDir();
+/** User CLIs directory: <config>/clis */
+export const USER_CLIS_DIR = getUserClisDir();
+/** Plugins directory: <config>/plugins/ (plugins are out of scope for the clis/sites
+ * relocation; kept as a const that many plugin.ts/tests consumers rely on). */
 export const PLUGINS_DIR = path.join(USER_BYCLI_DIR, 'plugins');
 /** Matches files that register commands via cli() or lifecycle hooks */
 const PLUGIN_MODULE_PATTERN = /\b(?:cli|onStartup|onBeforeExecute|onAfterExecute)\s*\(/;

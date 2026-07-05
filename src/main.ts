@@ -14,8 +14,8 @@ if (process.platform !== 'win32') {
 }
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import { getUserClisDir } from './config-paths.js';
 import { fileURLToPath } from 'node:url';
 import { getCompletionsFromManifest, hasAllManifests, printCompletionScriptFast } from './completion-fast.js';
 import { findPackageRoot, getCliManifestPath } from './package-paths.js';
@@ -28,7 +28,7 @@ const __dirname = path.dirname(__filename);
 // Adapters are JS-first and live at <package-root>/clis/.
 // Use findPackageRoot so the path works both in dev (src/main.ts) and prod (dist/src/main.js).
 const BUILTIN_CLIS = path.join(findPackageRoot(__filename), 'clis');
-const USER_CLIS = path.join(os.homedir(), '.bycli', 'clis');
+const USER_CLIS = getUserClisDir();
 
 // ── Ultra-fast path: lightweight commands bypass full discovery ──────────
 // These are high-frequency or trivial paths that must not pay the startup tax.

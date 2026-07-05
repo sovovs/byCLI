@@ -24,6 +24,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { getUserClisDir } from '../../config-paths.js';
 import {
   parseRunnerEvent, normalizeRunnerResult, buildRunnerArgs, createMetrics,
   type VerifySummary, type SeedArgEvidence, type RunnerConfig, type Metrics, type TempCapacity,
@@ -130,7 +131,7 @@ function defaultResolveAdapterPath(name: string): string {
   const slash = name.indexOf('/');
   const site = slash === -1 ? name : name.slice(0, slash);
   const command = slash === -1 ? name : name.slice(slash + 1);
-  return path.join(os.homedir(), '.bycli', 'clis', site, `${command}.js`);
+  return path.join(getUserClisDir(), site, `${command}.js`);
 }
 
 /**

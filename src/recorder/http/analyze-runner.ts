@@ -5,7 +5,7 @@
 // analyzeBrowserWithTimeout,finally 释放 lease(closeWindow)。隔离成可注入 seam → 测试无需真 daemon/Page。
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { getUserClisDir } from '../../config-paths.js';
 import { fileURLToPath } from 'node:url';
 import type { AnalyzeReport, AdapterRef } from '../../browser/analyze.js';
 import type { ManifestEntry } from '../../manifest-types.js';
@@ -27,7 +27,7 @@ function defaultManifestPaths(): string[] {
   const root = findPackageRoot(fileURLToPath(import.meta.url));
   return [
     getCliManifestPath(path.join(root, 'clis')),                          // built-in adapters
-    getCliManifestPath(path.join(os.homedir(), '.bycli', 'clis')),        // user adapters
+    getCliManifestPath(getUserClisDir()),                                 // user adapters
   ];
 }
 

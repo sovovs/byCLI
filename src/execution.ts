@@ -24,7 +24,8 @@ import type { IPage } from './types.js';
 import { pathToFileURL } from 'node:url';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
+import * as path from 'node:path';
+import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
 import { adapterLoadError, ArgumentError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
@@ -40,7 +41,11 @@ import { resolveAdapterSourcePath } from './adapter-source.js';
 const _loadedModules = new Map<string, Promise<void>>();
 /** Track mtime of loaded user adapter files for hot-reload in daemon mode. */
 const _moduleMtimes = new Map<string, number>();
-const _userClisDir = `${os.homedir()}/.bycli/clis/`;
+/** User adapter dir with a trailing separator, so `startsWith` can't match a sibling
+ * like `clis-foo`. Resolved per-call (config-paths.ts rationale) — no import-time freeze. */
+function userClisPrefix(): string {
+  return getUserClisDir() + path.sep;
+}
 
 type TraceMode = 'off' | 'on' | 'retain-on-failure';
 
@@ -104,7 +109,7 @@ async function runCommand(
   if (internal._lazy && internal._modulePath) {
     const modulePath = internal._modulePath;
     // Hot-reload: if a user adapter's file has changed on disk, invalidate cache
-    const isUserAdapter = modulePath.startsWith(_userClisDir);
+    const isUserAdapter = modulePath.startsWith(userClisPrefix());
     if (isUserAdapter && _loadedModules.has(modulePath)) {
       try {
         const stat = fs.statSync(modulePath);

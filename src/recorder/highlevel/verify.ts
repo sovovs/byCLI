@@ -13,8 +13,8 @@
  * they never enter the returned summary, report, status, or logs.
  */
 
-import { homedir } from 'node:os';
 import { resolve, sep } from 'node:path';
+import { getConfigDir } from '../../config-paths.js';
 import {
   validateAdapterName, deriveEvidenceSeedArgs,
   type SeedArgEvidence, type VerifySummary,
@@ -87,13 +87,14 @@ export async function verifyAdapter(
   const v = validateAdapterName(input.name);
   if (!v.ok) return { ok: false, errorCode: 'validation_failed', reason: v.reason };
 
-  // N3 安全:adapterPath override 必须是 ~/.bycli 下的绝对路径(草稿/正式 clis),防越权读任意文件。
+  // N3 安全:adapterPath override 必须是 byCLI 配置根(BYCLI_CONFIG_DIR,默认 ~/.bycli)下的绝对
+  // 路径(草稿/正式 clis),防越权读任意文件。根随 config-paths 解析,与 clis/sites 落盘同源。
   let adapterPath = input.adapterPath;
   if (adapterPath !== undefined) {
     const abs = resolve(adapterPath);
-    const root = resolve(homedir(), '.bycli') + sep;
+    const root = resolve(getConfigDir()) + sep;
     if (!abs.startsWith(root)) {
-      return { ok: false, errorCode: 'validation_failed', reason: 'adapterPath must be under ~/.bycli' };
+      return { ok: false, errorCode: 'validation_failed', reason: `adapterPath must be under ${getConfigDir()}` };
     }
     adapterPath = abs;
   }

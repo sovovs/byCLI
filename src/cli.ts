@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getUserClisDir, getSitesDir } from './config-paths.js';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { findPackageRoot, getBuiltEntryCandidates } from './package-paths.js';
 import { type CliCommand, fullName, getRegistry, strategyLabel } from './registry.js';
@@ -186,7 +187,7 @@ export type SiteMemoryReport = {
 };
 
 export function checkSiteMemory(site: string): SiteMemoryReport {
-  const siteDir = path.join(os.homedir(), '.bycli', 'sites', site);
+  const siteDir = path.join(getSitesDir(), site);
   const endpointsPath = path.join(siteDir, 'endpoints.json');
   const notesPath = path.join(siteDir, 'notes.md');
   let endpointsCount = 0;
@@ -2551,10 +2552,9 @@ Examples:
           return;
         }
 
-        const os = await import('node:os');
         const fs = await import('node:fs');
         const path = await import('node:path');
-        const dir = path.join(os.homedir(), '.bycli', 'clis', site);
+        const dir = path.join(getUserClisDir(), site);
         const filePath = path.join(dir, `${command}.js`);
 
         if (fs.existsSync(filePath)) {
@@ -2622,7 +2622,7 @@ cli({
 
         const { execFileSync } = await import('node:child_process');
         const { loadFixture, writeFixture, deriveFixture, validateRows, validateRowShape, fixturePath, expandFixtureArgs, parseSeedArgs } = await import('./browser/verify-fixture.js');
-        const filePath = path.join(os.homedir(), '.bycli', 'clis', site, `${command}.js`);
+        const filePath = path.join(getUserClisDir(), site, `${command}.js`);
         if (!fs.existsSync(filePath)) {
           console.error(`Adapter not found: ${filePath}`);
           console.error(`Run "bycli browser init ${name}" to create it.`);
@@ -2991,8 +2991,7 @@ cli({
     .command('status')
     .description('Show which sites have local overrides vs using official baseline')
     .action(async () => {
-      const os = await import('node:os');
-      const userClisDir = path.join(os.homedir(), '.bycli', 'clis');
+      const userClisDir = getUserClisDir();
       const builtinClisDir = BUILTIN_CLIS;
       try {
         const userEntries = await fs.promises.readdir(userClisDir, { withFileTypes: true });
@@ -3008,7 +3007,7 @@ cli({
           return;
         }
 
-        console.log(`Local overrides in ~/.bycli/clis/ (${userSites.length} sites):\n`);
+        console.log(`Local overrides in ${userClisDir} (${userSites.length} sites):\n`);
         for (const site of userSites) {
           const isOfficial = builtinSites.includes(site);
           const label = isOfficial ? 'override' : 'custom';
@@ -3025,8 +3024,7 @@ cli({
     .description('Copy an official adapter to ~/.bycli/clis/ for local editing')
     .argument('<site>', 'Site name (e.g. twitter, bilibili)')
     .action(async (site: string) => {
-      const os = await import('node:os');
-      const userClisDir = path.join(os.homedir(), '.bycli', 'clis');
+      const userClisDir = getUserClisDir();
       const builtinSiteDir = path.join(BUILTIN_CLIS, site);
       const userSiteDir = path.join(userClisDir, site);
 
@@ -3040,13 +3038,13 @@ cli({
 
       try {
         await fs.promises.access(userSiteDir);
-        console.error(`Site "${site}" already exists in ~/.bycli/clis/. Use "bycli adapter reset ${site}" first to restore official version.`);
+        console.error(`Site "${site}" already exists in ${userClisDir}. Use "bycli adapter reset ${site}" first to restore official version.`);
         process.exitCode = EXIT_CODES.USAGE_ERROR;
         return;
       } catch { /* good, doesn't exist yet */ }
 
       fs.cpSync(builtinSiteDir, userSiteDir, { recursive: true });
-      console.log(`✅ Ejected "${site}" to ~/.bycli/clis/${site}/`);
+      console.log(`✅ Ejected "${site}" to ${userSiteDir}/`);
       console.log('You can now edit the adapter files. Changes take effect immediately.');
       console.log('Note: Official updates to this adapter will overwrite your changes.');
     });
@@ -3057,8 +3055,7 @@ cli({
     .argument('[site]', 'Site name (e.g. twitter, bilibili)')
     .option('--all', 'Reset all local overrides')
     .action(async (site: string | undefined, opts: { all?: boolean }) => {
-      const os = await import('node:os');
-      const userClisDir = path.join(os.homedir(), '.bycli', 'clis');
+      const userClisDir = getUserClisDir();
 
       if (opts.all) {
         try {
