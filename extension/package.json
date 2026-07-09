@@ -1,6 +1,6 @@
 {
   "name": "bycli-extension",
-  "version": "1.0.15",
+  "version": "2.0.0",
   "private": true,
   "bycli": {
     "compatRange": ">=1.7.0"
