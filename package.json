@@ -42,7 +42,9 @@
     "README.md",
     "README.zh-CN.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "!**/*.test.js",
+    "!**/*.e2e.test.js"
   ],
   "scripts": {
     "dev": "tsx src/main.ts",
