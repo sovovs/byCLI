@@ -16,6 +16,7 @@ export type {
   SiteSessionMode,
   BrowserDeclaration,
   BrowserRequirementResolver,
+  ConditionalBrowserCommandFunc,
   NormalizedBrowserRequirement,
 } from './registry.js';
 export type { IPage } from './types.js';
