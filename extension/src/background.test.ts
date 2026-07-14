@@ -185,7 +185,7 @@ function createChromeMock() {
     alarms: {
       create: vi.fn(),
       clear: vi.fn(),
-      onAlarm: { addListener: vi.fn() } as Listener<(alarm: { name: string }) => void>,
+      onAlarm: { addListener: vi.fn() } as Listener<(alarm: { name: string; scheduledTime?: number }) => void>,
     },
     storage: {
       local: {
@@ -1055,6 +1055,99 @@ describe('background tab isolation', () => {
     ])).resolves.toMatchObject({ ok: true });
   });
 
+  it('ignores an old idle alarm queued behind the lease lock after a command renews the deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { chrome, tabs } = createChromeMock();
+    const foregroundWindow = deferred<{ id: number; focused: boolean }>();
+    chrome.windows.update = vi.fn(async () => foregroundWindow.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const key = adapterKey('alarm-renewed');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const oldDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'hold-alarm-lock', action: 'tabs', op: 'focus', session: 'alarm-renewed', surface: 'adapter', page: 'target-1' },
+      key,
+    );
+    for (let i = 0; i < 10 && chrome.windows.update.mock.calls.length === 0; i++) await Promise.resolve();
+    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+
+    vi.setSystemTime(oldDeadline);
+    const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
+    const oldExpiry = onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(key)}`,
+      scheduledTime: oldDeadline,
+    });
+    const renewing = mod.__test__.handleCommand({
+      id: 'renew-after-alarm',
+      action: 'tabs',
+      op: 'list',
+      session: 'alarm-renewed',
+      surface: 'adapter',
+    });
+    const renewedDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+    expect(renewedDeadline).toBeGreaterThan(oldDeadline);
+
+    foregroundWindow.resolve({ id: 1, focused: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await oldExpiry;
+    await expect(renewing).resolves.toMatchObject({ ok: true });
+
+    expect(mod.__test__.getSession(key)).toMatchObject({
+      preferredTabId: tabs[0].id,
+      idleDeadlineAt: renewedDeadline,
+    });
+  });
+
+  it('ignores an old in-memory idle timer queued behind the lease lock after a command renews the deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { chrome, tabs } = createChromeMock();
+    const foregroundWindow = deferred<{ id: number; focused: boolean }>();
+    chrome.windows.update = vi.fn(async () => foregroundWindow.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const key = adapterKey('timer-renewed');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const oldDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'hold-timer-lock', action: 'tabs', op: 'focus', session: 'timer-renewed', surface: 'adapter', page: 'target-1' },
+      key,
+    );
+    for (let i = 0; i < 10 && chrome.windows.update.mock.calls.length === 0; i++) await Promise.resolve();
+    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+
+    vi.advanceTimersByTime(1_000);
+    await Promise.resolve();
+    const renewing = mod.__test__.handleCommand({
+      id: 'renew-after-timer',
+      action: 'tabs',
+      op: 'list',
+      session: 'timer-renewed',
+      surface: 'adapter',
+    });
+    const renewedDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+    expect(renewedDeadline).toBeGreaterThan(oldDeadline);
+
+    foregroundWindow.resolve({ id: 1, focused: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await expect(renewing).resolves.toMatchObject({ ok: true });
+
+    expect(mod.__test__.getSession(key)).toMatchObject({
+      preferredTabId: tabs[0].id,
+      idleDeadlineAt: renewedDeadline,
+    });
+  });
+
   it('reuses the initial container tab for first tab-new lease instead of leaving a blank tab', async () => {
     const { chrome, create, update } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
@@ -1530,34 +1623,78 @@ describe('background tab isolation', () => {
 
   it('releases owned leases from the idle alarm path', async () => {
     const { chrome } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
-    await mod.__test__.resolveTabId(undefined, adapterKey('alarm'));
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('alarm'));
+    await vi.advanceTimersByTimeAsync(301);
+    await resolving;
+    const deadline = mod.__test__.getSession(adapterKey('alarm'))!.idleDeadlineAt;
+    vi.setSystemTime(deadline);
 
     const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
-    await onAlarmListener({ name: `bycli:lease-idle:${encodeURIComponent(adapterKey('alarm'))}` });
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(adapterKey('alarm'))}`,
+      scheduledTime: deadline,
+    });
 
     expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank' });
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     expect(mod.__test__.getSession(adapterKey('alarm'))).toBeNull();
   });
 
-  it('reuses the placeholder tab left by an idle release', async () => {
-    const { chrome, tabs } = createChromeMock();
+  it('does not release the current lease before its scheduled idle deadline', async () => {
+    const { chrome } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
-    await mod.__test__.resolveTabId(undefined, adapterKey('first'));
+    const key = adapterKey('alarm-early');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const deadline = mod.__test__.getSession(key)!.idleDeadlineAt;
 
     const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
-    await onAlarmListener({ name: `bycli:lease-idle:${encodeURIComponent(adapterKey('first'))}` });
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(key)}`,
+      scheduledTime: deadline,
+    });
+
+    expect(Date.now()).toBeLessThan(deadline);
+    expect(mod.__test__.getSession(key)).toMatchObject({ idleDeadlineAt: deadline });
+    expect(chrome.tabs.update).not.toHaveBeenCalledWith(1, { url: 'about:blank', active: true });
+  });
+
+  it('reuses the placeholder tab left by an idle release', async () => {
+    const { chrome, tabs } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('first'));
+    await vi.advanceTimersByTimeAsync(301);
+    await resolving;
+    const deadline = mod.__test__.getSession(adapterKey('first'))!.idleDeadlineAt;
+    vi.setSystemTime(deadline);
+
+    const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(adapterKey('first'))}`,
+      scheduledTime: deadline,
+    });
 
     expect(tabs[0].url).toBe('about:blank');
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     chrome.windows.create.mockClear();
 
-    const reused = await mod.__test__.resolveTabId(undefined, adapterKey('next'), 'https://next.example');
+    const reusePromise = mod.__test__.resolveTabId(undefined, adapterKey('next'), 'https://next.example');
+    await vi.advanceTimersByTimeAsync(301);
+    const reused = await reusePromise;
 
     expect(reused).toBe(1);
     expect(chrome.windows.create).not.toHaveBeenCalled();

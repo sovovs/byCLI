@@ -231,6 +231,7 @@ type TargetLease = {
 
 const automationSessions = new Map<string, TargetLease>();
 const leaseRevisions = new Map<string, number>();
+const leaseIdleGenerations = new Map<string, number>();
 const leaseOperationTails = new Map<string, Promise<void>>();
 const IDLE_TIMEOUT_DEFAULT = 30_000;      // 30s — adapter-driven automation
 const IDLE_TIMEOUT_INTERACTIVE = 600_000; // 10min — human-paced browser:* / operate:*
@@ -496,17 +497,28 @@ async function persistRuntimeState(): Promise<void> {
   });
 }
 
-function scheduleIdleAlarm(leaseKey: string, timeout: number): void {
+function nextIdleGeneration(leaseKey: string): number {
+  const generation = (leaseIdleGenerations.get(leaseKey) ?? 0) + 1;
+  leaseIdleGenerations.set(leaseKey, generation);
+  return generation;
+}
+
+function scheduleIdleAlarmAt(leaseKey: string, deadline: number): void {
   const alarmName = makeAlarmName(leaseKey);
   try {
-    if (timeout > 0) {
-      chrome.alarms?.create?.(alarmName, { when: Date.now() + timeout });
+    if (deadline > 0) {
+      chrome.alarms?.create?.(alarmName, { when: deadline });
     } else {
       chrome.alarms?.clear?.(alarmName);
     }
   } catch {
     // setTimeout remains the in-process fast path; alarms are the MV3 restart recovery path.
   }
+}
+
+function cancelIdleExpiry(leaseKey: string): void {
+  nextIdleGeneration(leaseKey);
+  scheduleIdleAlarmAt(leaseKey, 0);
 }
 
 async function safeDetach(tabId: number): Promise<void> {
@@ -526,8 +538,25 @@ async function removeLeaseSession(leaseKey: string, expected = automationSession
   sessionTimeoutOverrides.delete(leaseKey);
   sessionWindowModeOverrides.delete(leaseKey);
   sessionLifecycleOverrides.delete(leaseKey);
-  scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+  cancelIdleExpiry(leaseKey);
   await persistRuntimeState();
+}
+
+async function releaseLeaseIfIdleExpired(
+  leaseKey: string,
+  expectedSession: TargetLease,
+  expectedGeneration: number,
+  expectedDeadline: number,
+  reason: string,
+): Promise<void> {
+  await withLeaseLock(leaseKey, async () => {
+    const current = automationSessions.get(leaseKey);
+    if (current !== expectedSession) return;
+    if (leaseIdleGenerations.get(leaseKey) !== expectedGeneration) return;
+    if (current.idleDeadlineAt !== expectedDeadline) return;
+    if (expectedDeadline <= 0 || Date.now() < expectedDeadline) return;
+    await releaseLeaseUnlocked(leaseKey, reason);
+  });
 }
 
 function resetWindowIdleTimer(leaseKey: string): void {
@@ -535,17 +564,20 @@ function resetWindowIdleTimer(leaseKey: string): void {
   if (!session) return;
   if (session.idleTimer) clearTimeout(session.idleTimer);
   const timeout = getIdleTimeout(leaseKey);
-  scheduleIdleAlarm(leaseKey, timeout);
+  const generation = nextIdleGeneration(leaseKey);
   if (timeout <= 0) {
     session.idleTimer = null;
     session.idleDeadlineAt = 0;
+    scheduleIdleAlarmAt(leaseKey, 0);
     void persistRuntimeState();
     return;
   }
-  session.idleDeadlineAt = Date.now() + timeout;
+  const deadline = Date.now() + timeout;
+  session.idleDeadlineAt = deadline;
+  scheduleIdleAlarmAt(leaseKey, deadline);
   void persistRuntimeState();
   session.idleTimer = setTimeout(async () => {
-    await releaseLease(leaseKey, 'idle timeout');
+    await releaseLeaseIfIdleExpired(leaseKey, session, generation, deadline, 'idle timeout');
   }, timeout);
 }
 
@@ -909,7 +941,7 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
-      scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+      cancelIdleExpiry(leaseKey);
     });
   }
   await persistRuntimeState();
@@ -927,7 +959,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
-      scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+      cancelIdleExpiry(leaseKey);
       console.log(`[bycli] Session ${session.session} detached from tab ${tabId} (tab closed)`);
     });
   }
@@ -973,7 +1005,15 @@ initialize();
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'keepalive') void connect();
   const leaseKey = leaseKeyFromAlarmName(alarm.name);
-  if (leaseKey) await releaseLease(leaseKey, 'idle alarm');
+  if (leaseKey) {
+    const session = automationSessions.get(leaseKey);
+    if (!session) return;
+    const generation = leaseIdleGenerations.get(leaseKey) ?? 0;
+    const deadline = Number.isFinite(alarm.scheduledTime) && alarm.scheduledTime > 0
+      ? alarm.scheduledTime
+      : session.idleDeadlineAt;
+    await releaseLeaseIfIdleExpired(leaseKey, session, generation, deadline, 'idle alarm');
+  }
 });
 
 // ─── Popup status API ───────────────────────────────────────────────
@@ -1984,13 +2024,13 @@ async function releaseLeaseUnlocked(leaseKey: string, reason: string): Promise<v
     sessionTimeoutOverrides.delete(leaseKey);
     sessionWindowModeOverrides.delete(leaseKey);
     sessionLifecycleOverrides.delete(leaseKey);
-    scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+    cancelIdleExpiry(leaseKey);
     await persistRuntimeState();
     return;
   }
 
   if (session.idleTimer) clearTimeout(session.idleTimer);
-  scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+  cancelIdleExpiry(leaseKey);
 
   if (session.owned) {
     const tabId = session.preferredTabId;
