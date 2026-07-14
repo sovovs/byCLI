@@ -664,7 +664,7 @@ throw new Error('fail after external alias takeover');
     }
   });
 
-  it('rolls back late timed-out module writes without touching ordinary external commands', async () => {
+  it('rejects late timed-out module register and direct Map writes without touching external commands', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-timeout-late-write-'));
     const site = `timeout-late-write-${Date.now()}`;
     const modulePath = path.join(root, 'list.mjs');
@@ -682,13 +682,25 @@ throw new Error('fail after external alias takeover');
       __lateImportStarted: markStarted, __lateImportGate: gate, __lateImportDone: markLateDone,
     });
     fs.writeFileSync(modulePath, `
-import { cli } from ${JSON.stringify(registryUrl)};
+import { cli, getRegistry } from ${JSON.stringify(registryUrl)};
 globalThis.__lateImportStarted();
 await globalThis.__lateImportGate;
 try {
   cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['late-alias'], access: 'read', browser: () => false, func: async () => 'late' });
 } catch (error) {
   globalThis.__lateRegistrationError = error.message;
+}
+globalThis.__lateMapMutationErrors = [];
+for (const operation of [
+  () => getRegistry().set(${JSON.stringify(`${site}/direct-late`)}, { site: ${JSON.stringify(site)}, name: 'direct-late' }),
+  () => getRegistry().delete(${JSON.stringify(`${site}/list`)}),
+  () => getRegistry().clear(),
+]) {
+  try {
+    operation();
+  } catch (error) {
+    globalThis.__lateMapMutationErrors.push(error.message);
+  }
 }
 globalThis.__lateImportDone();
 await globalThis.__lateNeverSettles;
@@ -714,17 +726,23 @@ await globalThis.__lateNeverSettles;
       expect(getRegistry().get(`${site}/ordinary-late`)).toBe(ordinary);
       expect(getRegistry().get(`${site}/list`)).toBe(placeholder);
       expect(getRegistry().get(`${site}/late-alias`)).toBeUndefined();
+      expect(getRegistry().get(`${site}/direct-late`)).toBeUndefined();
       expect((globalThis as any).__lateRegistrationError).toMatch(/transaction.*closed/i);
+      expect((globalThis as any).__lateMapMutationErrors).toHaveLength(3);
+      for (const error of (globalThis as any).__lateMapMutationErrors) {
+        expect(error).toMatch(/transaction.*closed/i);
+      }
     } finally {
       releaseImport();
       _resetLazyModuleStateForTests();
-      for (const name of ['list', 'late-alias', 'ordinary-late']) getRegistry().delete(`${site}/${name}`);
+      for (const name of ['list', 'late-alias', 'direct-late', 'ordinary-late']) getRegistry().delete(`${site}/${name}`);
       fs.rmSync(root, { recursive: true, force: true });
       delete (globalThis as any).__lateImportStarted;
       delete (globalThis as any).__lateImportGate;
       delete (globalThis as any).__lateImportDone;
       delete (globalThis as any).__lateNeverSettles;
       delete (globalThis as any).__lateRegistrationError;
+      delete (globalThis as any).__lateMapMutationErrors;
       if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
       else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
     }

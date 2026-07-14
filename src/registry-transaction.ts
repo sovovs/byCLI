@@ -151,8 +151,8 @@ export function rollbackRegistryTransaction(
       if ((state.revisions.get(finalWrite.key) ?? 0) !== finalWrite.afterRevision) continue;
       for (let index = writes.length - 1; index >= 0; index -= 1) {
         const write = writes[index];
-        if (write.before.present) registry.set(write.key, write.before.value!);
-        else registry.delete(write.key);
+        if (write.before.present) Map.prototype.set.call(registry, write.key, write.before.value!);
+        else Map.prototype.delete.call(registry, write.key);
         if (write.beforeRevision === 0) state.revisions.delete(write.key);
         else state.revisions.set(write.key, write.beforeRevision);
       }

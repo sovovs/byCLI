@@ -175,8 +175,61 @@ export type CliOptions = BrowserCliOptions | NonBrowserCliOptions | ConditionalB
 // This is critical for TS plugins loaded via npm link / peerDependency — without
 // this, the plugin's import creates a separate module instance with its own Map.
 declare global { var __bycli_registry__: Map<string, CliCommand> | undefined; }
-const _registry: Map<string, CliCommand> =
-  globalThis.__bycli_registry__ ??= new Map<string, CliCommand>();
+const TRACKED_REGISTRY_MARKER = Symbol.for('@sovovs/bycli/tracked-registry');
+
+type TrackedRegistry = Map<string, CliCommand> & {
+  [TRACKED_REGISTRY_MARKER]: true;
+};
+
+class TrackedRegistryMap extends Map<string, CliCommand> implements TrackedRegistry {
+  declare [TRACKED_REGISTRY_MARKER]: true;
+
+  constructor(existing?: ReadonlyMap<string, CliCommand>) {
+    super();
+    Object.defineProperty(this, TRACKED_REGISTRY_MARKER, { value: true });
+    if (existing) {
+      for (const [key, value] of existing) Map.prototype.set.call(this, key, value);
+    }
+  }
+
+  override set(key: string, value: CliCommand): this {
+    const before = { present: this.has(key), value: this.get(key) };
+    recordRegistryMutation(key, before, { present: true, value });
+    return Map.prototype.set.call(this, key, value) as this;
+  }
+
+  override delete(key: string): boolean {
+    if (!this.has(key)) return false;
+    const before = { present: true, value: this.get(key) };
+    recordRegistryMutation(key, before, { present: false, value: undefined });
+    return Map.prototype.delete.call(this, key) as boolean;
+  }
+
+  override clear(): void {
+    if (this.size === 0) return;
+    withRegistryMutationGroup(() => {
+      for (const [key, value] of this) {
+        recordRegistryMutation(
+          key,
+          { present: true, value },
+          { present: false, value: undefined },
+        );
+      }
+      Map.prototype.clear.call(this);
+    });
+  }
+}
+
+function isTrackedRegistry(registry: Map<string, CliCommand> | undefined): registry is TrackedRegistry {
+  return registry !== undefined
+    && (registry as Partial<TrackedRegistry>)[TRACKED_REGISTRY_MARKER] === true;
+}
+
+const existingRegistry = globalThis.__bycli_registry__;
+const _registry: TrackedRegistry = isTrackedRegistry(existingRegistry)
+  ? existingRegistry
+  : new TrackedRegistryMap(existingRegistry);
+globalThis.__bycli_registry__ = _registry;
 
 export function cli(opts: ConditionalBrowserCliOptions): ConditionalBrowserCliCommand;
 export function cli(opts: NonBrowserCliOptions): NonBrowserCliCommand;
@@ -355,33 +408,20 @@ function registerCommandInput(cmd: RawCliCommand | CliCommand): void {
   });
 }
 
-function setRegistryValue(key: string, value: CliCommand): void {
-  const before = { present: _registry.has(key), value: _registry.get(key) };
-  recordRegistryMutation(key, before, { present: true, value });
-  _registry.set(key, value);
-}
-
-function deleteRegistryValue(key: string): void {
-  const before = { present: _registry.has(key), value: _registry.get(key) };
-  if (!before.present) return;
-  recordRegistryMutation(key, before, { present: false, value: undefined });
-  _registry.delete(key);
-}
-
 function insertNormalizedCommand(normalized: CliCommand): void {
   const canonicalKey = fullName(normalized);
   const existing = _registry.get(canonicalKey);
   if (existing?.aliases) {
     for (const alias of existing.aliases) {
-      deleteRegistryValue(`${existing.site}/${alias}`);
+      _registry.delete(`${existing.site}/${alias}`);
     }
   }
 
   const aliases = normalizeAliases(normalized.aliases, normalized.name);
   normalized.aliases = aliases.length > 0 ? aliases : undefined;
-  setRegistryValue(canonicalKey, normalized);
+  _registry.set(canonicalKey, normalized);
   for (const alias of aliases) {
-    setRegistryValue(`${normalized.site}/${alias}`, normalized);
+    _registry.set(`${normalized.site}/${alias}`, normalized);
   }
 }
 
