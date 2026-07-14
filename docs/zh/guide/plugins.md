@@ -198,7 +198,7 @@ byCLI 会先应用默认值、完成类型转换与参数校验，再执行
 
 ```json
 {
-  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3" }
+  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3.0.0" }
 }
 ```
 
@@ -206,7 +206,7 @@ byCLI 会先应用默认值、完成类型转换与参数校验，再执行
 
 ```json
 {
-  "bycli": ">=2.1.0 <3"
+  "bycli": ">=2.1.0 <3.0.0"
 }
 ```
 

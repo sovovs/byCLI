@@ -224,7 +224,7 @@ conditional contract:
 
 ```json
 {
-  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3" }
+  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3.0.0" }
 }
 ```
 
@@ -232,7 +232,7 @@ conditional contract:
 
 ```json
 {
-  "bycli": ">=2.1.0 <3"
+  "bycli": ">=2.1.0 <3.0.0"
 }
 ```
 
