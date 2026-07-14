@@ -39,8 +39,8 @@ describe('observation redaction', () => {
   });
 
   it('redacts fingerprint fields recursively', () => {
-    expect(redactValue({ fingerprint: 'fp+/=secret' })).toEqual({
-      fingerprint: '[REDACTED]',
+    expect(redactValue({ nested: { fingerprint: 'fp+/=secret' } })).toEqual({
+      nested: { fingerprint: '[REDACTED]' },
     });
   });
 
