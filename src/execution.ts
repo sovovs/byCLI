@@ -27,7 +27,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
-import { adapterLoadError, ArgumentError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
+import { adapterLoadError, ArgumentError, CliError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT, type BrowserWindowMode } from './runtime.js';
 import { resolveProfileContextId } from './browser/profile.js';
@@ -156,10 +156,23 @@ async function runCommand(
 
 function runCommandFunc(cmd: CliCommand, page: IPage | null, kwargs: CommandArgs, debug: boolean): Promise<unknown> {
   if (cmd.browser === false) return cmd.func!(kwargs, debug);
+  if (cmd.browser === 'conditional') return cmd.func!(page, kwargs, debug);
   if (!page) {
     throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
   }
   return (cmd as BrowserCliCommand).func!(page, kwargs, debug);
+}
+
+function resolveBrowserRequirement(cmd: CliCommand, kwargs: CommandArgs): boolean {
+  if (cmd.browser !== 'conditional') return cmd.browser;
+  try {
+    return Boolean(cmd.requiresBrowser(kwargs));
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CommandExecutionError(
+      `Browser requirement evaluation failed for ${fullName(cmd)}: ${getErrorMessage(error)}`,
+    );
+  }
 }
 
 function resolvePreNav(cmd: CliCommand): string | null {
@@ -220,6 +233,8 @@ export async function executeCommand(
     throw new ArgumentError(getErrorMessage(err));
   }
 
+  const resolvedBrowser = resolveBrowserRequirement(cmd, kwargs);
+
   const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
   const traceMode = normalizeTraceMode(opts.trace);
 
@@ -232,7 +247,7 @@ export async function executeCommand(
 
   let result: unknown;
   try {
-    if (shouldUseBrowserSession(cmd)) {
+    if (shouldUseBrowserSession(cmd, resolvedBrowser)) {
       const electron = isElectronApp(cmd.site);
       let cdpEndpoint: string | undefined;
 

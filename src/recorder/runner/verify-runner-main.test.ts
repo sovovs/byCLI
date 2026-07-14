@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import {
   executeAdapterForVerify, runVerifyRunner, loadAdapterByName,
-  setActiveLeaseCleanup, releaseActiveLease, type RunnerInput,
+  setActiveLeaseCleanup, releaseActiveLease, type BrowserAdapterRunner, type RunnerInput,
 } from './verify-runner-main.js';
-import type { CliCommand } from '../../registry.js';
+import { cli, type CliCommand } from '../../registry.js';
+import { ArgumentError } from '../../errors.js';
 import type { RunnerEvent } from '@sovovs/bycli-recorder-core';
 
 const baseInput = (over: Partial<RunnerInput> = {}): RunnerInput => ({
@@ -29,6 +30,74 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
       func: async (args: unknown) => { received = args; return [{ q: 'x' }]; } } as unknown as CliCommand;
     await executeAdapterForVerify(command, { name: 'demo/search', seedArgs: { keyword: '张三' } });
     expect(received).toEqual({ keyword: '张三' });
+  });
+
+  it('evaluates a conditional resolver once and runs its function with null when the seed selects no browser', async () => {
+    const resolver = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
+    const func = vi.fn(async (_page: unknown, _args: Record<string, unknown>, _debug?: boolean) => []);
+    const browserRunner = vi.fn<BrowserAdapterRunner>();
+    const command = cli({
+      site: 'verify-conditional', name: 'env', access: 'read',
+      browser: resolver, func,
+    });
+
+    const r = await executeAdapterForVerify(command, {
+      name: 'verify-conditional/env', seedArgs: { 'auth-source': 'env' }, browserRunner,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(resolver).toHaveBeenCalledOnce();
+    expect(resolver).toHaveBeenCalledWith({ 'auth-source': 'env' });
+    expect(browserRunner).not.toHaveBeenCalled();
+    expect(func).toHaveBeenCalledWith(null, { 'auth-source': 'env' }, false);
+  });
+
+  it('evaluates a conditional resolver once and runs its function with a page through browserRunner', async () => {
+    const resolver = vi.fn(() => true);
+    const func = vi.fn(async (_page: unknown, _args: Record<string, unknown>, _debug?: boolean) => []);
+    const mockPage = { marker: 'page' } as any;
+    const browserRunner: BrowserAdapterRunner = vi.fn(async (browserCommand, opts) => {
+      return browserCommand.func!(mockPage, opts.seedArgs, false);
+    });
+    const command = cli({
+      site: 'verify-conditional', name: 'browser', access: 'read',
+      browser: resolver, func,
+    });
+
+    const r = await executeAdapterForVerify(command, {
+      name: 'verify-conditional/browser', seedArgs: { 'auth-source': 'browser' }, browserRunner,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(resolver).toHaveBeenCalledOnce();
+    expect(browserRunner).toHaveBeenCalledOnce();
+    expect(func).toHaveBeenCalledWith(mockPage, { 'auth-source': 'browser' }, false);
+  });
+
+  it('preserves a typed conditional resolver error code in the verify envelope', async () => {
+    const command = cli({
+      site: 'verify-conditional', name: 'typed-error', access: 'read',
+      browser: () => { throw new ArgumentError('bad auth-source'); },
+      func: async () => [],
+    });
+
+    const r = await executeAdapterForVerify(command, { name: 'verify-conditional/typed-error', seedArgs: {} });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatchObject({ code: 'ARGUMENT', message: 'bad auth-source' });
+  });
+
+  it('classifies an unknown conditional resolver failure as an adapter runtime error', async () => {
+    const command = cli({
+      site: 'verify-conditional', name: 'unknown-error', access: 'read',
+      browser: () => { throw new Error('predicate bug'); },
+      func: async () => [],
+    });
+
+    const r = await executeAdapterForVerify(command, { name: 'verify-conditional/unknown-error', seedArgs: {} });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatchObject({ code: 'adapter_runtime_error', message: 'predicate bug' });
   });
 
   it('browser adapter → runs via injected browserRunner (M6b), reports rows + fieldCount', async () => {

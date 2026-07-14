@@ -14,6 +14,18 @@ function makeCmd(partial: Partial<CliCommand>): CliCommand {
 }
 
 describe('shouldUseBrowserSession', () => {
+  it('uses the already-resolved browser requirement for conditional commands', () => {
+    const cmd = makeCmd({
+      browser: 'conditional',
+      requiresBrowser: () => true,
+      strategy: Strategy.COOKIE,
+      func: async () => [],
+    });
+
+    expect(shouldUseBrowserSession(cmd, false)).toBe(false);
+    expect(shouldUseBrowserSession(cmd, true)).toBe(true);
+  });
+
   it('skips browser session for public fetch-only pipelines', () => {
     expect(shouldUseBrowserSession(makeCmd({
       browser: true,

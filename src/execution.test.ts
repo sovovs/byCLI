@@ -10,6 +10,109 @@ import { withTimeoutMs } from './runtime.js';
 import * as runtime from './runtime.js';
 import * as capRouting from './capabilityRouting.js';
 
+describe('executeCommand — conditional browser routing', () => {
+  it('resolves after defaults and skips the browser for environment authentication', async () => {
+    const resolver = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
+    const func = vi.fn(async () => []);
+    const mockPage = { closeWindow: vi.fn().mockResolvedValue(undefined) } as any;
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => fn(mockPage));
+    const cmd = cli({
+      site: 'test-execution',
+      name: 'conditional-env',
+      access: 'read',
+      strategy: Strategy.COOKIE,
+      browser: resolver,
+      args: [{ name: 'auth-source', default: 'browser', choices: ['browser', 'env'] }],
+      func,
+    });
+
+    try {
+      await executeCommand(cmd, { 'auth-source': 'env' });
+
+      expect(resolver).toHaveBeenCalledOnce();
+      expect(resolver).toHaveBeenCalledWith(expect.objectContaining({ 'auth-source': 'env' }));
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(func).toHaveBeenCalledWith(null, expect.objectContaining({ 'auth-source': 'env' }), false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('resolves after defaults and opens one browser session for browser authentication', async () => {
+    const resolver = vi.fn((args: Record<string, unknown>) => (
+      args['auth-source'] !== 'env' && args['browser-enabled'] === true
+    ));
+    const func = vi.fn(async () => []);
+    const mockPage = { closeWindow: vi.fn().mockResolvedValue(undefined) } as any;
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => fn(mockPage));
+    const cmd = cli({
+      site: 'test-execution',
+      name: 'conditional-browser',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      browser: resolver,
+      args: [
+        { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
+        { name: 'browser-enabled', type: 'boolean' },
+      ],
+      func,
+    });
+
+    try {
+      await executeCommand(cmd, { 'browser-enabled': 'true' });
+
+      expect(resolver).toHaveBeenCalledOnce();
+      expect(resolver).toHaveBeenCalledWith(expect.objectContaining({
+        'auth-source': 'browser',
+        'browser-enabled': true,
+      }));
+      expect(browserSessionSpy).toHaveBeenCalledOnce();
+      expect(func).toHaveBeenCalledWith(mockPage, expect.objectContaining({
+        'auth-source': 'browser',
+        'browser-enabled': true,
+      }), false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('preserves typed errors thrown by a browser requirement resolver', async () => {
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+    const cmd = cli({
+      site: 'test-execution',
+      name: 'conditional-typed-error',
+      access: 'read',
+      browser: () => { throw new ArgumentError('bad auth-source'); },
+      func: async () => [],
+    });
+
+    try {
+      await expect(executeCommand(cmd, {})).rejects.toMatchObject({ code: 'ARGUMENT', exitCode: 2 });
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('wraps unknown browser requirement resolver failures as command execution errors', async () => {
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+    const cmd = cli({
+      site: 'test-execution',
+      name: 'conditional-unknown-error',
+      access: 'read',
+      browser: () => { throw new Error('predicate bug'); },
+      func: async () => [],
+    });
+
+    try {
+      await expect(executeCommand(cmd, {})).rejects.toMatchObject({ code: 'COMMAND_EXEC', exitCode: 1 });
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 describe('executeCommand — non-browser timeout', () => {
   it('applies the user --timeout arg as the ceiling for non-browser commands', async () => {
     const runWithTimeoutSpy = vi.spyOn(runtime, 'runWithTimeout');

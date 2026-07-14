@@ -18,7 +18,14 @@
 import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { getRegistry, fullName, type BrowserCliCommand, type CliCommand, type InternalCliCommand } from '../../registry.js';
+import {
+  getRegistry,
+  fullName,
+  type BrowserCliCommand,
+  type CliCommand,
+  type ConditionalBrowserCliCommand,
+  type InternalCliCommand,
+} from '../../registry.js';
 import type { RunnerEvent, RunnerResultEvent } from '@sovovs/bycli-recorder-core';
 
 /** Parsed input.json (written by RunnerPort; raw seed args are execution-only). */
@@ -124,7 +131,7 @@ export async function loadAdapterByName(adapterPath: string, name: string): Prom
  * tests can exercise executeAdapterForVerify without a real daemon/browser.
  */
 export type BrowserAdapterRunner = (
-  command: BrowserCliCommand,
+  command: BrowserCliCommand | ConditionalBrowserCliCommand,
   opts: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null },
 ) => Promise<unknown>;
 
@@ -136,7 +143,7 @@ export type BrowserAdapterRunner = (
  * and always releases the tab lease in `finally`.
  */
 async function defaultBrowserAdapterRunner(
-  command: BrowserCliCommand,
+  command: BrowserCliCommand | ConditionalBrowserCliCommand,
   opts: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null },
 ): Promise<unknown> {
   const { Page } = await import('../../browser/page.js');
@@ -183,6 +190,18 @@ export async function executeAdapterForVerify(
     let rows: unknown;
     if (command.browser === false) {
       rows = await command.func(opts.seedArgs, false);
+    } else if (command.browser === 'conditional') {
+      const browserRequired = Boolean(command.requiresBrowser(opts.seedArgs));
+      if (!browserRequired) {
+        rows = await command.func(null, opts.seedArgs, false);
+      } else {
+        const runner = opts.browserRunner ?? defaultBrowserAdapterRunner;
+        rows = await runner(command, {
+          seedArgs: opts.seedArgs,
+          contextId: opts.contextId,
+          preNavUrl: typeof command.navigateBefore === 'string' ? command.navigateBefore : null,
+        });
+      }
     } else {
       // M6b: browser adapter connects back to the daemon for a Page. navigateBefore is a
       // string only when a concrete pre-nav URL was derived (e.g. COOKIE strategy + domain);

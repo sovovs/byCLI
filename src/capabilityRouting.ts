@@ -43,8 +43,11 @@ function pipelineNeedsBrowserSession(pipeline: Record<string, unknown>[]): boole
   });
 }
 
-export function shouldUseBrowserSession(cmd: CliCommand): boolean {
-  if (!cmd.browser) return false;
+export function shouldUseBrowserSession(
+  cmd: CliCommand,
+  resolvedBrowser: boolean = cmd.browser !== false,
+): boolean {
+  if (!resolvedBrowser) return false;
   if (cmd.func) return true;
   if (!cmd.pipeline || cmd.pipeline.length === 0) return true;
   // normalizeCommand sets navigateBefore to a URL string (needs pre-nav) or
