@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AuthRequiredError } from '@sovovs/bycli/errors';
-import { collectArticles, isUsableArticle } from './article-service.js';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { DEFAULT_MAX_PAGES, collectArticles, isUsableArticle } from './article-service.js';
 
 const article = (id, extra = {}) => ({
   title: id,
@@ -22,6 +22,35 @@ describe('isUsableArticle', () => {
 });
 
 describe('collectArticles', () => {
+  it.each([
+    ['pageSize', 0], ['pageSize', -1], ['pageSize', 1.5], ['pageSize', Infinity],
+    ['limit', 0], ['limit', -1], ['limit', 1.5], ['limit', Number.MAX_SAFE_INTEGER + 1],
+    ['maxPages', 0], ['maxPages', -1], ['maxPages', 1.5], ['maxPages', Infinity],
+  ])('rejects invalid %s=%s before requesting a page', async (key, value) => {
+    const fetchPage = vi.fn();
+    const options = { fakeid: 'id', fetchPage, [key]: value };
+    await expect(collectArticles(options)).rejects.toBeInstanceOf(ArgumentError);
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it('uses a documented default hard cap for full pages without an API total', async () => {
+    expect(DEFAULT_MAX_PAGES).toBe(100);
+    const fetchPage = vi.fn(({ begin }) => Promise.resolve({
+      total: 0,
+      publishItemCount: 1,
+      articles: [article(`a${begin}`)],
+    }));
+    const result = await collectArticles({ fakeid: 'id', fetchPage, pageSize: 1 });
+    expect(result.summary.pages).toBe(DEFAULT_MAX_PAGES);
+    expect(fetchPage).toHaveBeenCalledTimes(DEFAULT_MAX_PAGES);
+  });
+
+  it('rejects pagination when the next begin offset cannot advance safely', async () => {
+    const fetchPage = vi.fn().mockResolvedValue({ total: 0, publishItemCount: Number.MAX_SAFE_INTEGER, articles: [] });
+    await expect(collectArticles({ fakeid: 'id', fetchPage, pageSize: Number.MAX_SAFE_INTEGER }))
+      .rejects.toBeInstanceOf(CommandExecutionError);
+  });
+
   it('filters invalid entries and deduplicates canonical URLs in source order', async () => {
     const fetchPage = vi.fn()
       .mockResolvedValueOnce({ total: 4, publishItemCount: 2, articles: [

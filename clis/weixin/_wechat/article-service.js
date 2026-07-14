@@ -1,3 +1,7 @@
+import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+
+export const DEFAULT_MAX_PAGES = 100;
+
 /** @param {any} article */
 export function isUsableArticle(article) {
   return Boolean(article)
@@ -31,6 +35,12 @@ function publicArticle(article) {
  * @param {{fakeid:string,fetchPage:(input:{fakeid:string,begin:number,count:number})=>Promise<any>,limit?:number,maxPages?:number,pageSize?:number}} options
  */
 export async function collectArticles({ fakeid, fetchPage, limit, maxPages, pageSize = 10 }) {
+  for (const [name, value] of [['pageSize', pageSize], ['limit', limit], ['maxPages', maxPages]]) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+      throw new ArgumentError(`${name} must be a positive safe integer`);
+    }
+  }
+  const pageLimit = maxPages ?? DEFAULT_MAX_PAGES;
   const articles = [];
   const seen = new Set();
   let totalFromApi = 0;
@@ -65,12 +75,16 @@ export async function collectArticles({ fakeid, fetchPage, limit, maxPages, page
     }
 
     const reachedLimit = Boolean(limit && articles.length >= limit);
-    const reachedMaxPages = Boolean(maxPages && pages >= maxPages);
+    const reachedMaxPages = pages >= pageLimit;
     const reachedEnd = publishItemCount === 0
       || publishItemCount < pageSize
       || (totalFromApi > 0 && begin + publishItemCount >= totalFromApi);
     if (reachedLimit || reachedMaxPages || reachedEnd) break;
-    begin += pageSize;
+    const nextBegin = begin + pageSize;
+    if (!Number.isSafeInteger(nextBegin) || nextBegin <= begin) {
+      throw new CommandExecutionError('WeChat article pagination could not advance safely');
+    }
+    begin = nextBegin;
   }
 
   return {

@@ -50,15 +50,25 @@ export function parsePublishData(data) {
       throw new CommandExecutionError('WeChat article history returned invalid publish information');
     }
     const timestamp = info.sent_info?.time ?? info.publish_info?.create_time ?? 0;
+    let publishedAt = null;
+    if (timestamp !== 0) {
+      if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) {
+        throw new CommandExecutionError('WeChat article history returned an invalid publish timestamp');
+      }
+      const date = new Date(timestamp * 1000);
+      if (!Number.isFinite(date.getTime())) {
+        throw new CommandExecutionError('WeChat article history returned an invalid publish timestamp');
+      }
+      publishedAt = date.toISOString();
+    }
     for (const messageItem of info.appmsg_info) {
       const article = messageItem && typeof messageItem === 'object' ? messageItem : {};
       articles.push({
         title: typeof article.title === 'string' ? article.title : '',
         url: typeof article.content_url === 'string' ? article.content_url : '',
         isDeleted: article.is_deleted === true,
-        timestamp: typeof timestamp === 'number' ? timestamp : 0,
-        publishedAt: typeof timestamp === 'number' && timestamp > 0
-          ? new Date(timestamp * 1000).toISOString() : null,
+        timestamp,
+        publishedAt,
         digest: typeof article.digest === 'string' ? article.digest : '',
         author: typeof article.author === 'string' ? article.author : '',
       });

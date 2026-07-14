@@ -50,6 +50,24 @@ describe('parsePublishData', () => {
     expect(() => parsePublishData(payload)).toThrow(CommandExecutionError);
   });
 
+  it.each([
+    ['Infinity', Infinity],
+    ['an out-of-range number', 8_640_000_000_001],
+    ['a non-number', 'token=timestamp-secret'],
+  ])('maps %s timestamps to a redacted CommandExecutionError', (_name, timestamp) => {
+    const payload = { publish_page: {
+      total_count: 1,
+      publish_list: [{ publish_info: { sent_info: { time: timestamp }, appmsg_info: [{}] } }],
+    } };
+    const error = (() => {
+      try { parsePublishData(payload); }
+      catch (value) { return value; }
+    })();
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect(error).not.toBeInstanceOf(RangeError);
+    expect(error.message).not.toContain('timestamp-secret');
+  });
+
   it('requires the exact known auth ret/message pair', () => {
     expect(() => parsePublishData(fixture('articles-auth-expired'))).toThrow(AuthRequiredError);
     expect(() => parsePublishData({ base_resp: { ret: 200013, err_msg: 'other' } })).toThrow(CommandExecutionError);
