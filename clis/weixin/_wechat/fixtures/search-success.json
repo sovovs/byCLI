@@ -1,0 +1,7 @@
+{
+  "base_resp": { "ret": 0, "err_msg": "ok" },
+  "list": [
+    { "nickname": "微信派", "fakeid": "MzA1", "alias": "wx-pai" },
+    { "nickname": "微信派服务号", "fakeid": "MzA2" }
+  ]
+}
