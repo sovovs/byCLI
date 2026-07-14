@@ -36,7 +36,7 @@ byCLI 当前使用静态 `browser: true | false` 决定是否在执行命令前�
 插件侧建议注册形式：
 
 ```ts
-browser: (args) => args.authSource !== 'env'
+browser: (args) => args['auth-source'] !== 'env'
 ```
 
 注册声明与 registry 规范化后的运行时结构必须分离。注册 API 可以接受上述条件函数，但不得把函数直接存入或序列化到命令元数据。规范化结构为：
@@ -71,6 +71,11 @@ src/execution.ts
 src/commanderAdapter.ts
 src/help.ts
 src/serialization.ts
+src/types.ts
+src/browser/page.ts
+src/browser/cdp.ts
+extension/src/protocol.ts
+extension/src/background.ts
 ```
 
 另需同步 CLI 列表输出、plugin manifest/schema、相关类型、snapshot 与回归测试，确保第三态在所有对外元数据路径中含义一致。
@@ -83,10 +88,10 @@ src/serialization.ts
 bycli-plugin-wechat/
 ├── bycli-plugin.json
 ├── package.json
+├── search.ts
+├── list.ts
+├── save.ts
 ├── src/
-│   ├── search.ts
-│   ├── list.ts
-│   ├── save.ts
 │   ├── auth-session.ts
 │   ├── search-biz.ts
 │   ├── crawler-process.ts
@@ -99,6 +104,8 @@ bycli-plugin-wechat/
     ├── commands.test.ts
     └── fixtures/
 ```
+
+`search.ts`、`list.ts`、`save.ts` 是 byCLI 当前扁平插件发现器可见的根入口；认证、HTTP、crawler 和映射实现保持在 `src/`。发布包必须包含构建后的根入口 JavaScript 与其 `dist/` 依赖，不能要求生产 Node.js 直接加载嵌套 TypeScript。
 
 依赖关系：
 
@@ -121,9 +128,9 @@ bycli-plugin-wechat/
 
 | 命令 | access | strategy | browser 条件 |
 |---|---|---|---|
-| `wechat search` | `read` | `INTERCEPT` | `authSource !== 'env'` |
-| `wechat list` | `read` | `COOKIE` | `authSource !== 'env'` |
-| `wechat save` | `write` | `COOKIE` | `authSource !== 'env'` |
+| `wechat search` | `read` | `INTERCEPT` | `args['auth-source'] !== 'env'` |
+| `wechat list` | `read` | `COOKIE` | `args['auth-source'] !== 'env'` |
+| `wechat save` | `write` | `COOKIE` | `args['auth-source'] !== 'env'` |
 
 `save` 会写入本地文件，因此必须声明 `access: 'write'`；另外两个命令不改变微信或本地业务数据。
 
@@ -138,7 +145,7 @@ bycli wechat search <query> \
 
 默认值：
 
-- `authSource = browser`
+- `auth-source = browser`
 - `limit = 10`
 - `limit` 必须为正整数；不得静默截断或修正。
 
@@ -268,9 +275,9 @@ bycli wechat save \
 - Cookie 必须通过 `page.getCookies({ url: 'https://mp.weixin.qq.com/' })` 获取，以包含 HttpOnly Cookie；禁止使用 `document.cookie`。
 - Cookie header 由匹配目标 URL、未过期的 cookie 组成，格式为 `name=value; name2=value2`。
 - token 从已登录后台页面的 URL、Referer 等页面上下文提取。不得依赖网络捕获输出中的 token，因为 byCLI 会对捕获 URL 的认证参数脱敏。
-- `search` 启动网络捕获后触发真实 `search_biz` 搜索，从请求 URL 中读取 fingerprint。fingerprint 必须与 token、Cookie 来自同一次浏览器会话。
+- `search` 在页面上下文安装一次性请求观察器后触发真实 `search_biz` 搜索。观察器只从请求 URL 提取 fingerprint 值，不保存或返回完整 URL，并在成功、失败或超时后恢复被包装的 `fetch/XMLHttpRequest`。不得依赖 byCLI 的通用 network capture 读取该值，因为 extension 会在跨桥前将 fingerprint 脱敏。fingerprint 必须与 token、Cookie 来自同一次浏览器会话。
 - 登录等待默认超时为 180 秒。超时抛 `TimeoutError`，不无限等待。
-- 浏览器窗口在需要用户登录时必须置于前台；已登录的正常调用可使用用户指定的窗口模式。
+- byCLI 核心为 `IPage` 增加 `focusWindow()` 能力。浏览器窗口在需要用户登录时由插件调用该能力置于前台；已登录的正常调用不主动抢占焦点，并继续使用用户指定的窗口模式。
 
 ### 5.2 环境变量模式
 
@@ -404,8 +411,8 @@ rand_info
 
 - 静态 `browser: true/false` 行为不回归。
 - 条件函数在参数解析后执行。
-- `authSource=env` 不创建浏览器会话。
-- `authSource=browser` 创建浏览器会话并传入 `IPage`。
+- `auth-source=env` 不创建浏览器会话。
+- `auth-source=browser` 创建浏览器会话并传入 `IPage`。
 - 条件命令的 help 包含浏览器 flags。
 - `bycli list -f json` 输出 `browser: "conditional"`。
 - 条件谓词不进入 JSON/manifest；静态布尔值和 `"conditional"` 均不被真值强转破坏。
