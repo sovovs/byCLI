@@ -44,8 +44,32 @@ describe('observation redaction', () => {
     });
   });
 
+  it('redacts exact and segmented fingerprint fields without matching unrelated substrings', () => {
+    expect(redactValue({
+      browserfingerprintlabel: 'visible',
+      fingerprint: 'exact-secret',
+      wechat_fingerprint: 'delimited-secret',
+      wechatFingerprint: 'camel-secret',
+    })).toEqual({
+      browserfingerprintlabel: 'visible',
+      fingerprint: '[REDACTED]',
+      wechat_fingerprint: '[REDACTED]',
+      wechatFingerprint: '[REDACTED]',
+    });
+  });
+
   it('redacts fingerprint and token assignments in diagnostic text', () => {
     expect(redactText('request failed: fingerprint=fp-secret&token=token-secret'))
       .toBe('request failed: fingerprint=[REDACTED]&token=[REDACTED]');
+  });
+
+  it('redacts fingerprint assignments with whitespace before equals', () => {
+    expect(redactText('request failed: fingerprint = fp-secret'))
+      .toBe('request failed: fingerprint=[REDACTED]');
+  });
+
+  it('redacts quoted fingerprint assignments with whitespace before colon', () => {
+    expect(redactText('request failed: fingerprint : "fp-secret"'))
+      .toBe('request failed: fingerprint=[REDACTED]');
   });
 });
