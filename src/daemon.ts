@@ -37,6 +37,11 @@ import { resolveTempPolicy, resolveRunnerConfig, resolveTempCapacity } from './r
 import { defaultSessionKeyRegistry } from './recorder/runner/session-keys.js';
 import { recordExtensionVersion } from './update-check.js';
 import {
+  extensionCapabilityHint,
+  missingRequiredExtensionCapability,
+  normalizeExtensionCapabilities,
+} from './browser/extension-capabilities.js';
+import {
   buildCommandDispatchFailure,
   buildExtensionDisconnectFailure,
   getResponseCorsHeaders,
@@ -70,6 +75,7 @@ type ExtensionProfileConnection = {
   ws: WebSocket;
   extensionVersion: string | null;
   extensionCompatRange: string | null;
+  extensionCapabilities: string[];
   lastSeenAt: number;
 };
 
@@ -158,6 +164,7 @@ function registerExtensionConnection(ws: WebSocket, rawContextId: unknown): Exte
     ws,
     extensionVersion: current?.ws === ws ? current.extensionVersion : null,
     extensionCompatRange: current?.ws === ws ? current.extensionCompatRange : null,
+    extensionCapabilities: current?.ws === ws ? current.extensionCapabilities : [],
     lastSeenAt: Date.now(),
   };
   extensionProfiles.set(contextId, connection);
@@ -391,6 +398,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       extensionConnected: true,
       extensionVersion: profile.extensionVersion ?? undefined,
       extensionCompatRange: profile.extensionCompatRange ?? undefined,
+      extensionCapabilities: profile.extensionCapabilities,
       pending: [...pending.values()].filter((entry) => entry.contextId === profile.contextId).length,
       lastSeenAt: profile.lastSeenAt,
     }));
@@ -402,6 +410,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       extensionConnected: !!route.connection,
       extensionVersion: route.connection?.extensionVersion ?? undefined,
       extensionCompatRange: route.connection?.extensionCompatRange ?? undefined,
+      extensionCapabilities: route.connection?.extensionCapabilities,
       contextId: route.connection?.contextId ?? requestedContextId,
       profileRequired: route.errorCode === 'profile_required',
       profileDisconnected: route.errorCode === 'profile_disconnected',
@@ -460,6 +469,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
           errorCode: route.errorCode,
           error: route.error,
           ...(route.errorHint ? { errorHint: route.errorHint } : {}),
+        });
+        return;
+      }
+
+      const requiredCapability = missingRequiredExtensionCapability(body, route.connection.extensionCapabilities);
+      if (requiredCapability) {
+        jsonResponse(res, 409, {
+          id: body.id,
+          ok: false,
+          errorCode: 'extension_capability_missing',
+          error: `Connected Browser Bridge does not advertise ${requiredCapability}.`,
+          errorHint: extensionCapabilityHint(requiredCapability),
         });
         return;
       }
@@ -575,6 +596,7 @@ wss.on('connection', (ws: WebSocket) => {
         const connection = registerExtensionConnection(ws, msg.contextId);
         connection.extensionVersion = typeof msg.version === 'string' ? msg.version : null;
         connection.extensionCompatRange = typeof msg.compatRange === 'string' ? msg.compatRange : null;
+        connection.extensionCapabilities = normalizeExtensionCapabilities(msg.capabilities);
         connection.lastSeenAt = Date.now();
         if (connection.extensionVersion) recordExtensionVersion(connection.extensionVersion);
         log.info(`[daemon] Extension profile connected: ${connection.contextId}`);

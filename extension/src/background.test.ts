@@ -558,7 +558,7 @@ describe('background tab isolation', () => {
     expect(result).toEqual({ id: 'focus-current', ok: true, data: { focused: true } });
     expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
     expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
-    expect(chrome.windows.update.mock.invocationCallOrder[0]).toBeLessThan(chrome.tabs.update.mock.invocationCallOrder[0]);
+    expect(chrome.tabs.update.mock.invocationCallOrder[0]).toBeLessThan(chrome.windows.update.mock.invocationCallOrder[0]);
   });
 
   it('rejects a focus request for a page outside the current owned session', async () => {
@@ -615,7 +615,7 @@ describe('background tab isolation', () => {
     expect(chrome.tabs.update).not.toHaveBeenCalled();
   });
 
-  it('does not activate the tab when focusing the owned window fails', async () => {
+  it('reports window focus failure after activating only the authorized leased tab', async () => {
     const { chrome } = createChromeMock();
     chrome.windows.update.mockRejectedValueOnce(new Error('window focus failed'));
     vi.stubGlobal('chrome', chrome);
@@ -628,10 +628,11 @@ describe('background tab isolation', () => {
     );
 
     expect(result).toMatchObject({ id: 'focus-window-failure', ok: false, error: 'window focus failed' });
-    expect(chrome.tabs.update).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
   });
 
-  it('reports tab activation failures after the owned window has been focused', async () => {
+  it('does not foreground the window when activating the authorized tab fails', async () => {
     const { chrome } = createChromeMock();
     chrome.tabs.update.mockRejectedValueOnce(new Error('tab activation failed'));
     vi.stubGlobal('chrome', chrome);
@@ -644,8 +645,54 @@ describe('background tab isolation', () => {
     );
 
     expect(result).toMatchObject({ id: 'focus-tab-failure', ok: false, error: 'tab activation failed' });
-    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+    expect(chrome.windows.update).not.toHaveBeenCalled();
     expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
+  });
+
+  it('aborts focus when the lease is replaced while resolving the tab', async () => {
+    const { chrome } = createChromeMock();
+    const getTab = deferred<MockTab>();
+    chrome.tabs.get = vi.fn(async (tabId: number) => {
+      if (tabId === 1) return getTab.promise;
+      return { id: tabId, windowId: 2, url: 'https://replacement.example' };
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-race-get', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.get).toHaveBeenCalledWith(1));
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
+    getTab.resolve({ id: 1, windowId: 1, url: 'https://automation.example' });
+
+    await expect(focusing).resolves.toMatchObject({ ok: false, error: expect.stringContaining('changed during focus') });
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+
+  it('does not focus the window when the lease changes during tab activation', async () => {
+    const { chrome } = createChromeMock();
+    const activateTab = deferred<MockTab>();
+    chrome.tabs.update = vi.fn(async () => activateTab.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-race-update', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true }));
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
+    activateTab.resolve({ id: 1, windowId: 1, url: 'https://automation.example', active: true });
+
+    await expect(focusing).resolves.toMatchObject({ ok: false, error: expect.stringContaining('changed during focus') });
+    expect(chrome.windows.update).not.toHaveBeenCalled();
   });
 
   it('reuses the initial container tab for first tab-new lease instead of leaving a blank tab', async () => {
@@ -818,6 +865,25 @@ describe('background tab isolation', () => {
     await vi.waitFor(() => {
       expect(secondWs.sent.some((entry) => entry.includes('sessions-after-stale-close'))).toBe(true);
     });
+  });
+
+  it('advertises the focus-window capability in the daemon hello', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    vi.stubGlobal('__BYCLI_COMPAT_RANGE__', '>=2');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    await import('./background');
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const socket = MockWebSocket.instances[0];
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    expect(socket.sent.map((message) => JSON.parse(message))).toContainEqual(expect.objectContaining({
+      type: 'hello',
+      version: 'test-version',
+      capabilities: expect.arrayContaining(['focus-window-v1']),
+    }));
   });
 
   it('coalesces concurrent daemon connection attempts while the probe is in flight', async () => {

@@ -7,6 +7,8 @@
 
 declare const __BYCLI_COMPAT_RANGE__: string;
 
+const EXTENSION_CAPABILITIES = ['focus-window-v1'] as const;
+
 import type { Command, Result } from './protocol';
 import { DAEMON_HOST, DAEMON_PORT, DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import * as executor from './cdp';
@@ -151,6 +153,7 @@ async function connectAttempt(): Promise<void> {
       contextId: currentContextId,
       version: chrome.runtime.getManifest().version,
       compatRange: __BYCLI_COMPAT_RANGE__,
+      capabilities: EXTENSION_CAPABILITIES,
     });
   };
 
@@ -227,6 +230,8 @@ type TargetLease = {
 };
 
 const automationSessions = new Map<string, TargetLease>();
+const leaseRevisions = new Map<string, number>();
+const activeLeaseTransitions = new Map<string, number>();
 const IDLE_TIMEOUT_DEFAULT = 30_000;      // 30s — adapter-driven automation
 const IDLE_TIMEOUT_INTERACTIVE = 600_000; // 10min — human-paced browser:* / operate:*
 const IDLE_TIMEOUT_NONE = -1;             // borrowed bound tabs stay bound until unbound/closed
@@ -354,6 +359,38 @@ function withLeaseMutation<T>(fn: () => Promise<T>): Promise<T> {
   const run = leaseMutationQueue.then(fn, fn);
   leaseMutationQueue = run.then(() => undefined, () => undefined);
   return run;
+}
+
+function invalidateLease(leaseKey: string): void {
+  leaseRevisions.set(leaseKey, (leaseRevisions.get(leaseKey) ?? 0) + 1);
+}
+
+async function withLeaseTransition<T>(leaseKey: string, fn: () => Promise<T>): Promise<T> {
+  activeLeaseTransitions.set(leaseKey, (activeLeaseTransitions.get(leaseKey) ?? 0) + 1);
+  invalidateLease(leaseKey);
+  try {
+    return await fn();
+  } finally {
+    const remaining = (activeLeaseTransitions.get(leaseKey) ?? 1) - 1;
+    if (remaining > 0) activeLeaseTransitions.set(leaseKey, remaining);
+    else activeLeaseTransitions.delete(leaseKey);
+    invalidateLease(leaseKey);
+  }
+}
+
+function deleteAutomationSession(leaseKey: string): void {
+  invalidateLease(leaseKey);
+  automationSessions.delete(leaseKey);
+}
+
+function storeAutomationSession(leaseKey: string, session: TargetLease): void {
+  invalidateLease(leaseKey);
+  automationSessions.set(leaseKey, session);
+}
+
+function clearAutomationSessions(): void {
+  for (const leaseKey of automationSessions.keys()) invalidateLease(leaseKey);
+  automationSessions.clear();
 }
 
 function makeSession(
@@ -486,7 +523,7 @@ async function safeDetach(tabId: number): Promise<void> {
 async function removeLeaseSession(leaseKey: string): Promise<void> {
   const existing = automationSessions.get(leaseKey);
   if (existing?.idleTimer) clearTimeout(existing.idleTimer);
-  automationSessions.delete(leaseKey);
+  deleteAutomationSession(leaseKey);
   sessionTimeoutOverrides.delete(leaseKey);
   sessionWindowModeOverrides.delete(leaseKey);
   sessionLifecycleOverrides.delete(leaseKey);
@@ -863,7 +900,7 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
     if (session.windowId === windowId) {
       console.log(`[bycli] ${session.surface} container closed (session=${session.session})`);
       if (session.idleTimer) clearTimeout(session.idleTimer);
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
@@ -879,7 +916,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   for (const [leaseKey, session] of automationSessions.entries()) {
     if (session.preferredTabId === tabId) {
       if (session.idleTimer) clearTimeout(session.idleTimer);
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
@@ -1123,7 +1160,7 @@ function setLeaseSession(
   const existing = automationSessions.get(leaseKey);
   if (existing?.idleTimer) clearTimeout(existing.idleTimer);
   const timeout = getIdleTimeout(leaseKey);
-  automationSessions.set(leaseKey, {
+  storeAutomationSession(leaseKey, {
     ...makeSession(leaseKey, session),
     idleTimer: null,
     idleDeadlineAt: timeout <= 0 ? 0 : Date.now() + timeout,
@@ -1185,7 +1222,7 @@ async function resolveTab(tabId: number | undefined, leaseKey: string, initialUr
     } catch (err) {
       if (err instanceof CommandFailure) throw err;
       if (existingSession && !existingSession.owned) {
-        automationSessions.delete(leaseKey);
+        deleteAutomationSession(leaseKey);
         throw new CommandFailure(
           'bound_tab_gone',
           `Bound tab for session "${existingSession.session}" no longer exists.`,
@@ -1274,14 +1311,14 @@ async function listAutomationTabs(leaseKey: string): Promise<chrome.tabs.Tab[]> 
     try {
       return [await chrome.tabs.get(session.preferredTabId)];
     } catch {
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       return [];
     }
   }
   try {
     return await chrome.tabs.query({ windowId: session.windowId });
   } catch {
-    automationSessions.delete(leaseKey);
+    deleteAutomationSession(leaseKey);
     return [];
   }
 }
@@ -1497,6 +1534,58 @@ async function handleNavigate(cmd: Command, leaseKey: string): Promise<Result> {
   });
 }
 
+type FocusLeaseSnapshot = {
+  revision: number;
+  session: string;
+  surface: BrowserSurface;
+  kind: LeaseKind;
+  windowId: number;
+  preferredTabId: number;
+  contextId: BrowserContextId;
+  ownership: LeaseOwnership;
+  lifecycle: LeaseLifecycle;
+  windowRole: WindowRole;
+  windowMode: WindowMode;
+};
+
+function captureFocusLease(leaseKey: string, lease: TargetLease): FocusLeaseSnapshot | null {
+  if (!lease.owned || lease.preferredTabId === null || (activeLeaseTransitions.get(leaseKey) ?? 0) > 0) return null;
+  return {
+    revision: leaseRevisions.get(leaseKey) ?? 0,
+    session: lease.session,
+    surface: lease.surface,
+    kind: lease.kind,
+    windowId: lease.windowId,
+    preferredTabId: lease.preferredTabId,
+    contextId: lease.contextId,
+    ownership: lease.ownership,
+    lifecycle: lease.lifecycle,
+    windowRole: lease.windowRole,
+    windowMode: getWindowMode(leaseKey),
+  };
+}
+
+function isFocusLeaseCurrent(leaseKey: string, expected: FocusLeaseSnapshot): boolean {
+  const current = automationSessions.get(leaseKey);
+  return (leaseRevisions.get(leaseKey) ?? 0) === expected.revision
+    && (activeLeaseTransitions.get(leaseKey) ?? 0) === 0
+    && current?.owned === true
+    && current.session === expected.session
+    && current.surface === expected.surface
+    && current.kind === expected.kind
+    && current.windowId === expected.windowId
+    && current.preferredTabId === expected.preferredTabId
+    && current.contextId === expected.contextId
+    && current.ownership === expected.ownership
+    && current.lifecycle === expected.lifecycle
+    && current.windowRole === expected.windowRole
+    && getWindowMode(leaseKey) === expected.windowMode;
+}
+
+function focusLeaseChangedResult(id: string): Result {
+  return { id, ok: false, error: 'Current automation lease changed during focus; no further focus action was performed' };
+}
+
 async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
   const session = automationSessions.get(leaseKey);
   if (session && !session.owned && cmd.op !== 'list') {
@@ -1596,13 +1685,15 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
     }
     case 'focus': {
       const currentSession = automationSessions.get(leaseKey);
-      if (!currentSession?.owned || currentSession.preferredTabId === null) {
+      const focusLease = currentSession ? captureFocusLease(leaseKey, currentSession) : null;
+      if (!focusLease) {
         return { id: cmd.id, ok: false, error: 'No owned tab is leased to the current automation session' };
       }
 
       const cmdTabId = await resolveCommandTabId(cmd);
-      const tabId = cmdTabId ?? currentSession.preferredTabId;
-      if (tabId !== currentSession.preferredTabId) {
+      if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+      const tabId = cmdTabId ?? focusLease.preferredTabId;
+      if (tabId !== focusLease.preferredTabId) {
         return { id: cmd.id, ok: false, error: 'Page is not leased to the current automation session' };
       }
 
@@ -1612,7 +1703,8 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
       } catch {
         return { id: cmd.id, ok: false, error: 'Current automation session tab no longer exists' };
       }
-      if (!Number.isInteger(tab.windowId) || tab.windowId < 0 || tab.windowId !== currentSession.windowId) {
+      if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+      if (!Number.isInteger(tab.windowId) || tab.windowId < 0 || tab.windowId !== focusLease.windowId) {
         return { id: cmd.id, ok: false, error: 'Current automation session tab is outside its owned window' };
       }
 
@@ -1621,8 +1713,14 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
       }).update;
       if (typeof updateWindow !== 'function') throw new Error('chrome.windows.update is unavailable');
 
-      await updateWindow(tab.windowId, { focused: true });
-      await chrome.tabs.update(tabId, { active: true });
+      const activatedTab = await chrome.tabs.update(tabId, { active: true });
+      if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+      if (activatedTab.id !== tabId || activatedTab.windowId !== focusLease.windowId) {
+        return { id: cmd.id, ok: false, error: 'Current automation session tab changed window during focus' };
+      }
+
+      await updateWindow(focusLease.windowId, { focused: true });
+      if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
       return { id: cmd.id, ok: true, data: { focused: true } };
     }
     default:
@@ -1826,6 +1924,10 @@ async function handleWaitDownload(cmd: Command): Promise<Result> {
 }
 
 async function releaseLease(leaseKey: string, reason: string = 'released'): Promise<void> {
+  return withLeaseTransition(leaseKey, () => releaseLeaseUnlocked(leaseKey, reason));
+}
+
+async function releaseLeaseUnlocked(leaseKey: string, reason: string): Promise<void> {
   const session = automationSessions.get(leaseKey);
   if (!session) {
     sessionTimeoutOverrides.delete(leaseKey);
@@ -1871,7 +1973,7 @@ async function releaseLease(leaseKey: string, reason: string = 'released'): Prom
     console.log(`[bycli] Detached borrowed tab lease ${session.preferredTabId} (session=${session.session}, surface=${session.surface}, ${reason})`);
   }
 
-  automationSessions.delete(leaseKey);
+  deleteAutomationSession(leaseKey);
   sessionTimeoutOverrides.delete(leaseKey);
   sessionWindowModeOverrides.delete(leaseKey);
   sessionLifecycleOverrides.delete(leaseKey);
@@ -1895,7 +1997,7 @@ async function reconcileTargetLeaseRegistry(): Promise<void> {
     }
   }
 
-  automationSessions.clear();
+  clearAutomationSessions();
   for (const [leaseKey, stored] of Object.entries(registry.leases)) {
     const tabId = stored.preferredTabId;
     if (tabId === null) continue;
@@ -1914,7 +2016,7 @@ async function reconcileTargetLeaseRegistry(): Promise<void> {
         preferredTabId: tabId,
       });
       const timeout = getIdleTimeout(leaseKey);
-      automationSessions.set(leaseKey, {
+      storeAutomationSession(leaseKey, {
         ...session,
         idleTimer: null,
         idleDeadlineAt: stored.idleDeadlineAt,
@@ -1942,6 +2044,10 @@ async function reconcileTargetLeaseRegistry(): Promise<void> {
 }
 
 async function handleBind(cmd: Command, leaseKey: string): Promise<Result> {
+  return withLeaseTransition(leaseKey, () => handleBindUnlocked(cmd, leaseKey));
+}
+
+async function handleBindUnlocked(cmd: Command, leaseKey: string): Promise<Result> {
   const existing = automationSessions.get(leaseKey);
   if (existing?.owned) {
     await releaseLease(leaseKey, 'rebind');
@@ -2003,7 +2109,7 @@ export const __test__ = {
     if (windowId === null) {
       const session = automationSessions.get(leaseKey);
       if (session?.idleTimer) clearTimeout(session.idleTimer);
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       return;
     }
     setLeaseSession(leaseKey, {

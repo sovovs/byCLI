@@ -10,7 +10,8 @@
  */
 
 import type { BrowserCookie, BrowserDownloadWaitResult, BrowserEvaluateFunction, ScreenshotOptions } from '../types.js';
-import { sendCommand, sendCommandFull } from './daemon-client.js';
+import { fetchDaemonStatus, sendCommand, sendCommandFull } from './daemon-client.js';
+import { extensionCapabilityHint, FOCUS_WINDOW_CAPABILITY } from './extension-capabilities.js';
 import { buildEvaluateExpression } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
 import { generateStealthJs } from './stealth.js';
@@ -186,6 +187,12 @@ export class Page extends BasePage {
   }
 
   async focusWindow(): Promise<void> {
+    const status = await fetchDaemonStatus(this.contextId ? { contextId: this.contextId } : undefined);
+    if (!status?.extensionConnected || !status.extensionCapabilities?.includes(FOCUS_WINDOW_CAPABILITY)) {
+      throw new Error(
+        `Connected Browser Bridge does not advertise ${FOCUS_WINDOW_CAPABILITY}. ${extensionCapabilityHint(FOCUS_WINDOW_CAPABILITY)}`,
+      );
+    }
     await sendCommandFull('tabs', {
       op: 'focus',
       ...this._cmdOpts(),

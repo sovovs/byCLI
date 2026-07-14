@@ -89,6 +89,7 @@ export interface DaemonStatus {
   extensionConnected: boolean;
   extensionVersion?: string;
   extensionCompatRange?: string;
+  extensionCapabilities?: string[];
   contextId?: string;
   profileRequired?: boolean;
   profileDisconnected?: boolean;
@@ -104,6 +105,7 @@ export interface BrowserProfileStatus {
   extensionConnected: boolean;
   extensionVersion?: string;
   extensionCompatRange?: string;
+  extensionCapabilities?: string[];
   pending: number;
   lastSeenAt?: number;
 }

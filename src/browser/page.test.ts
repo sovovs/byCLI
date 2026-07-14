@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { sendCommandMock, sendCommandFullMock } = vi.hoisted(() => ({
+const { fetchDaemonStatusMock, sendCommandMock, sendCommandFullMock } = vi.hoisted(() => ({
+  fetchDaemonStatusMock: vi.fn(),
   sendCommandMock: vi.fn(),
   sendCommandFullMock: vi.fn(),
 }));
@@ -9,6 +10,7 @@ const { warnMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('./daemon-client.js', () => ({
+  fetchDaemonStatus: fetchDaemonStatusMock,
   sendCommand: sendCommandMock,
   sendCommandFull: sendCommandFullMock,
 }));
@@ -22,12 +24,17 @@ import { Page } from './page.js';
 
 describe('Page.focusWindow', () => {
   beforeEach(() => {
+    fetchDaemonStatusMock.mockReset();
     sendCommandMock.mockReset();
     sendCommandFullMock.mockReset();
     warnMock.mockReset();
   });
 
   it('asks the bridge to focus the active page in its automation session', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: true,
+      extensionCapabilities: ['focus-window-v1'],
+    });
     sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
 
     const page = new Page('wechat', 45, 'profile-1', 'background', 'adapter', 'persistent');
@@ -35,6 +42,7 @@ describe('Page.focusWindow', () => {
 
     await page.focusWindow();
 
+    expect(fetchDaemonStatusMock).toHaveBeenCalledWith({ contextId: 'profile-1' });
     expect(sendCommandFullMock).toHaveBeenCalledWith('tabs', {
       op: 'focus',
       session: 'wechat',
@@ -45,6 +53,18 @@ describe('Page.focusWindow', () => {
       windowMode: 'background',
       siteSession: 'persistent',
     });
+  });
+
+  it('rejects an old extension before sending an unsupported focus command', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: true,
+      extensionVersion: '2.0.0',
+    });
+
+    const page = new Page('wechat', undefined, 'profile-1', undefined, 'adapter');
+
+    await expect(page.focusWindow()).rejects.toThrow(/update.*reload.*extension/i);
+    expect(sendCommandFullMock).not.toHaveBeenCalled();
   });
 });
 
