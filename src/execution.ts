@@ -25,7 +25,6 @@ import { pathToFileURL } from 'node:url';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
 import { adapterLoadError, ArgumentError, CliError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
@@ -41,19 +40,48 @@ import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-s
 
 interface ModuleLoadEntry {
   promise: Promise<void>;
-  observedMtime: number | undefined;
+  fingerprint: string | undefined;
   generation: number;
   /** Commands registered by this exact import generation. */
   registeredCommands: Map<string, CliCommand>;
+  registryDelta: RegistryDeltaEntry[];
+  rolledBack: boolean;
+}
+
+interface RegistryDeltaEntry {
+  key: string;
+  hadBefore: boolean;
+  before: CliCommand | undefined;
+  hadAfter: boolean;
+  after: CliCommand | undefined;
 }
 
 const _loadedModules = new Map<string, ModuleLoadEntry>();
 /** Independent cache-busting generation; retained when an import promise is discarded. */
 const _moduleImportGenerations = new Map<string, number>();
-/** User adapter dir with a trailing separator, so `startsWith` can't match a sibling
- * like `clis-foo`. Resolved per-call (config-paths.ts rationale) — no import-time freeze. */
-function userClisPrefix(): string {
-  return getUserClisDir() + path.sep;
+let _registrationImportTail: Promise<void> = Promise.resolve();
+let _registrationImportsPoisoned = false;
+
+const DEFAULT_ADAPTER_IMPORT_TIMEOUT_MS = 30_000;
+
+function adapterImportTimeoutMs(): number {
+  const configured = Number(process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ADAPTER_IMPORT_TIMEOUT_MS;
+}
+
+function poisonedImportError(): CliError {
+  return adapterLoadError(
+    'Adapter registration imports are unavailable because a previous import timed out.',
+    'Restart byCLI before retrying; the timed-out module may still complete and register stale commands in this process.',
+  );
+}
+
+/** Internal test-only reset. Never use this to recover a production process. */
+export function _resetLazyModuleStateForTests(): void {
+  _loadedModules.clear();
+  _moduleImportGenerations.clear();
+  _registrationImportTail = Promise.resolve();
+  _registrationImportsPoisoned = false;
 }
 
 type TraceMode = 'off' | 'on' | 'retain-on-failure';
@@ -136,24 +164,105 @@ async function runCommand(
   );
 }
 
-function moduleMtime(modulePath: string): number | undefined {
+function moduleFingerprint(modulePath: string): string | undefined {
   try {
-    return fs.statSync(modulePath).mtimeMs;
+    return crypto.createHash('sha256').update(fs.readFileSync(modulePath)).digest('hex');
   } catch {
     return undefined;
   }
 }
 
+function captureRegistryDelta(before: Map<string, CliCommand>): RegistryDeltaEntry[] {
+  const registry = getRegistry();
+  const keys = new Set([...before.keys(), ...registry.keys()]);
+  const delta: RegistryDeltaEntry[] = [];
+  for (const key of keys) {
+    const hadBefore = before.has(key);
+    const hadAfter = registry.has(key);
+    const beforeValue = before.get(key);
+    const afterValue = registry.get(key);
+    if (hadBefore === hadAfter && beforeValue === afterValue) continue;
+    delta.push({ key, hadBefore, before: beforeValue, hadAfter, after: afterValue });
+  }
+  return delta;
+}
+
+function rollbackRegistryDelta(entry: ModuleLoadEntry): void {
+  if (entry.rolledBack) return;
+  const registry = getRegistry();
+  for (const change of entry.registryDelta) {
+    const currentMatchesAfter = change.hadAfter
+      ? registry.has(change.key) && registry.get(change.key) === change.after
+      : !registry.has(change.key);
+    if (!currentMatchesAfter) continue;
+    if (change.hadBefore) registry.set(change.key, change.before!);
+    else registry.delete(change.key);
+  }
+  entry.rolledBack = true;
+}
+
+function recordRegistryDelta(entry: ModuleLoadEntry, before: Map<string, CliCommand>): void {
+  entry.registryDelta = captureRegistryDelta(before);
+  entry.rolledBack = false;
+  entry.registeredCommands.clear();
+  for (const change of entry.registryDelta) {
+    if (change.hadAfter && change.after) entry.registeredCommands.set(change.key, change.after);
+  }
+}
+
+async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
+  if (_registrationImportsPoisoned) throw poisonedImportError();
+  const registryBefore = new Map(getRegistry());
+  const settlement = import(importUrl).then(
+    () => ({ ok: true as const }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ timeout: true }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ timeout: true }), adapterImportTimeoutMs());
+  });
+  const outcome = await Promise.race([settlement, timeout]);
+  if ('timeout' in outcome) {
+    _registrationImportsPoisoned = true;
+    recordRegistryDelta(entry, registryBefore);
+    rollbackRegistryDelta(entry);
+    void settlement.then(() => {
+      recordRegistryDelta(entry, registryBefore);
+      rollbackRegistryDelta(entry);
+    });
+    throw adapterLoadError(
+      `Adapter module ${modulePath} registration timed out after ${adapterImportTimeoutMs()}ms.`,
+      'Restart byCLI before retrying; ESM evaluation cannot be cancelled safely.',
+    );
+  }
+  if (timeoutId) clearTimeout(timeoutId);
+  recordRegistryDelta(entry, registryBefore);
+  if (!outcome.ok) {
+    rollbackRegistryDelta(entry);
+    throw adapterLoadError(
+      `Failed to load adapter module ${modulePath}: ${getErrorMessage(outcome.error)}`,
+      'Check that the adapter file exists and has no syntax errors.',
+    );
+  }
+}
+
+function scheduleRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
+  const scheduled = _registrationImportTail.then(
+    () => performRegistrationImport(entry, importUrl, modulePath),
+    () => performRegistrationImport(entry, importUrl, modulePath),
+  );
+  _registrationImportTail = scheduled.then(() => undefined, () => undefined);
+  return scheduled;
+}
+
 async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadEntry | undefined> {
   const modulePath = internal._modulePath;
   if (!internal._lazy || !modulePath) return;
+  if (_registrationImportsPoisoned) throw poisonedImportError();
 
-  const isUserAdapter = modulePath.startsWith(userClisPrefix());
-  const observedMtime = isUserAdapter ? moduleMtime(modulePath) : undefined;
+  const fingerprint = moduleFingerprint(modulePath);
   let entry = _loadedModules.get(modulePath);
-  let predecessor: ModuleLoadEntry | undefined;
-  if (entry && isUserAdapter && entry.observedMtime !== observedMtime) {
-    predecessor = entry;
+  if (entry && entry.fingerprint !== fingerprint) {
     invalidateLazyModule(modulePath, entry);
     entry = undefined;
   }
@@ -162,32 +271,18 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadE
     const url = pathToFileURL(modulePath).href;
     const generation = _moduleImportGenerations.get(modulePath) ?? 0;
     const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
-    let createdEntry!: ModuleLoadEntry;
-    const loadPromise = (async () => {
-      // Serialize module side effects. Successor callers may continue after a
-      // predecessor failure, while callers awaiting the predecessor still see
-      // its original rejection.
-      if (predecessor) await predecessor.promise.catch(() => undefined);
-      const registryBefore = new Map(getRegistry());
-      try {
-        await import(importUrl);
-      } catch (err) {
-        invalidateLazyModule(modulePath, createdEntry);
-        throw adapterLoadError(
-          `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
-          'Check that the adapter file exists and has no syntax errors.',
-        );
-      }
-      for (const [key, command] of getRegistry()) {
-        if (registryBefore.get(key) !== command) createdEntry.registeredCommands.set(key, command);
-      }
-    })();
-    createdEntry = {
-      promise: loadPromise,
-      observedMtime,
+    const createdEntry: ModuleLoadEntry = {
+      promise: Promise.resolve(),
+      fingerprint,
       generation,
       registeredCommands: new Map(),
+      registryDelta: [],
+      rolledBack: false,
     };
+    createdEntry.promise = scheduleRegistrationImport(createdEntry, importUrl, modulePath).catch((error) => {
+      invalidateLazyModule(modulePath, createdEntry);
+      throw error;
+    });
     _loadedModules.set(modulePath, createdEntry);
     entry = createdEntry;
   }
@@ -220,6 +315,7 @@ function assertMatchingArgSchema(
     const moduleSchema = canonicalizeManifestArgSchema(hydrated.args, `Hydrated command ${key}`);
     if (manifestSchema === moduleSchema) return;
   } catch (error) {
+    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
     invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
     if (!(error instanceof ManifestSchemaError)) throw error;
     throw new CommandExecutionError(
@@ -227,6 +323,7 @@ function assertMatchingArgSchema(
       'Use only JSON-safe defaults and string choices, then rebuild the CLI manifest.',
     );
   }
+  if (loadedEntry) rollbackRegistryDelta(loadedEntry);
   invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
   throw new CommandExecutionError(
     `Conditional adapter ${key} argument schema does not match its manifest`,
@@ -261,6 +358,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || fullName(hydrated) !== key
     || hydrated.browser !== 'conditional';
   if (invalidReplacement) {
+    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
     invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
@@ -275,6 +373,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || hydratedInternal._lazy === true
     || hydratedInternal._modulePath !== undefined
   ) {
+    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
     invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,

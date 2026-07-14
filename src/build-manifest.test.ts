@@ -114,7 +114,10 @@ describe('manifest helper rules', () => {
         name: 'list',
         access: 'read',
         browser: args => args['auth-source'] !== 'env',
-        args: [{ name: 'auth-source', default: 'browser' }],
+        args: [
+          { name: 'auth-source', default: 'browser' },
+          { name: 'config', default: [{ value: 1 }, { value: 1 }] },
+        ],
         func: async () => [],
       }),
     }));
@@ -185,6 +188,37 @@ describe('manifest helper rules', () => {
         func: async () => [],
       }),
     }))).rejects.toThrow(/unsafe-array/);
+    getRegistry().delete(key);
+  });
+
+  it.each([
+    ['shared default reference', () => {
+      const shared = { value: 1 };
+      return [{ name: 'shared', default: [shared, shared] }];
+    }],
+    ['sparse args container', () => {
+      const args = new Array(2);
+      args[1] = { name: 'present' };
+      return args;
+    }],
+    ['unsafe choices container', () => [{
+      name: 'choice',
+      choices: Object.assign(['one'], { meta: true }),
+    }]],
+  ])('rejects %s during manifest generation', async (_label, makeArgs) => {
+    const site = `manifest-unsafe-schema-${Date.now()}-${Math.random()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    await expect(loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site, name: 'list', access: 'read', browser: false,
+        args: makeArgs(), func: async () => [],
+      }),
+    }))).rejects.toThrow(/Command .*list/);
     getRegistry().delete(key);
   });
 

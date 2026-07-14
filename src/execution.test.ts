@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { CliCommand, InternalCliCommand } from './registry.js';
-import { executeCommand, prepareCommandArgs } from './execution.js';
+import { _resetLazyModuleStateForTests, executeCommand, prepareCommandArgs } from './execution.js';
 import { ArgumentError, CliError, TimeoutError, toEnvelope } from './errors.js';
 import { cli, getRegistry, registerCommand, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
@@ -76,9 +76,10 @@ cli({
 
     try {
       await expect(executeCommand(placeholder, {})).resolves.toBe(1);
+      const originalStat = fs.statSync(modulePath);
       writeVersion(2);
-      const future = new Date(Date.now() + 2_000);
-      fs.utimesSync(modulePath, future, future);
+      expect(fs.statSync(modulePath).size).toBe(originalStat.size);
+      fs.utimesSync(modulePath, originalStat.atime, originalStat.mtime);
       await expect(Promise.all([
         executeCommand(placeholder, {}),
         executeCommand(placeholder, {}),
@@ -240,6 +241,79 @@ cli({
     }
   });
 
+  it('serializes competing registrations from different lazy modules', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-cross-module-imports-'));
+    const site = `cross-module-${Date.now()}`;
+    const key = `${site}/status`;
+    const firstPath = path.join(root, 'first.mjs');
+    const secondPath = path.join(root, 'second.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    let markFirstStarted!: () => void;
+    const firstStarted = new Promise<void>(resolve => { markFirstStarted = resolve; });
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let markSecondStarted!: () => void;
+    const secondStarted = new Promise<void>(resolve => { markSecondStarted = resolve; });
+    const firstSentinel = vi.fn(() => { throw new Error('first sentinel ran'); });
+    const secondSentinel = vi.fn(() => { throw new Error('second sentinel ran'); });
+    Object.assign(globalThis, {
+      __crossFirstStarted: markFirstStarted,
+      __crossFirstGate: firstGate,
+      __crossSecondStarted: markSecondStarted,
+      __crossRegistrationOrder: [],
+    });
+    fs.writeFileSync(firstPath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__crossFirstStarted();
+await globalThis.__crossFirstGate;
+globalThis.__crossRegistrationOrder.push('first');
+cli({ site: ${JSON.stringify(site)}, name: 'status', access: 'read', browser: () => false, func: async () => 'first' });
+`);
+    fs.writeFileSync(secondPath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__crossSecondStarted();
+globalThis.__crossRegistrationOrder.push('second');
+cli({ site: ${JSON.stringify(site)}, name: 'status', access: 'read', browser: () => false, func: async () => 'second' });
+`);
+    const first: InternalCliCommand = {
+      site, name: 'status', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: firstSentinel,
+      _lazy: true, _modulePath: firstPath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(first);
+
+    try {
+      const firstExecution = executeCommand(first, {});
+      await firstStarted;
+      const second: InternalCliCommand = {
+        site, name: 'status', access: 'read', description: '', args: [],
+        browser: 'conditional', requiresBrowser: secondSentinel,
+        _lazy: true, _modulePath: secondPath, _hydrateBeforeBrowserRouting: true,
+      };
+      registerCommand(second);
+      const secondExecution = executeCommand(second, {});
+      const stateBeforeRelease = await Promise.race([
+        secondStarted.then(() => 'started'),
+        new Promise<'blocked'>(resolve => setTimeout(() => resolve('blocked'), 100)),
+      ]);
+      expect(stateBeforeRelease).toBe('blocked');
+      releaseFirst();
+      await expect(Promise.all([firstExecution, secondExecution])).resolves.toEqual(['first', 'second']);
+      expect((globalThis as any).__crossRegistrationOrder).toEqual(['first', 'second']);
+      expect(getRegistry().get(key)?.func).toBeDefined();
+      expect(firstSentinel).not.toHaveBeenCalled();
+      expect(secondSentinel).not.toHaveBeenCalled();
+    } finally {
+      releaseFirst();
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__crossFirstStarted;
+      delete (globalThis as any).__crossFirstGate;
+      delete (globalThis as any).__crossSecondStarted;
+      delete (globalThis as any).__crossRegistrationOrder;
+    }
+  });
+
   it('hydrates a conditional manifest placeholder before routing and validates once with its matching schema', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-hydrate-'));
     const site = `conditional-hydrate-${Date.now()}`;
@@ -259,6 +333,7 @@ cli({
   args: [
     { name: 'auth-source', default: 'env', choices: ['browser', 'env'] },
     { name: 'limit', type: 'int', default: 10 },
+    { name: 'config', default: [{ value: 1 }, { value: 1 }] },
   ],
   validateArgs: args => globalThis.__hydrateValidate(args),
   func: async (page, args, debug) => globalThis.__hydrateFunc(page, args, debug),
@@ -270,6 +345,7 @@ cli({
       args: [
         { name: 'auth-source', default: 'env', choices: ['browser', 'env'] },
         { name: 'limit', type: 'int', default: 10 },
+        { name: 'config', default: [{ value: 1 }, { value: 1 }] },
       ],
       _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
     };
@@ -280,8 +356,12 @@ cli({
       await executeCommand(placeholder, { limit: '3' });
 
       expect(browserSessionSpy).not.toHaveBeenCalled();
-      expect(resolverTracker).toHaveBeenCalledWith(expect.objectContaining({ 'auth-source': 'env', limit: 3 }));
-      expect(funcTracker).toHaveBeenCalledWith(null, expect.objectContaining({ 'auth-source': 'env', limit: 3 }), false);
+      expect(resolverTracker).toHaveBeenCalledWith(expect.objectContaining({
+        'auth-source': 'env', limit: 3, config: [{ value: 1 }, { value: 1 }],
+      }));
+      expect(funcTracker).toHaveBeenCalledWith(null, expect.objectContaining({
+        'auth-source': 'env', limit: 3, config: [{ value: 1 }, { value: 1 }],
+      }), false);
       expect(validationTracker).toHaveBeenCalledTimes(1);
       expect(sentinelPredicate).not.toHaveBeenCalled();
     } finally {
@@ -350,6 +430,58 @@ cli({
     }
   });
 
+  it('rolls back registry and aliases when a module registers and then throws', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-register-then-throw-'));
+    const site = `register-then-throw-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', aliases: ['bad-alias'], access: 'read',
+  browser: () => false, func: async () => 'bad',
+});
+throw new Error('top-level failure after registration');
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'ADAPTER_LOAD', exitCode: 69,
+      });
+      expect(getRegistry().get(key)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/old-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/bad-alias`)).toBeUndefined();
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+
+      fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', aliases: ['fresh-alias'], access: 'read',
+  browser: () => false, func: async () => 'fresh',
+});
+`);
+      await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
+      const fresh = getRegistry().get(key);
+      expect(fresh).not.toBe(placeholder);
+      expect(getRegistry().get(`${site}/fresh-alias`)).toBe(fresh);
+      expect(getRegistry().get(`${site}/old-alias`)).toBeUndefined();
+    } finally {
+      getRegistry().delete(key);
+      getRegistry().delete(`${site}/old-alias`);
+      getRegistry().delete(`${site}/bad-alias`);
+      getRegistry().delete(`${site}/fresh-alias`);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a conditional hydration module that does not replace its placeholder', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-malformed-'));
     const site = `conditional-malformed-${Date.now()}`;
@@ -372,6 +504,7 @@ cli({
       });
       expect(sentinelPredicate).not.toHaveBeenCalled();
       expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(getRegistry().get(key)).toBe(placeholder);
     } finally {
       getRegistry().delete(key);
       fs.rmSync(root, { recursive: true, force: true });
@@ -440,7 +573,7 @@ cli({
     fs.writeFileSync(modulePath, `
 import { cli } from ${JSON.stringify(registryUrl)};
 cli({
-  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  site: ${JSON.stringify(site)}, name: 'list', aliases: ['bad-alias'], access: 'read',
   browser: () => false,
   args: [{ name: 'auth-source', default: 'browser' }],
   validateArgs: args => globalThis.__schemaHydrateValidate(args),
@@ -448,7 +581,7 @@ cli({
 });
 `);
     const placeholder: InternalCliCommand = {
-      site, name: 'list', access: 'read', description: '',
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '',
       browser: 'conditional', requiresBrowser: sentinelPredicate,
       args: [{ name: 'auth-source', default: 'env' }],
       _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
@@ -464,8 +597,13 @@ cli({
       expect(validationTracker).not.toHaveBeenCalled();
       expect(sentinelPredicate).not.toHaveBeenCalled();
       expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(getRegistry().get(key)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/old-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/bad-alias`)).toBeUndefined();
     } finally {
       getRegistry().delete(key);
+      getRegistry().delete(`${site}/old-alias`);
+      getRegistry().delete(`${site}/bad-alias`);
       fs.rmSync(root, { recursive: true, force: true });
       delete (globalThis as any).__schemaHydrateValidate;
       vi.restoreAllMocks();
@@ -529,6 +667,58 @@ cli({
     }
   });
 
+  it.each([
+    ['shared default reference', () => {
+      const shared = { value: 1 };
+      return [{ name: 'shared', default: [shared, shared] }];
+    }],
+    ['sparse args container', () => {
+      const args = new Array(2);
+      args[1] = { name: 'present' };
+      return args;
+    }],
+    ['unsafe choices container', () => [{
+      name: 'choice', choices: Object.assign(['one'], { meta: true }),
+    }]],
+  ])('rejects hydrated %s transactionally', async (_label, makeArgs) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-unsafe-schema-'));
+    const site = `conditional-unsafe-schema-${Date.now()}-${Math.random()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    (globalThis as any).__unsafeHydratedArgs = makeArgs();
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', aliases: ['bad-alias'], access: 'read',
+  browser: () => false, args: globalThis.__unsafeHydratedArgs, func: async () => [],
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'COMMAND_EXEC', message: expect.stringContaining('unsafe argument schema'),
+      });
+      expect(getRegistry().get(key)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/old-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/bad-alias`)).toBeUndefined();
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      getRegistry().delete(`${site}/old-alias`);
+      getRegistry().delete(`${site}/bad-alias`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__unsafeHydratedArgs;
+    }
+  });
+
   it('rejects a static replacement for a conditional manifest placeholder', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-static-'));
     const site = `conditional-static-${Date.now()}`;
@@ -540,11 +730,11 @@ cli({
 import { cli, Strategy } from ${JSON.stringify(registryUrl)};
 cli({
   site: ${JSON.stringify(site)}, name: 'list', access: 'read',
-  strategy: Strategy.PUBLIC, browser: false, func: async () => [],
+  strategy: Strategy.PUBLIC, browser: false, aliases: ['bad-alias'], func: async () => [],
 });
 `);
     const placeholder: InternalCliCommand = {
-      site, name: 'list', access: 'read', description: '', args: [],
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '', args: [],
       browser: 'conditional', requiresBrowser: sentinelPredicate,
       _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
     };
@@ -558,6 +748,9 @@ cli({
       });
       expect(sentinelPredicate).not.toHaveBeenCalled();
       expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(getRegistry().get(key)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/old-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/bad-alias`)).toBeUndefined();
 
       const retryFunc = vi.fn(async () => []);
       Object.assign(globalThis, { __staticRetryImports: 0, __staticRetryFunc: retryFunc });
@@ -580,6 +773,54 @@ cli({
       delete (globalThis as any).__staticRetryImports;
       delete (globalThis as any).__staticRetryFunc;
       vi.restoreAllMocks();
+    }
+  });
+
+  it('times out a stuck registration import, poisons lazy retries, and leaves ordinary commands usable', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-import-timeout-'));
+    const site = `import-timeout-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const previousTimeout = process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
+    (globalThis as any).__neverSettlingImport = new Promise(() => {});
+    fs.writeFileSync(modulePath, 'await globalThis.__neverSettlingImport;\n');
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const startedAt = Date.now();
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'ADAPTER_LOAD', exitCode: 69,
+        hint: expect.stringContaining('Restart byCLI'),
+      });
+      expect(Date.now() - startedAt).toBeLessThan(1_000);
+
+      fs.writeFileSync(modulePath, 'export const corrected = true;\n');
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'ADAPTER_LOAD',
+        hint: expect.stringContaining('Restart byCLI'),
+      });
+
+      const ordinary = cli({
+        site, name: 'ordinary', access: 'read', browser: false,
+        func: async () => 'still-usable',
+      });
+      await expect(executeCommand(ordinary, {})).resolves.toBe('still-usable');
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+    } finally {
+      _resetLazyModuleStateForTests();
+      getRegistry().delete(key);
+      getRegistry().delete(`${site}/ordinary`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__neverSettlingImport;
+      if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+      else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
     }
   });
 

@@ -70,6 +70,41 @@ describe('manifest argument schema canonicalization', () => {
     ], 'test/dense-arrays')).not.toThrow();
   });
 
+  it('rejects repeated object identities while accepting duplicated JSON values', () => {
+    const shared = { value: 1 };
+    expect(() => canonicalizeManifestArgSchema([
+      { name: 'shared', default: [shared, shared] },
+    ], 'test/shared')).toThrow(/shared|repeated/i);
+    expect(() => canonicalizeManifestArgSchema([
+      { name: 'duplicated', default: [{ value: 1 }, { value: 1 }] },
+    ], 'test/duplicated')).not.toThrow();
+  });
+
+  it('rejects a sparse top-level args container', () => {
+    const args = new Array(2) as Array<{ name: string }>;
+    args[1] = { name: 'present' };
+    expect(() => canonicalizeManifestArgSchema(args, 'test/sparse-args')).toThrow(/sparse/i);
+  });
+
+  it.each([
+    ['extra property', () => Object.assign(['one'], { meta: true })],
+    ['symbol property', () => {
+      const choices = ['one'];
+      Object.defineProperty(choices, Symbol('meta'), { value: true });
+      return choices;
+    }],
+    ['accessor', () => {
+      const choices: string[] = [];
+      Object.defineProperty(choices, '0', { get: () => 'one', enumerable: true, configurable: true });
+      return choices;
+    }],
+    ['nonstandard descriptor', () => Object.freeze(['one'])],
+  ])('rejects a choices container with unsafe %s', (_label, makeChoices) => {
+    expect(() => canonicalizeManifestArgSchema([
+      { name: 'choice', choices: makeChoices() as unknown as string[] },
+    ], 'test/unsafe-choices')).toThrow(ManifestSchemaError);
+  });
+
   it.each([
     ['extra string property', () => {
       const value: unknown[] & { meta?: string } = [];
