@@ -225,13 +225,9 @@ export async function executeCommand(
     onTraceExport?: (trace: ObservationExportResult) => void;
   } = {},
 ): Promise<unknown> {
-  let kwargs: CommandArgs;
-  try {
-    kwargs = opts.prepared ? rawKwargs : prepareCommandArgs(cmd, rawKwargs);
-  } catch (err) {
-    if (err instanceof ArgumentError) throw err;
-    throw new ArgumentError(getErrorMessage(err));
-  }
+  let kwargs = opts.prepared
+    ? rawKwargs
+    : prepareCommandArgsOrThrowArgumentError(cmd, rawKwargs);
 
   const traceMode = normalizeTraceMode(opts.trace);
 
@@ -497,6 +493,19 @@ export function prepareCommandArgs(
   const kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
   cmd.validateArgs?.(kwargs);
   return kwargs;
+}
+
+/** Prepare adapter arguments using the execution boundary's public error contract. */
+export function prepareCommandArgsOrThrowArgumentError(
+  cmd: CliCommand,
+  rawKwargs: CommandArgs,
+): CommandArgs {
+  try {
+    return prepareCommandArgs(cmd, rawKwargs);
+  } catch (err) {
+    if (err instanceof ArgumentError) throw err;
+    throw new ArgumentError(getErrorMessage(err));
+  }
 }
 
 /**

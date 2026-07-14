@@ -11,8 +11,9 @@
  * adapters report not-yet (their Page must come from the daemon — M6b). The spawn /
  * input.json security / timeout / byte-cap mechanism lives in `runner-port.ts`.
  *
- * SECURITY (07:123-124): raw executionSeedArgs arrive via input.json (0600) and are used
- * as the adapter's call args; they are never echoed into the emitted result/started events.
+ * SECURITY (07:123-124): raw executionSeedArgs arrive via input.json (0600), then are
+ * defaulted, coerced, and validated before execution. Neither raw nor prepared arguments
+ * are echoed into the emitted result/started events.
  */
 
 import * as fs from 'node:fs';
@@ -26,7 +27,7 @@ import {
   type ConditionalBrowserCliCommand,
   type InternalCliCommand,
 } from '../../registry.js';
-import { prepareCommandArgs } from '../../execution.js';
+import { prepareCommandArgsOrThrowArgumentError } from '../../execution.js';
 import type { RunnerEvent, RunnerResultEvent } from '@sovovs/bycli-recorder-core';
 
 /** Parsed input.json (written by RunnerPort; raw seed args are execution-only). */
@@ -37,7 +38,7 @@ export interface RunnerInput {
   adapterPath: string;
   /** Browser profile contextId for browser adapters (M6b). Omitted → daemon default profile. */
   contextId?: string;
-  /** Raw seed args — used as the adapter call args, never echoed into events. */
+  /** Raw seed args — prepared before resolver/adapter calls and never echoed into events. */
   executionSeedArgs?: Record<string, unknown>;
   fixture?: 'ignore' | 'match' | 'update';
   trace?: 'off' | 'retain-on-failure' | 'always';
@@ -188,7 +189,7 @@ export async function executeAdapterForVerify(
   }
 
   try {
-    const preparedArgs = prepareCommandArgs(command, opts.seedArgs);
+    const preparedArgs = prepareCommandArgsOrThrowArgumentError(command, opts.seedArgs);
     let rows: unknown;
     if (command.browser === false) {
       rows = await command.func(preparedArgs, false);

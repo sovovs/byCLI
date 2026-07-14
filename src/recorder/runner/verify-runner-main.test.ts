@@ -135,6 +135,24 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
     expect(func).not.toHaveBeenCalled();
   });
 
+  it('classifies a plain validateArgs failure as an argument error like main execution', async () => {
+    const func = vi.fn(async () => []);
+    const command = cli({
+      site: 'verify-conditional', name: 'invalid-custom-validation', access: 'read',
+      browser: false,
+      validateArgs: () => { throw new Error('invalid seed combination'); },
+      func,
+    });
+
+    const r = await executeAdapterForVerify(command, {
+      name: 'verify-conditional/invalid-custom-validation', seedArgs: {},
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatchObject({ code: 'ARGUMENT', message: 'invalid seed combination' });
+    expect(func).not.toHaveBeenCalled();
+  });
+
   it('browser adapter → runs via injected browserRunner (M6b), reports rows + fieldCount', async () => {
     // The runner owns the Page; the adapter func must NOT be called directly here.
     const command = { site: 'demo', name: 'x', access: 'read', browser: true,
