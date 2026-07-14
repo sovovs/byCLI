@@ -11,19 +11,44 @@ export interface RegistryTransactionWrite {
   before: RegistrySlot;
   after: RegistrySlot;
   group: number;
+  beforeRevision: number;
+  afterRevision: number;
 }
 
 export interface RegistryTransaction {
   readonly writes: RegistryTransactionWrite[];
+  readonly id: number;
   active: boolean;
-  nextGroup: number;
   currentGroup: number | undefined;
 }
 
-const transactionStorage = new AsyncLocalStorage<RegistryTransaction>();
+interface RegistryTransactionGlobalState {
+  storage: AsyncLocalStorage<RegistryTransaction>;
+  transactionCounter: number;
+  groupCounter: number;
+  revisionCounter: number;
+  revisions: Map<string, number>;
+}
+
+const TRANSACTION_STATE_KEY = Symbol.for('@sovovs/bycli/registry-transaction-state');
+const globalState = globalThis as typeof globalThis & {
+  [TRANSACTION_STATE_KEY]?: RegistryTransactionGlobalState;
+};
+const state = globalState[TRANSACTION_STATE_KEY] ??= {
+  storage: new AsyncLocalStorage<RegistryTransaction>(),
+  transactionCounter: 0,
+  groupCounter: 0,
+  revisionCounter: 0,
+  revisions: new Map<string, number>(),
+};
 
 export function createRegistryTransaction(): RegistryTransaction {
-  return { writes: [], active: false, nextGroup: 0, currentGroup: undefined };
+  return { writes: [], id: ++state.transactionCounter, active: false, currentGroup: undefined };
+}
+
+export function closeRegistryTransaction(transaction: RegistryTransaction): void {
+  transaction.active = false;
+  transaction.currentGroup = undefined;
 }
 
 export async function runRegistryTransaction<T>(
@@ -31,24 +56,23 @@ export async function runRegistryTransaction<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   transaction.active = true;
-  return transactionStorage.run(transaction, async () => {
+  return state.storage.run(transaction, async () => {
     try {
       return await operation();
     } finally {
-      transaction.active = false;
-      transaction.currentGroup = undefined;
+      closeRegistryTransaction(transaction);
     }
   });
 }
 
 export function withRegistryMutationGroup<T>(operation: () => T): T {
-  const transaction = transactionStorage.getStore();
+  const transaction = state.storage.getStore();
   if (!transaction) return operation();
   if (!transaction.active) {
     throw new Error('Adapter registration transaction is closed; delayed registration is not allowed');
   }
   const previousGroup = transaction.currentGroup;
-  transaction.currentGroup = ++transaction.nextGroup;
+  transaction.currentGroup = ++state.groupCounter;
   try {
     return operation();
   } finally {
@@ -61,16 +85,21 @@ export function recordRegistryMutation(
   before: RegistrySlot,
   after: RegistrySlot,
 ): void {
-  const transaction = transactionStorage.getStore();
-  if (!transaction) return;
-  if (!transaction.active) {
+  const transaction = state.storage.getStore();
+  if (transaction && !transaction.active) {
     throw new Error('Adapter registration transaction is closed; delayed registration is not allowed');
   }
+  const beforeRevision = state.revisions.get(key) ?? 0;
+  const afterRevision = ++state.revisionCounter;
+  state.revisions.set(key, afterRevision);
+  if (!transaction) return;
   transaction.writes.push({
     key,
     before,
     after,
-    group: transaction.currentGroup ?? ++transaction.nextGroup,
+    group: transaction.currentGroup ?? ++state.groupCounter,
+    beforeRevision,
+    afterRevision,
   });
 }
 
@@ -106,13 +135,30 @@ export function rollbackRegistryTransaction(
   registry: Map<string, CliCommand>,
   groups?: ReadonlySet<number>,
 ): void {
-  for (let index = transaction.writes.length - 1; index >= 0; index -= 1) {
-    const write = transaction.writes[index];
-    if (groups && !groups.has(write.group)) continue;
-    const currentPresent = registry.has(write.key);
-    const currentValue = registry.get(write.key);
-    if (currentPresent !== write.after.present || currentValue !== write.after.value) continue;
-    if (write.before.present) registry.set(write.key, write.before.value!);
-    else registry.delete(write.key);
+  const groupIds = [...new Set(transaction.writes.map(write => write.group))]
+    .filter(group => !groups || groups.has(group))
+    .sort((a, b) => b - a);
+  for (const group of groupIds) {
+    const writes = transaction.writes.filter(write => write.group === group);
+    const lastWriteByKey = new Map<string, RegistryTransactionWrite>();
+    for (const write of writes) lastWriteByKey.set(write.key, write);
+    const ownsEntireGroup = [...lastWriteByKey.values()].every(
+      write => (state.revisions.get(write.key) ?? 0) === write.afterRevision,
+    );
+    if (!ownsEntireGroup) continue;
+    for (let index = writes.length - 1; index >= 0; index -= 1) {
+      const write = writes[index];
+      if (write.before.present) registry.set(write.key, write.before.value!);
+      else registry.delete(write.key);
+      if (write.beforeRevision === 0) state.revisions.delete(write.key);
+      else state.revisions.set(write.key, write.beforeRevision);
+    }
   }
+}
+
+export function resetRegistryTransactionStateForTests(): void {
+  state.revisions.clear();
+  state.transactionCounter = 0;
+  state.groupCounter = 0;
+  state.revisionCounter = 0;
 }

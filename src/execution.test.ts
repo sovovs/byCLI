@@ -3,7 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { CliCommand, InternalCliCommand } from './registry.js';
-import { _resetLazyModuleStateForTests, executeCommand, prepareCommandArgs } from './execution.js';
+import {
+  _getLazyModuleFingerprintReadCountForTests,
+  _resetLazyModuleStateForTests,
+  executeCommand,
+  prepareCommandArgs,
+} from './execution.js';
 import { ArgumentError, CliError, TimeoutError, toEnvelope } from './errors.js';
 import { cli, getRegistry, registerCommand, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
@@ -13,6 +18,7 @@ import { clearAllHooks, onAfterExecute, onBeforeExecute, type HookContext } from
 
 describe('executeCommand — conditional browser routing', () => {
   it('keeps ordinary static manifest commands on the lazy run path', async () => {
+    _resetLazyModuleStateForTests();
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-static-lazy-'));
     const site = `static-lazy-${Date.now()}`;
     const key = `${site}/status`;
@@ -37,7 +43,10 @@ cli({
 
     try {
       await executeCommand(placeholder, {});
+      await executeCommand(placeholder, {});
       expect(funcTracker).toHaveBeenCalledWith({}, false);
+      expect(funcTracker).toHaveBeenCalledTimes(2);
+      expect(_getLazyModuleFingerprintReadCountForTests()).toBe(0);
       expect(browserSessionSpy).not.toHaveBeenCalled();
     } finally {
       getRegistry().delete(key);
@@ -613,6 +622,7 @@ throw new Error('fail after paused registration');
     const gate = new Promise<void>(resolve => { releaseImport = resolve; });
     let markLateDone!: () => void;
     const lateDone = new Promise<void>(resolve => { markLateDone = resolve; });
+    (globalThis as any).__lateNeverSettles = new Promise(() => {});
     Object.assign(globalThis, {
       __lateImportStarted: markStarted, __lateImportGate: gate, __lateImportDone: markLateDone,
     });
@@ -620,8 +630,13 @@ throw new Error('fail after paused registration');
 import { cli } from ${JSON.stringify(registryUrl)};
 globalThis.__lateImportStarted();
 await globalThis.__lateImportGate;
-cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['late-alias'], access: 'read', browser: () => false, func: async () => 'late' });
+try {
+  cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['late-alias'], access: 'read', browser: () => false, func: async () => 'late' });
+} catch (error) {
+  globalThis.__lateRegistrationError = error.message;
+}
 globalThis.__lateImportDone();
+await globalThis.__lateNeverSettles;
 `);
     const sentinel = vi.fn(() => { throw new Error('sentinel ran'); });
     const placeholder: InternalCliCommand = {
@@ -644,6 +659,7 @@ globalThis.__lateImportDone();
       expect(getRegistry().get(`${site}/ordinary-late`)).toBe(ordinary);
       expect(getRegistry().get(`${site}/list`)).toBe(placeholder);
       expect(getRegistry().get(`${site}/late-alias`)).toBeUndefined();
+      expect((globalThis as any).__lateRegistrationError).toMatch(/transaction.*closed/i);
     } finally {
       releaseImport();
       _resetLazyModuleStateForTests();
@@ -652,6 +668,42 @@ globalThis.__lateImportDone();
       delete (globalThis as any).__lateImportStarted;
       delete (globalThis as any).__lateImportGate;
       delete (globalThis as any).__lateImportDone;
+      delete (globalThis as any).__lateNeverSettles;
+      delete (globalThis as any).__lateRegistrationError;
+      if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+      else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
+    }
+  });
+
+  it('rolls back writes made before a registration import times out', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-timeout-prior-write-'));
+    const site = `timeout-prior-write-${Date.now()}`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const previousTimeout = process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
+    (globalThis as any).__timeoutPriorNever = new Promise(() => {});
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['timed-alias'], access: 'read', browser: () => false, func: async () => 'timed' });
+await globalThis.__timeoutPriorNever;
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', aliases: ['prior-alias'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      expect(getRegistry().get(`${site}/list`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/prior-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/timed-alias`)).toBeUndefined();
+    } finally {
+      _resetLazyModuleStateForTests();
+      for (const name of ['list', 'prior-alias', 'timed-alias']) getRegistry().delete(`${site}/${name}`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__timeoutPriorNever;
       if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
       else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
     }
@@ -1037,6 +1089,56 @@ cli({
       getRegistry().delete(`${site}/ordinary`);
       fs.rmSync(root, { recursive: true, force: true });
       delete (globalThis as any).__neverSettlingImport;
+      if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+      else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
+    }
+  });
+
+  it('reuses an unchanged successful hot-reload entry after poison but rejects a changed reload', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-poison-cache-'));
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    const previousTimeout = process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+    process.env.BYCLI_CONFIG_DIR = root;
+    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
+    const site = `poison-cache-${Date.now()}`;
+    const moduleDir = path.join(root, 'clis', site);
+    const successPath = path.join(moduleDir, 'success.mjs');
+    const timeoutPath = path.join(moduleDir, 'timeout.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    fs.mkdirSync(moduleDir, { recursive: true });
+    fs.writeFileSync(successPath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+cli({ site: ${JSON.stringify(site)}, name: 'success', access: 'read', strategy: Strategy.PUBLIC, browser: false, func: async () => 'cached' });
+`);
+    (globalThis as any).__poisonNever = new Promise(() => {});
+    fs.writeFileSync(timeoutPath, 'await globalThis.__poisonNever;\n');
+    const success: InternalCliCommand = {
+      site, name: 'success', access: 'read', description: '', args: [],
+      browser: false, _lazy: true, _modulePath: successPath,
+    };
+    const timeout: InternalCliCommand = {
+      site, name: 'timeout', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: timeoutPath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(success);
+    registerCommand(timeout);
+    try {
+      await expect(executeCommand(success, {})).resolves.toBe('cached');
+      await expect(executeCommand(timeout, {})).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      await expect(executeCommand(success, {})).resolves.toBe('cached');
+
+      fs.appendFileSync(successPath, '\n// changed after poison\n');
+      await expect(executeCommand(success, {})).rejects.toMatchObject({
+        code: 'ADAPTER_LOAD', hint: expect.stringContaining('Restart byCLI'),
+      });
+    } finally {
+      _resetLazyModuleStateForTests();
+      for (const name of ['success', 'timeout']) getRegistry().delete(`${site}/${name}`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__poisonNever;
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
       if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
       else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
     }

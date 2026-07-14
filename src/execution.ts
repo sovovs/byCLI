@@ -25,6 +25,7 @@ import { pathToFileURL } from 'node:url';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
 import { adapterLoadError, ArgumentError, CliError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
@@ -39,7 +40,9 @@ import { resolveAdapterSourcePath } from './adapter-source.js';
 import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
 import {
   capturedRegistryValues,
+  closeRegistryTransaction,
   createRegistryTransaction,
+  resetRegistryTransactionStateForTests,
   rollbackRegistryTransaction,
   runRegistryTransaction,
   transactionGroupsForKey,
@@ -53,6 +56,7 @@ interface ModuleLoadEntry {
   /** Commands registered by this exact import generation. */
   registeredCommands: Map<string, CliCommand>;
   transaction: RegistryTransaction;
+  hotReloadable: boolean;
 }
 
 const _loadedModules = new Map<string, ModuleLoadEntry>();
@@ -60,6 +64,7 @@ const _loadedModules = new Map<string, ModuleLoadEntry>();
 const _moduleImportGenerations = new Map<string, number>();
 let _registrationImportTail: Promise<void> = Promise.resolve();
 let _registrationImportsPoisoned = false;
+let _fingerprintReadCount = 0;
 
 const DEFAULT_ADAPTER_IMPORT_TIMEOUT_MS = 30_000;
 
@@ -81,6 +86,12 @@ export function _resetLazyModuleStateForTests(): void {
   _moduleImportGenerations.clear();
   _registrationImportTail = Promise.resolve();
   _registrationImportsPoisoned = false;
+  _fingerprintReadCount = 0;
+  resetRegistryTransactionStateForTests();
+}
+
+export function _getLazyModuleFingerprintReadCountForTests(): number {
+  return _fingerprintReadCount;
 }
 
 type TraceMode = 'off' | 'on' | 'retain-on-failure';
@@ -165,10 +176,16 @@ async function runCommand(
 
 function moduleFingerprint(modulePath: string): string | undefined {
   try {
+    _fingerprintReadCount += 1;
     return crypto.createHash('sha256').update(fs.readFileSync(modulePath)).digest('hex');
   } catch {
     return undefined;
   }
+}
+
+function isHotReloadableModule(modulePath: string): boolean {
+  const prefix = getUserClisDir() + path.sep;
+  return modulePath.startsWith(prefix);
 }
 
 function refreshCapturedCommands(entry: ModuleLoadEntry): void {
@@ -197,6 +214,7 @@ async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: stri
   const outcome = await Promise.race([settlement, timeout]);
   if ('timeout' in outcome) {
     _registrationImportsPoisoned = true;
+    closeRegistryTransaction(entry.transaction);
     rollbackImport(entry);
     void settlement.then(() => {
       refreshCapturedCommands(entry);
@@ -230,16 +248,26 @@ function scheduleRegistrationImport(entry: ModuleLoadEntry, importUrl: string, m
 async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadEntry | undefined> {
   const modulePath = internal._modulePath;
   if (!internal._lazy || !modulePath) return;
-  if (_registrationImportsPoisoned) throw poisonedImportError();
-
-  const fingerprint = moduleFingerprint(modulePath);
   let entry = _loadedModules.get(modulePath);
-  if (entry && entry.fingerprint !== fingerprint) {
+  if (entry) {
+    if (!entry.hotReloadable) {
+      await entry.promise;
+      return entry;
+    }
+    const currentFingerprint = moduleFingerprint(modulePath);
+    if (entry.fingerprint === currentFingerprint) {
+      await entry.promise;
+      return entry;
+    }
+    if (_registrationImportsPoisoned) throw poisonedImportError();
     invalidateLazyModule(modulePath, entry);
     entry = undefined;
   }
+  if (_registrationImportsPoisoned) throw poisonedImportError();
 
   if (!entry) {
+    const hotReloadable = isHotReloadableModule(modulePath);
+    const fingerprint = hotReloadable ? moduleFingerprint(modulePath) : undefined;
     const url = pathToFileURL(modulePath).href;
     const generation = _moduleImportGenerations.get(modulePath) ?? 0;
     const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
@@ -249,6 +277,7 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadE
       generation,
       registeredCommands: new Map(),
       transaction: createRegistryTransaction(),
+      hotReloadable,
     };
     createdEntry.promise = scheduleRegistrationImport(createdEntry, importUrl, modulePath).catch((error) => {
       invalidateLazyModule(modulePath, createdEntry);
