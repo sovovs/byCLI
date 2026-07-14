@@ -37,8 +37,9 @@ export type SiteSessionMode = 'ephemeral' | 'persistent';
  * 所有已注册 adapter command 的共享元数据和运行选项。
  *
  * 这里故意不包含 `browser` 和 `func` 这类执行形态字段，因为浏览器命令和
- * 非浏览器命令的执行签名不同。`BrowserCliCommand` 和 `NonBrowserCliCommand`
- * 会在 normalize 之后扩展这个共同底座，形成最终可执行的命令类型。
+ * 非浏览器命令、条件浏览器命令的执行签名不同。`BrowserCliCommand`、
+ * `NonBrowserCliCommand` 和 `ConditionalBrowserCliCommand` 会在 normalize 之后
+ * 扩展这个共同底座，形成最终可执行的命令类型。
  */
 interface BaseCliCommand {
   /** 站点或命名空间名称，对应命令中的 `<site>`，例如 `devto`、`brave`。 */
@@ -91,8 +92,8 @@ interface BaseCliCommand {
 }
 
 export interface BrowserCliCommand extends BaseCliCommand {
-  /** Browser commands receive an IPage. Omitted means true after normalization. */
-  browser?: true;
+  /** Browser commands receive an IPage. */
+  browser: true;
   func?: BrowserCommandFunc;
 }
 
@@ -115,16 +116,29 @@ export type CliCommand = BrowserCliCommand | NonBrowserCliCommand | ConditionalB
  * `cli()` 注册 adapter 时使用的内部预归一化命令形态。
  *
  * adapter 作者传入的是 `CliOptions`，它的 TypeScript union 会保证公开调用点足够精确。
- * registry 内部会先把这些选项复制成这个更宽松的形态，再交给 `normalizeCommand()`
- * 根据 `strategy` 推导 `browser`、`navigateBefore` 等运行时意图，最后存成具体的
- * `CliCommand`。
+ * registry 内部会先把这些选项复制成对应的预归一化分支，再交给
+ * `normalizeCommand()` 根据 `strategy` 推导 `browser`、`navigateBefore` 等运行时意图，
+ * 最后存成具体的 `CliCommand`。
  */
-type RawCliCommand = BaseCliCommand & {
-  /** 预归一化阶段的浏览器需求标记；可省略，之后会由 strategy 推导。 */
-  browser?: BrowserDeclaration;
-  /** 预归一化阶段的执行函数；具体签名由浏览器需求声明决定。 */
-  func?: BrowserCommandFunc | ConditionalBrowserCommandFunc | NonBrowserCommandFunc;
+type RawCliCommandBase = Omit<BaseCliCommand, 'strategy'>;
+
+type RawBrowserCliCommand = RawCliCommandBase & { func?: BrowserCommandFunc } & (
+  | { browser: true; strategy?: Strategy }
+  | { browser?: true; strategy?: BrowserStrategy }
+);
+
+type RawNonBrowserCliCommand = RawCliCommandBase & { func?: NonBrowserCommandFunc } & (
+  | { browser: false; strategy?: Strategy }
+  | { browser?: false; strategy: Strategy.PUBLIC | Strategy.LOCAL }
+);
+
+type RawConditionalBrowserCliCommand = RawCliCommandBase & {
+  browser: BrowserRequirementResolver;
+  strategy?: Strategy;
+  func?: ConditionalBrowserCommandFunc;
 };
+
+type RawCliCommand = RawBrowserCliCommand | RawNonBrowserCliCommand | RawConditionalBrowserCliCommand;
 
 /** Internal extension for lazy-loaded TS modules (not exposed in public API) */
 export type InternalCliCommand = CliCommand & {
@@ -162,8 +176,30 @@ declare global { var __bycli_registry__: Map<string, CliCommand> | undefined; }
 const _registry: Map<string, CliCommand> =
   globalThis.__bycli_registry__ ??= new Map<string, CliCommand>();
 
+export function cli(opts: ConditionalBrowserCliOptions): ConditionalBrowserCliCommand;
+export function cli(opts: NonBrowserCliOptions): NonBrowserCliCommand;
+export function cli(opts: BrowserCliOptions): BrowserCliCommand;
 export function cli(opts: CliOptions): CliCommand {
-  const cmd: RawCliCommand = {
+  const base = rawCommandBase(opts);
+  let cmd: RawCliCommand;
+  if (typeof opts.browser === 'function') {
+    cmd = { ...base, strategy: opts.strategy, browser: opts.browser, func: opts.func };
+  } else if (opts.browser === false) {
+    cmd = { ...base, strategy: opts.strategy, browser: false, func: opts.func };
+  } else if (opts.browser === true) {
+    cmd = { ...base, strategy: opts.strategy, browser: true, func: opts.func };
+  } else if (isImplicitNonBrowserOptions(opts)) {
+    cmd = { ...base, strategy: opts.strategy, browser: opts.browser, func: opts.func };
+  } else {
+    cmd = { ...base, strategy: opts.strategy, browser: opts.browser, func: opts.func };
+  }
+
+  registerCommand(cmd);
+  return _registry.get(fullName(cmd))!;
+}
+
+function rawCommandBase(opts: CliOptions): RawCliCommandBase {
+  return {
     site: opts.site,
     name: opts.name,
     aliases: opts.aliases,
@@ -171,11 +207,8 @@ export function cli(opts: CliOptions): CliCommand {
     access: opts.access,
     example: opts.example,
     domain: opts.domain,
-    strategy: opts.strategy,
-    browser: opts.browser,
     args: opts.args ?? [],
     columns: opts.columns,
-    func: opts.func,
     pipeline: opts.pipeline,
     footerExtra: opts.footerExtra,
     validateArgs: opts.validateArgs,
@@ -183,9 +216,13 @@ export function cli(opts: CliOptions): CliCommand {
     siteSession: opts.siteSession,
     defaultFormat: opts.defaultFormat,
   };
+}
 
-  registerCommand(cmd);
-  return _registry.get(fullName(cmd))!;
+function isImplicitNonBrowserOptions(
+  opts: BrowserCliOptions | NonBrowserCliOptions,
+): opts is NonBrowserCliOptions {
+  return opts.browser === undefined
+    && (opts.strategy === Strategy.PUBLIC || opts.strategy === Strategy.LOCAL);
 }
 
 export function getRegistry(): Map<string, CliCommand> {
@@ -213,10 +250,7 @@ export function strategyLabel(cmd: CliCommand): string {
  *   1. Explicit field on the command (`browser: false`, `navigateBefore: false`)
  *   2. Derived from strategy + domain (the defaults below)
  */
-function normalizeCommand(cmd: RawCliCommand): CliCommand {
-  assertCommandAccess(cmd);
-  assertSiteSession(cmd);
-
+function normalizeCommand(cmd: RawCliCommand | BrowserCliCommand | NonBrowserCliCommand): CliCommand {
   const declaredBrowser = cmd.browser;
   const strategy = cmd.strategy ?? (declaredBrowser === false ? Strategy.PUBLIC : Strategy.COOKIE);
 
@@ -232,30 +266,50 @@ function normalizeCommand(cmd: RawCliCommand): CliCommand {
     }
   }
 
-  if (typeof declaredBrowser === 'function') {
-    return {
+  if (typeof cmd.browser === 'function') {
+    const normalized: ConditionalBrowserCliCommand = {
       ...cmd,
       strategy,
       browser: 'conditional',
-      requiresBrowser: declaredBrowser,
+      requiresBrowser: cmd.browser,
       navigateBefore,
-    } as ConditionalBrowserCliCommand;
+    };
+    return normalized;
   }
 
-  const browser = declaredBrowser ?? (strategy !== Strategy.PUBLIC && strategy !== Strategy.LOCAL);
+  if (cmd.browser === false) {
+    const normalized: NonBrowserCliCommand = { ...cmd, strategy, browser: false, navigateBefore };
+    return normalized;
+  }
 
-  return browser
-    ? { ...cmd, strategy, browser: true, navigateBefore } as BrowserCliCommand
-    : { ...cmd, strategy, browser: false, navigateBefore } as NonBrowserCliCommand;
+  if (cmd.browser === true) {
+    const normalized: BrowserCliCommand = { ...cmd, strategy, browser: true, navigateBefore };
+    return normalized;
+  }
+
+  if (isImplicitNonBrowserCommand(cmd)) {
+    const normalized: NonBrowserCliCommand = { ...cmd, strategy, browser: false, navigateBefore };
+    return normalized;
+  }
+
+  const normalized: BrowserCliCommand = { ...cmd, strategy, browser: true, navigateBefore };
+  return normalized;
 }
 
-function assertCommandAccess(cmd: Pick<RawCliCommand, 'site' | 'name'> & { access?: unknown }): asserts cmd is RawCliCommand {
+function isImplicitNonBrowserCommand(
+  cmd: RawBrowserCliCommand | RawNonBrowserCliCommand,
+): cmd is RawNonBrowserCliCommand {
+  return cmd.browser === undefined
+    && (cmd.strategy === Strategy.PUBLIC || cmd.strategy === Strategy.LOCAL);
+}
+
+function assertCommandAccess(cmd: Pick<BaseCliCommand, 'site' | 'name'> & { access?: unknown }): void {
   if (cmd.access === 'read' || cmd.access === 'write') return;
   const key = `${cmd.site}/${cmd.name}`;
   throw new Error(`Command ${key} must declare access: 'read' | 'write'`);
 }
 
-function assertSiteSession(cmd: Pick<RawCliCommand, 'site' | 'name'> & { siteSession?: unknown }): void {
+function assertSiteSession(cmd: Pick<BaseCliCommand, 'site' | 'name'> & { siteSession?: unknown }): void {
   if (cmd.siteSession === undefined) return;
   const key = `${cmd.site}/${cmd.name}`;
   if (cmd.siteSession !== 'ephemeral' && cmd.siteSession !== 'persistent') {
@@ -263,8 +317,25 @@ function assertSiteSession(cmd: Pick<RawCliCommand, 'site' | 'name'> & { siteSes
   }
 }
 
-export function registerCommand(cmd: RawCliCommand): void {
-  const normalized = normalizeCommand(cmd);
+export function registerCommand(cmd: RawCliCommand): void;
+export function registerCommand(cmd: CliCommand): void;
+export function registerCommand(cmd: RawCliCommand | CliCommand): void {
+  assertCommandAccess(cmd);
+  assertSiteSession(cmd);
+
+  if (cmd.browser === 'conditional') {
+    if (typeof cmd.requiresBrowser !== 'function') {
+      const key = `${cmd.site}/${cmd.name}`;
+      throw new Error(`Command ${key} requiresBrowser must be a function`);
+    }
+    insertNormalizedCommand(cmd);
+    return;
+  }
+
+  insertNormalizedCommand(normalizeCommand(cmd));
+}
+
+function insertNormalizedCommand(normalized: CliCommand): void {
   const canonicalKey = fullName(normalized);
   const existing = _registry.get(canonicalKey);
   if (existing?.aliases) {
