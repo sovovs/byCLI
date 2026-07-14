@@ -165,6 +165,37 @@ cli({
 });
 ```
 
+## 按参数决定是否启用浏览器
+
+插件命令可以根据最终的命令参数决定本次执行是否需要浏览器：
+
+```ts
+cli({
+  site: 'example',
+  name: 'conditional',
+  access: 'read',
+  strategy: Strategy.COOKIE,
+  browser: args => args['auth-source'] !== 'env',
+  args: [
+    { name: 'auth-source', choices: ['browser', 'env'], default: 'browser' },
+  ],
+  columns: ['status'],
+  func: async (page, args) => [{ status: page ? 'browser' : 'environment' }],
+});
+```
+
+byCLI 会先应用默认值、完成类型转换与参数校验，再执行
+`onBeforeExecute`；之后才调用 `browser` 条件函数。因此，条件函数看到的
+是浏览器路由和命令执行共同使用的最终参数。命令的 `func` 会收到
+`IPage | null`：条件函数返回 `true` 时传入 `IPage`，返回 `false` 时传入
+`null`。
+
+条件浏览器命令仍会显示 `--window`、`--site-session` 和 `--keep-tab`
+等浏览器选项。结构化帮助、命令列表和 CLI 清单只会输出字面量
+`browser: "conditional"`，不会序列化条件函数。对于通过预编译清单发现
+的插件，byCLI 会在浏览器路由前先加载真实插件模块，确保执行的是内存中
+的实际条件函数，而不是清单占位逻辑。
+
 运行 `bycli plugin install` 时，TS plugins 会自动完成基础设置：
 
 1. 安装 plugin 自身依赖

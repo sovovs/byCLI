@@ -190,6 +190,38 @@ cli({
 });
 ```
 
+### Conditional Browser Commands
+
+A plugin command can choose whether it needs a browser from its final command
+arguments:
+
+```typescript
+cli({
+  site: 'example',
+  name: 'conditional',
+  access: 'read',
+  strategy: Strategy.COOKIE,
+  browser: args => args['auth-source'] !== 'env',
+  args: [
+    { name: 'auth-source', choices: ['browser', 'env'], default: 'browser' },
+  ],
+  columns: ['status'],
+  func: async (page, args) => [{ status: page ? 'browser' : 'environment' }],
+});
+```
+
+The predicate runs after defaults, coercion, validation, and any
+`onBeforeExecute` changes, so it receives the final arguments used for routing
+and execution. The command function receives `IPage | null`: `page` is an
+`IPage` when the predicate returns `true`, otherwise it is `null`.
+
+Browser flags such as `--window`, `--site-session`, and `--keep-tab` remain
+visible for conditional commands. Structured help, command listings, and the
+CLI manifest expose the literal metadata `browser: "conditional"` without
+serializing the predicate. Manifest-backed plugins are hydrated before browser
+routing, ensuring the real in-memory predicate—not a serialized placeholder—is
+evaluated.
+
 ### TS Plugin Install Lifecycle
 
 When you run `bycli plugin install`, TS plugins are automatically set up:

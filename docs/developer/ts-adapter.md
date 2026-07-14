@@ -83,6 +83,38 @@ for context, the full pattern table, and how to add an id to a listing.
 | Intercept | `Strategy.INTERCEPT` | Capture browser requests/responses |
 | UI | `Strategy.UI` | Drive authenticated browser UI |
 
+## Conditional Browser Requirements
+
+An adapter can decide whether it needs a browser from its final command
+arguments:
+
+```typescript
+cli({
+  site: 'example',
+  name: 'conditional',
+  access: 'read',
+  strategy: Strategy.COOKIE,
+  browser: args => args['auth-source'] !== 'env',
+  args: [
+    { name: 'auth-source', choices: ['browser', 'env'], default: 'browser' },
+  ],
+  columns: ['status'],
+  func: async (page, args) => [{ status: page ? 'browser' : 'environment' }],
+});
+```
+
+The browser predicate runs after argument defaults, coercion, validation, and
+`onBeforeExecute`, so it sees the same final arguments used for routing and
+execution. A conditional command's `func` receives `IPage | null`: it gets a
+page when the predicate returns `true` and `null` when it returns `false`.
+
+Conditional commands still expose browser flags such as `--window`,
+`--site-session`, and `--keep-tab`. Structured help, command listings, and the
+CLI manifest serialize the capability as `browser: "conditional"`; the
+predicate itself is never serialized. When a command is discovered from a
+precompiled manifest, byCLI hydrates the real plugin module before browser
+routing so the in-memory predicate is available.
+
 ## Browser Session Reuse
 
 Browser-backed commands are one-shot by default: each execution gets a fresh
