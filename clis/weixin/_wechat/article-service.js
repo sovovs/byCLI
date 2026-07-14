@@ -1,6 +1,8 @@
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 
-export const DEFAULT_MAX_PAGES = 100;
+export const MAX_PAGES = 100;
+export const MAX_PAGE_SIZE = 10;
+export const MAX_ARTICLES = 1000;
 
 /** @param {any} article */
 export function isUsableArticle(article) {
@@ -35,12 +37,20 @@ function publicArticle(article) {
  * @param {{fakeid:string,fetchPage:(input:{fakeid:string,begin:number,count:number})=>Promise<any>,limit?:number,maxPages?:number,pageSize?:number}} options
  */
 export async function collectArticles({ fakeid, fetchPage, limit, maxPages, pageSize = 10 }) {
-  for (const [name, value] of [['pageSize', pageSize], ['limit', limit], ['maxPages', maxPages]]) {
+  for (const [name, value, maximum] of [
+    ['pageSize', pageSize, MAX_PAGE_SIZE],
+    ['limit', limit, MAX_ARTICLES],
+    ['maxPages', maxPages, MAX_PAGES],
+  ]) {
     if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
       throw new ArgumentError(`${name} must be a positive safe integer`);
     }
+    if (value !== undefined && value > maximum) {
+      throw new ArgumentError(`${name} must not exceed ${maximum}`);
+    }
   }
-  const pageLimit = maxPages ?? DEFAULT_MAX_PAGES;
+  const pageLimit = maxPages ?? MAX_PAGES;
+  const articleLimit = limit ?? MAX_ARTICLES;
   const articles = [];
   const seen = new Set();
   let totalFromApi = 0;
@@ -53,10 +63,16 @@ export async function collectArticles({ fakeid, fetchPage, limit, maxPages, page
   while (true) {
     const page = await fetchPage({ fakeid, begin, count: pageSize });
     pages += 1;
-    if (pages === 1) totalFromApi = typeof page?.total === 'number' ? page.total : 0;
+    const pageTotal = page?.total === undefined ? 0 : page.total;
+    if (!Number.isSafeInteger(pageTotal) || pageTotal < 0) {
+      throw new CommandExecutionError('WeChat article history returned invalid total metadata');
+    }
+    if (pages === 1) totalFromApi = pageTotal;
     const rawArticles = Array.isArray(page?.articles) ? page.articles : [];
-    const publishItemCount = Number.isInteger(page?.publishItemCount) && page.publishItemCount >= 0
-      ? page.publishItemCount : 0;
+    const publishItemCount = page?.publishItemCount === undefined ? 0 : page.publishItemCount;
+    if (!Number.isSafeInteger(publishItemCount) || publishItemCount < 0) {
+      throw new CommandExecutionError('WeChat article history returned invalid publish-item metadata');
+    }
 
     for (const article of rawArticles) {
       scanned += 1;
@@ -71,10 +87,10 @@ export async function collectArticles({ fakeid, fetchPage, limit, maxPages, page
       }
       seen.add(canonical);
       articles.push(publicArticle(article));
-      if (limit && articles.length >= limit) break;
+      if (articles.length >= articleLimit) break;
     }
 
-    const reachedLimit = Boolean(limit && articles.length >= limit);
+    const reachedLimit = articles.length >= articleLimit;
     const reachedMaxPages = pages >= pageLimit;
     const reachedEnd = publishItemCount === 0
       || publishItemCount < pageSize

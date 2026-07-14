@@ -43,6 +43,19 @@ describe('parsePublishData', () => {
     });
   });
 
+  it.each([Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, null, '1'])(
+    'rejects invalid total_count metadata %s',
+    totalCount => {
+      expect(() => parsePublishData({ publish_page: { total_count: totalCount, publish_list: [] } }))
+        .toThrow(CommandExecutionError);
+    },
+  );
+
+  it('defaults missing total_count to zero and derives publishItemCount', () => {
+    expect(parsePublishData({ publish_page: { publish_list: [{ publish_info: { appmsg_info: [] } }] } }))
+      .toMatchObject({ total: 0, publishItemCount: 1 });
+  });
+
   it.each([
     { publish_page: '{bad json' },
     { publish_page: { total_count: 1, publish_list: [{ publish_info: '{bad json' }] } },
@@ -106,6 +119,21 @@ describe('createWechatApi', () => {
   ])('wraps and redacts %s', async (_name, implementation) => {
     const api = createWechatApi({ token: 'token-secret', cookie: 'sid=cookie-secret', fetchImpl: implementation });
     const error = await api.fetchPage({ fakeid: 'id' }).catch(value => value);
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect(error.message).not.toMatch(/token-secret|cookie-secret/);
+  });
+
+  it('aborts a pending fetch at timeout and maps the failure to a redacted CommandExecutionError', async () => {
+    let aborted = false;
+    const fetchImpl = vi.fn((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        aborted = true;
+        reject(new Error('aborted token-secret sid=cookie-secret'));
+      }, { once: true });
+    }));
+    const api = createWechatApi({ token: 'token-secret', cookie: 'sid=cookie-secret', timeoutMs: 5, fetchImpl });
+    const error = await api.fetchPage({ fakeid: 'id' }).catch(value => value);
+    expect(aborted).toBe(true);
     expect(error).toBeInstanceOf(CommandExecutionError);
     expect(error.message).not.toMatch(/token-secret|cookie-secret/);
   });

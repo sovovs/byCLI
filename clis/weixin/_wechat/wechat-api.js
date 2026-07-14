@@ -43,6 +43,10 @@ export function parsePublishData(data) {
   if (!page || typeof page !== 'object' || !Array.isArray(page.publish_list)) {
     throw new CommandExecutionError('WeChat article history returned an invalid publish page');
   }
+  const total = page.total_count === undefined ? 0 : page.total_count;
+  if (!Number.isSafeInteger(total) || total < 0) {
+    throw new CommandExecutionError('WeChat article history returned invalid total metadata');
+  }
   const articles = [];
   for (const item of page.publish_list) {
     const info = parseNestedJson(item?.publish_info ?? {}, 'publish_info');
@@ -75,7 +79,7 @@ export function parsePublishData(data) {
     }
   }
   return {
-    total: typeof page.total_count === 'number' ? page.total_count : 0,
+    total,
     publishItemCount: page.publish_list.length,
     articles,
   };

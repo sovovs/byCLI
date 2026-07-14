@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
-import { DEFAULT_MAX_PAGES, collectArticles, isUsableArticle } from './article-service.js';
+import {
+  MAX_ARTICLES, MAX_PAGES, MAX_PAGE_SIZE, collectArticles, isUsableArticle,
+} from './article-service.js';
 
 const article = (id, extra = {}) => ({
   title: id,
@@ -33,21 +35,50 @@ describe('collectArticles', () => {
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['pageSize', 11], ['pageSize', Number.MAX_SAFE_INTEGER],
+    ['limit', 1001], ['limit', Number.MAX_SAFE_INTEGER],
+    ['maxPages', 101], ['maxPages', Number.MAX_SAFE_INTEGER],
+  ])('rejects %s=%s above its absolute cap', async (key, value) => {
+    const fetchPage = vi.fn();
+    await expect(collectArticles({ fakeid: 'id', fetchPage, [key]: value }))
+      .rejects.toBeInstanceOf(ArgumentError);
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it('exports absolute caps and accepts their boundary values', async () => {
+    expect({ MAX_PAGES, MAX_PAGE_SIZE, MAX_ARTICLES }).toEqual({
+      MAX_PAGES: 100, MAX_PAGE_SIZE: 10, MAX_ARTICLES: 1000,
+    });
+    const fetchPage = vi.fn().mockResolvedValue({ total: 0, publishItemCount: 0, articles: [] });
+    await expect(collectArticles({
+      fakeid: 'id', fetchPage, pageSize: MAX_PAGE_SIZE, limit: MAX_ARTICLES, maxPages: MAX_PAGES,
+    })).resolves.toMatchObject({ summary: { pages: 1 } });
+  });
+
   it('uses a documented default hard cap for full pages without an API total', async () => {
-    expect(DEFAULT_MAX_PAGES).toBe(100);
+    expect(MAX_PAGES).toBe(100);
     const fetchPage = vi.fn(({ begin }) => Promise.resolve({
       total: 0,
       publishItemCount: 1,
       articles: [article(`a${begin}`)],
     }));
     const result = await collectArticles({ fakeid: 'id', fetchPage, pageSize: 1 });
-    expect(result.summary.pages).toBe(DEFAULT_MAX_PAGES);
-    expect(fetchPage).toHaveBeenCalledTimes(DEFAULT_MAX_PAGES);
+    expect(result.summary.pages).toBe(MAX_PAGES);
+    expect(fetchPage).toHaveBeenCalledTimes(MAX_PAGES);
   });
 
-  it('rejects pagination when the next begin offset cannot advance safely', async () => {
-    const fetchPage = vi.fn().mockResolvedValue({ total: 0, publishItemCount: Number.MAX_SAFE_INTEGER, articles: [] });
-    await expect(collectArticles({ fakeid: 'id', fetchPage, pageSize: Number.MAX_SAFE_INTEGER }))
+  it.each([
+    [{ total: Infinity, publishItemCount: 1, articles: [] }],
+    [{ total: -1, publishItemCount: 1, articles: [] }],
+    [{ total: 1.5, publishItemCount: 1, articles: [] }],
+    [{ total: null, publishItemCount: 1, articles: [] }],
+    [{ total: 0, publishItemCount: Infinity, articles: [] }],
+    [{ total: 0, publishItemCount: -1, articles: [] }],
+    [{ total: 0, publishItemCount: 1.5, articles: [] }],
+    [{ total: 0, publishItemCount: null, articles: [] }],
+  ])('rejects invalid page response metadata', async page => {
+    await expect(collectArticles({ fakeid: 'id', fetchPage: async () => page }))
       .rejects.toBeInstanceOf(CommandExecutionError);
   });
 
