@@ -6,7 +6,7 @@
  */
 
 import type { Arg, CliCommand } from './registry.js';
-import { fullName, strategyLabel } from './registry.js';
+import { browserRequirementLabel, fullName, strategyLabel } from './registry.js';
 
 // ── Serialization ───────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export function serializeCommand(cmd: CliCommand) {
     description: cmd.description,
     access: cmd.access,
     strategy: strategyLabel(cmd),
-    browser: !!cmd.browser,
+    browser: cmd.browser,
     args: cmd.args.map(serializeArg),
     columns: cmd.columns ?? [],
     domain: cmd.domain ?? null,
@@ -105,7 +105,7 @@ export function formatRegistryHelpText(cmd: CliCommand): string {
   }
   const meta: string[] = [];
   meta.push(`Access: ${cmd.access}`);
-  meta.push(`Browser: ${cmd.browser ? 'yes' : 'no'}`);
+  meta.push(`Browser: ${browserRequirementLabel(cmd)}`);
   if (cmd.domain) meta.push(`Domain: ${cmd.domain}`);
   if (cmd.defaultFormat) meta.push(`Default format: ${cmd.defaultFormat}`);
   if (cmd.aliases?.length) meta.push(`Aliases: ${cmd.aliases.join(', ')}`);

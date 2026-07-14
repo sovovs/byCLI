@@ -1,5 +1,50 @@
 import { describe, it, expect } from 'vitest';
-import { classifyAdapter, formatRootAdapterHelpText } from './help.js';
+import {
+  classifyAdapter,
+  commandHelpData,
+  formatCommandHelpText,
+  formatRootAdapterHelpText,
+  formatSiteHelpText,
+  siteHelpData,
+} from './help.js';
+import { cli, Strategy } from './registry.js';
+
+const conditional = cli({
+  site: 'wechat',
+  name: 'search',
+  access: 'read',
+  strategy: Strategy.INTERCEPT,
+  browser: args => args['auth-source'] !== 'env',
+  args: [],
+  func: async () => [],
+});
+
+describe('conditional browser help metadata', () => {
+  it('preserves the conditional state in command and site structured help', () => {
+    expect(commandHelpData(conditional)).toMatchObject({ browser: 'conditional' });
+    expect(commandHelpData(conditional)).not.toHaveProperty('requiresBrowser');
+    expect(siteHelpData('wechat', [conditional])).toMatchObject({
+      commands: [expect.objectContaining({ browser: 'conditional' })],
+    });
+    expect(JSON.stringify(siteHelpData('wechat', [conditional]))).not.toContain('requiresBrowser');
+  });
+
+  it('shows browser common options for conditional commands in structured and text help', () => {
+    expect(commandHelpData(conditional)).toHaveProperty('browser_common_options');
+    expect(siteHelpData('wechat', [conditional])).toHaveProperty('browser_common_options');
+    expect(formatCommandHelpText(conditional)).toContain('Browser common options:');
+    expect(formatCommandHelpText(conditional)).toContain('Browser: conditional');
+    expect(formatSiteHelpText('wechat', [conditional])).toContain('Browser common options:');
+  });
+
+  it('keeps static no-browser commands free of browser common options', () => {
+    const local = cli({ site: 'local', name: 'read', access: 'read', browser: false, args: [], func: async () => [] });
+
+    expect(commandHelpData(local)).toMatchObject({ browser: false });
+    expect(commandHelpData(local)).not.toHaveProperty('browser_common_options');
+    expect(formatCommandHelpText(local)).toContain('Browser: no');
+  });
+});
 
 describe('classifyAdapter', () => {
   it('classifies DNS-style domains as site', () => {

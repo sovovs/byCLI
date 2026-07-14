@@ -13,7 +13,7 @@
 import { Command } from 'commander';
 import { log } from './logger.js';
 import yaml from 'js-yaml';
-import { type CliCommand, fullName, getRegistry } from './registry.js';
+import { type CliCommand, fullName, getRegistry, hasBrowserCapability } from './registry.js';
 import { render as renderOutput } from './output.js';
 import { executeCommand, prepareCommandArgs } from './execution.js';
 import {
@@ -61,7 +61,7 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
     .option('-f, --format <fmt>', 'Output format: table, plain, json, yaml, md, csv', 'table')
     .option('--trace <mode>', 'Trace capture: off, on, retain-on-failure', 'off')
     .option('-v, --verbose', 'Debug output', false);
-  if (cmd.browser) {
+  if (hasBrowserCapability(cmd)) {
     subCmd
       .option('--window <mode>', 'Browser window mode: foreground or background')
       .option('--site-session <mode>', 'Adapter site session lifecycle: ephemeral or persistent')
@@ -118,9 +118,9 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
         prepared: true,
         ...(typeof globals.profile === 'string' && globals.profile.trim() ? { profile: globals.profile.trim() } : {}),
         ...(typeof optionsRecord.trace === 'string' && optionsRecord.trace !== 'off' ? { trace: optionsRecord.trace } : {}),
-        ...(cmd.browser && typeof optionsRecord.window === 'string' ? { windowMode: optionsRecord.window } : {}),
-        ...(cmd.browser && typeof optionsRecord.siteSession === 'string' ? { siteSession: optionsRecord.siteSession } : {}),
-        ...(cmd.browser && typeof optionsRecord.keepTab === 'string' ? { keepTab: optionsRecord.keepTab } : {}),
+        ...(hasBrowserCapability(cmd) && typeof optionsRecord.window === 'string' ? { windowMode: optionsRecord.window } : {}),
+        ...(hasBrowserCapability(cmd) && typeof optionsRecord.siteSession === 'string' ? { siteSession: optionsRecord.siteSession } : {}),
+        ...(hasBrowserCapability(cmd) && typeof optionsRecord.keepTab === 'string' ? { keepTab: optionsRecord.keepTab } : {}),
       });
       if (result === null || result === undefined) {
         return;

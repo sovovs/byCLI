@@ -237,6 +237,16 @@ export function strategyLabel(cmd: CliCommand): string {
   return cmd.strategy ?? Strategy.PUBLIC;
 }
 
+/** Whether a command may use browser-backed execution for some invocation. */
+export function hasBrowserCapability(cmd: CliCommand): boolean {
+  return cmd.browser !== false;
+}
+
+/** Stable human-readable label for the normalized browser requirement. */
+export function browserRequirementLabel(cmd: CliCommand): 'yes' | 'no' | 'conditional' {
+  return cmd.browser === 'conditional' ? 'conditional' : cmd.browser ? 'yes' : 'no';
+}
+
 /**
  * Normalize a command's runtime fields. This is the single place where
  * `strategy` is decoded into the concrete fields that the execution path
