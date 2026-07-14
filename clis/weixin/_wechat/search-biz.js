@@ -17,7 +17,8 @@ export function mapSearchBizPayload(payload) {
   const response = /** @type {Record<string, any>} */ (payload);
   const ret = response.base_resp?.ret;
   const message = String(response.base_resp?.err_msg ?? response.base_resp?.err_msg_en ?? '');
-  if (ret === 200013 || /invalid credential/i.test(message)) {
+  const normalizedMessage = message.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (ret === 200013 && normalizedMessage === 'invalid credential') {
     throw new AuthRequiredError(DOMAIN, 'WeChat search credentials have expired');
   }
   if (ret !== 0) {

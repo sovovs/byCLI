@@ -12,7 +12,7 @@ export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_00
       const root = /** @type {any} */ (window);
       const originalFetch = root.fetch;
       const originalOpen = root.XMLHttpRequest?.prototype?.open;
-      const state = { fingerprint: null, originalFetch, originalOpen };
+      const state = { fingerprint: null };
       Object.defineProperty(root, stateKey, { configurable: true, value: state });
 
       const capture = input => {
@@ -22,16 +22,20 @@ export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_00
         } catch { /* Ignore unrelated or relative malformed requests. */ }
       };
       if (typeof originalFetch === 'function') {
-        root.fetch = function wrappedFetch(input, ...args) {
+        const wrappedFetch = function wrappedFetch(input, ...args) {
           capture(input);
           return originalFetch.call(this, input, ...args);
         };
+        Object.defineProperty(wrappedFetch, '__bycliOriginalFetch', { value: originalFetch });
+        root.fetch = wrappedFetch;
       }
       if (typeof originalOpen === 'function') {
-        root.XMLHttpRequest.prototype.open = function wrappedOpen(method, url, ...args) {
+        const wrappedOpen = function wrappedOpen(method, url, ...args) {
           capture(url);
           return originalOpen.call(this, method, url, ...args);
         };
+        Object.defineProperty(wrappedOpen, '__bycliOriginalOpen', { value: originalOpen });
+        root.XMLHttpRequest.prototype.open = wrappedOpen;
       }
 
       const visible = element => {
@@ -87,9 +91,11 @@ export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_00
         const root = /** @type {any} */ (window);
         const state = root[stateKey];
         if (!state) return;
-        if (state.originalFetch) root.fetch = state.originalFetch;
-        if (state.originalOpen && root.XMLHttpRequest?.prototype) {
-          root.XMLHttpRequest.prototype.open = state.originalOpen;
+        const originalFetch = root.fetch?.__bycliOriginalFetch;
+        const originalOpen = root.XMLHttpRequest?.prototype?.open?.__bycliOriginalOpen;
+        if (originalFetch) root.fetch = originalFetch;
+        if (originalOpen && root.XMLHttpRequest?.prototype) {
+          root.XMLHttpRequest.prototype.open = originalOpen;
         }
         delete root[stateKey];
       }, { operation: 'cleanup', stateKey: STATE_KEY });

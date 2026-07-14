@@ -19,6 +19,13 @@ describe('mapSearchBizPayload', () => {
   });
 
   it.each([
+    { base_resp: { ret: 99, err_msg: 'invalid credential' }, list: [] },
+    { base_resp: { ret: 200013, err_msg: 'unrelated failure' }, list: [] },
+  ])('requires the exact ret and normalized message pair for auth expiry', payload => {
+    expect(() => mapSearchBizPayload(payload)).toThrow(CommandExecutionError);
+  });
+
+  it.each([
     [{ base_resp: { ret: 99, err_msg: 'odd failure' }, list: [] }],
     [{ base_resp: { ret: 0 }, list: {} }],
     [{ base_resp: { ret: 0 }, list: [{ nickname: '', fakeid: 'id' }] }],
