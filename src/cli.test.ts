@@ -54,6 +54,63 @@ vi.mock('node:child_process', async () => {
 
 import { createProgram, findPackageRoot, normalizeVerifyRows, renderVerifyPreview, resolveBrowserVerifyInvocation, selectFreshByTimestamp } from './cli.js';
 
+describe('bycli list conditional browser metadata', () => {
+  async function renderList(format: 'md' | 'csv'): Promise<string> {
+    const registry = getRegistry();
+    const snapshot = new Map(registry);
+    const originalLog = console.log;
+    const log = vi.fn();
+    console.log = log;
+    registry.clear();
+    try {
+      cli({
+        site: 'wechat',
+        name: 'conditional',
+        access: 'read',
+        browser: args => args['auth-source'] !== 'env',
+        args: [],
+        func: async () => [],
+      });
+      cli({ site: 'wechat', name: 'browser', access: 'read', browser: true, args: [], func: async () => [] });
+      cli({ site: 'wechat', name: 'local', access: 'read', browser: false, args: [], func: async () => [] });
+
+      await createProgram('', '').parseAsync(['node', 'bycli', 'list', '--format', format]);
+      return log.mock.calls.map(call => call.map(String).join(' ')).join('\n');
+    } finally {
+      console.log = originalLog;
+      registry.clear();
+      for (const [key, value] of snapshot) registry.set(key, value);
+    }
+  }
+
+  it('renders conditional literally in Markdown while preserving static booleans', async () => {
+    const output = await renderList('md');
+    const rows = output.split('\n').filter(line => line.startsWith('| wechat/'));
+    const browserValue = (command: string) => rows
+      .find(line => line.startsWith(`| ${command} |`))!
+      .split('|')[8]
+      .trim();
+
+    expect(browserValue('wechat/conditional')).toBe('conditional');
+    expect(browserValue('wechat/browser')).toBe('true');
+    expect(browserValue('wechat/local')).toBe('false');
+    expect(output).not.toContain('requiresBrowser');
+  });
+
+  it('renders conditional literally in CSV while preserving static booleans', async () => {
+    const output = await renderList('csv');
+    const rows = output.split('\n').filter(line => line.startsWith('wechat/'));
+    const browserValue = (command: string) => rows
+      .find(line => line.startsWith(`${command},`))!
+      .split(',')[7];
+
+    expect(browserValue('wechat/conditional')).toBe('conditional');
+    expect(browserValue('wechat/browser')).toBe('true');
+    expect(browserValue('wechat/local')).toBe('false');
+    expect(output).not.toContain('requiresBrowser');
+  });
+});
+
 describe('createProgram root help descriptions', () => {
   function descriptionFor(program: ReturnType<typeof createProgram>, name: string): string | undefined {
     return program.commands.find(cmd => cmd.name() === name)?.description();

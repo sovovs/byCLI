@@ -584,7 +584,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
               description: c.description,
               access: c.access,
               strategy: strategyLabel(c),
-              browser: !!c.browser,
+              browser: c.browser,
               args: formatArgSummary(c.args),
             }));
         renderOutput(rows, {
