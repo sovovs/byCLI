@@ -57,8 +57,15 @@ describe('registry public TypeScript API', () => {
       access: 'read',
       description: '',
       args: [],
-      browser: (_args: CommandArgs) => true,
-      func: async (_page: IPage | null, _args: CommandArgs) => [],
+      browser: (args) => {
+        expectTypeOf(args).toEqualTypeOf<CommandArgs>();
+        return true;
+      },
+      func: async (page, args) => {
+        expectTypeOf(page).toEqualTypeOf<IPage | null>();
+        expectTypeOf(args).toEqualTypeOf<CommandArgs>();
+        return [];
+      },
     });
   });
 });

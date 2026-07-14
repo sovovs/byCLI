@@ -194,7 +194,7 @@ export function cli(opts: CliOptions): CliCommand {
     cmd = { ...base, strategy: opts.strategy, browser: opts.browser, func: opts.func };
   }
 
-  registerCommand(cmd);
+  registerCommandInput(cmd);
   return _registry.get(fullName(cmd))!;
 }
 
@@ -317,9 +317,15 @@ function assertSiteSession(cmd: Pick<BaseCliCommand, 'site' | 'name'> & { siteSe
   }
 }
 
-export function registerCommand(cmd: RawCliCommand): void;
+export function registerCommand(cmd: RawConditionalBrowserCliCommand): void;
+export function registerCommand(cmd: RawNonBrowserCliCommand): void;
+export function registerCommand(cmd: RawBrowserCliCommand): void;
 export function registerCommand(cmd: CliCommand): void;
 export function registerCommand(cmd: RawCliCommand | CliCommand): void {
+  registerCommandInput(cmd);
+}
+
+function registerCommandInput(cmd: RawCliCommand | CliCommand): void {
   assertCommandAccess(cmd);
   assertSiteSession(cmd);
 
