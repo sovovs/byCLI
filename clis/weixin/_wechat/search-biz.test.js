@@ -58,6 +58,7 @@ describe('executeSearchBiz', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => fixture('search-success') });
     await executeSearchBiz({ page: null, source: 'env', credentials, query: '微信 派', limit: 2, fetchImpl });
     assertRequest(...fetchImpl.mock.calls[0], true);
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
   it.each(['browser', 'env'])('redacts transport errors in %s mode', async source => {
@@ -76,6 +77,18 @@ describe('executeSearchBiz', () => {
     const page = { fetchJson: vi.fn().mockRejectedValue(typed) };
     await expect(executeSearchBiz({ page, source: 'browser', credentials, query: 'q', limit: 1 }))
       .rejects.toBe(typed);
+  });
+
+  it('wraps and redacts typed browser transport errors that contain request secrets', async () => {
+    const typed = new CommandExecutionError(
+      'failed https://mp.weixin.qq.com/cgi-bin/searchbiz?token=token-secret&fingerprint=fp-secret',
+      'Cookie: sid=cookie-secret',
+    );
+    const page = { fetchJson: vi.fn().mockRejectedValue(typed) };
+    const error = await executeSearchBiz({ page, source: 'browser', credentials, query: 'q', limit: 1 }).catch(value => value);
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect(error).not.toBe(typed);
+    expect(`${error.message} ${error.hint ?? ''}`).not.toMatch(/token-secret|fp-secret|cookie-secret/);
   });
 
   it('redacts environment JSON parse failures', async () => {

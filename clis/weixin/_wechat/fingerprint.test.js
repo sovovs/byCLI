@@ -24,23 +24,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function makeRealPage({ triggerRequest = true } = {}) {
+function makeRealPage({ triggerRequest = true, trustedContainer = true, includeUnrelatedButton = false } = {}) {
   const originalFetch = vi.fn(async () => ({ ok: true }));
   const originalOpen = vi.fn();
   class FakeXHR {}
   FakeXHR.prototype.open = originalOpen;
+  const scope = { querySelectorAll: selector => selector.includes('button') ? [button] : [] };
   const input = {
     value: '',
     focus: vi.fn(),
     dispatchEvent: vi.fn(),
-    closest: vi.fn(() => null),
+    closest: vi.fn(() => trustedContainer ? scope : null),
     getBoundingClientRect: () => ({ width: 100, height: 24 }),
   };
   const button = {
     textContent: '搜索',
     getBoundingClientRect: () => ({ width: 40, height: 24 }),
     click: vi.fn(() => {
-      if (triggerRequest) window.fetch('https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=fp-real&token=token-secret');
+      if (triggerRequest) window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
     }),
   };
   vi.stubGlobal('window', {
@@ -54,7 +55,7 @@ function makeRealPage({ triggerRequest = true } = {}) {
   vi.stubGlobal('Event', class Event { constructor(type, options) { this.type = type; this.options = options; } });
   vi.stubGlobal('KeyboardEvent', class KeyboardEvent {});
   vi.stubGlobal('document', {
-    querySelectorAll: selector => selector.startsWith('input') ? [input] : selector.includes('button') ? [button] : [],
+    querySelectorAll: selector => selector.startsWith('input') ? [input] : includeUnrelatedButton && selector.includes('button') ? [button] : [],
   });
   const page = {
     evaluate: vi.fn(async (callback, argument) => callback(argument)),
@@ -106,8 +107,8 @@ describe('captureSearchBizFingerprint', () => {
       }
       return result;
     });
-    await expect(captureSearchBizFingerprint(page, '微信派', 1_000)).resolves.toBe('fp-real');
-    expect(capturedState).toEqual({ fingerprint: 'fp-real' });
+    await expect(captureSearchBizFingerprint(page, '微信派', 1_000)).resolves.toBe('微信派-fp');
+    expect(capturedState).toEqual({ fingerprint: '微信派-fp' });
     expect(JSON.stringify(capturedState)).not.toMatch(/searchbiz|token-secret|cookie/i);
     expect(window.fetch).toBe(originalFetch);
     expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
@@ -142,5 +143,48 @@ describe('captureSearchBizFingerprint', () => {
     expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
     expect(JSON.stringify(window)).not.toMatch(/searchbiz|token-secret|fp-secret|cookie/i);
     expect(page.evaluate.mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ operation: 'cleanup' }));
+    expect(`${error.message} ${error.hint ?? ''}`).not.toMatch(/searchbiz|token-secret|fp-secret|cookie/i);
+  });
+
+  it('serializes concurrent captures on the same page and releases ownership', async () => {
+    const { page, originalFetch, originalOpen } = makeRealPage();
+    await expect(Promise.all([
+      captureSearchBizFingerprint(page, 'first', 1_000),
+      captureSearchBizFingerprint(page, 'second', 1_000),
+    ])).resolves.toEqual(['first-fp', 'second-fp']);
+    expect(window.fetch).toBe(originalFetch);
+    expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
+    expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
+  });
+
+  it('does not let a failed capture block the next capture on the same page', async () => {
+    const { page, originalFetch, originalOpen } = makeRealPage();
+    let failNextRead = true;
+    page.evaluate.mockImplementation(async (callback, argument) => {
+      if (argument.operation === 'read' && failNextRead) {
+        failNextRead = false;
+        throw new Error('bridge failed');
+      }
+      return callback(argument);
+    });
+    const failed = captureSearchBizFingerprint(page, 'failed', 1_000);
+    const succeeded = captureSearchBizFingerprint(page, 'recovered', 1_000);
+    await expect(failed).rejects.toBeInstanceOf(CommandExecutionError);
+    await expect(succeeded).resolves.toBe('recovered-fp');
+    expect(window.fetch).toBe(originalFetch);
+    expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
+    expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
+  });
+
+  it('uses the button in the same trusted picker container, not a global search button', async () => {
+    const { page } = makeRealPage({ includeUnrelatedButton: true });
+    await expect(captureSearchBizFingerprint(page, 'dialog', 1_000)).resolves.toBe('dialog-fp');
+  });
+
+  it('rejects an input that has only an unrelated global search button', async () => {
+    const { page } = makeRealPage({ trustedContainer: false, includeUnrelatedButton: true });
+    const error = await captureSearchBizFingerprint(page, 'global', 1_000).catch(value => value);
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect(error.hint).toMatch(/layout|control/i);
   });
 });

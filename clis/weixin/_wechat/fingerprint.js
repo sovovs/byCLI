@@ -2,9 +2,22 @@ import { CliError, CommandExecutionError, TimeoutError } from '@sovovs/bycli/err
 
 const STATE_KEY = '__bycliWechatSearchBizCapture';
 const POLL_INTERVAL_MS = 100;
+const captureQueues = new WeakMap();
 
 /** @param {any} page @param {string} query @param {number} [timeoutMs] */
-export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_000) {
+export function captureSearchBizFingerprint(page, query, timeoutMs = 30_000) {
+  const previous = captureQueues.get(page) ?? Promise.resolve();
+  const run = previous.catch(() => undefined)
+    .then(() => captureSearchBizFingerprintOwned(page, query, timeoutMs));
+  const tail = run.then(() => undefined, () => undefined);
+  captureQueues.set(page, tail);
+  return run.finally(() => {
+    if (captureQueues.get(page) === tail) captureQueues.delete(page);
+  });
+}
+
+/** @param {any} page @param {string} query @param {number} timeoutMs */
+async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
   const startedAt = Date.now();
   try {
     const installed = await page.evaluate(({ operation, query: searchQuery, stateKey }) => {
@@ -55,7 +68,8 @@ export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_00
       if (setter) setter.call(input, searchQuery); else input.value = searchQuery;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      const scope = input.closest('form, .weui-desktop-search, .search-box') ?? document;
+      const scope = input.closest('form, [role="dialog"], .weui-desktop-dialog, .weui-desktop-search, .search-box');
+      if (!scope) return { submitted: false };
       const buttons = Array.from(scope.querySelectorAll('button, [role="button"], a'));
       const button = buttons.find(element => visible(element) && /搜索|搜一搜/.test(element.textContent ?? ''));
       if (button) button.click();
@@ -83,7 +97,10 @@ export async function captureSearchBizFingerprint(page, query, timeoutMs = 30_00
     throw new TimeoutError('WeChat search fingerprint capture', timeoutMs / 1000);
   } catch (error) {
     if (error instanceof CliError) throw error;
-    throw new CommandExecutionError(`WeChat fingerprint capture failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new CommandExecutionError(
+      'WeChat fingerprint capture failed',
+      'The WeChat editor page or browser bridge failed while capturing the official-account search request; retry the search',
+    );
   } finally {
     try {
       await page.evaluate(({ operation, stateKey }) => {

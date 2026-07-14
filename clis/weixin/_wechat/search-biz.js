@@ -1,9 +1,8 @@
 import {
   AuthRequiredError,
-  CliError,
   CommandExecutionError,
 } from '@sovovs/bycli/errors';
-import { buildSecretSet, redactValue } from './redact.js';
+import { buildSecretSet, redactText } from './redact.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const ENDPOINT = `https://${DOMAIN}/cgi-bin/searchbiz`;
@@ -43,16 +42,26 @@ export function mapSearchBizPayload(payload) {
 
 /** @param {unknown} error @param {{token:string,cookie:string,fingerprint?:string}} credentials */
 function transportError(error, credentials) {
-  if (error instanceof CliError) return error;
+  const secrets = buildSecretSet(credentials);
   const message = error instanceof Error ? error.message : String(error);
-  const redacted = redactValue(message, buildSecretSet(credentials));
-  return new CommandExecutionError(`WeChat search_biz request failed: ${String(redacted)}`);
+  const hint = error && typeof error === 'object' && 'hint' in error && typeof error.hint === 'string'
+    ? error.hint : undefined;
+  const redactedMessage = redactText(message, secrets);
+  const redactedHint = hint ? redactText(hint, secrets) : undefined;
+  if (error instanceof AuthRequiredError
+    && error.domain === DOMAIN
+    && redactedMessage === message
+    && redactedHint === hint) return error;
+  return new CommandExecutionError(
+    `WeChat search_biz request failed: ${redactedMessage}`,
+    redactedHint,
+  );
 }
 
 /**
- * @param {{page:any,source:'browser'|'env',credentials:{token:string,cookie:string,fingerprint?:string},query:string,limit:number,fetchImpl?:typeof fetch}} input
+ * @param {{page:any,source:'browser'|'env',credentials:{token:string,cookie:string,fingerprint?:string},query:string,limit:number,fetchImpl?:typeof fetch,timeoutMs?:number}} input
  */
-export async function executeSearchBiz({ page, source, credentials, query, limit, fetchImpl = fetch }) {
+export async function executeSearchBiz({ page, source, credentials, query, limit, fetchImpl = fetch, timeoutMs = 30_000 }) {
   const params = new URLSearchParams({
     action: 'search_biz', scene: '1', begin: '0', count: String(limit), query,
     fingerprint: credentials.fingerprint ?? '', token: credentials.token,
@@ -66,7 +75,10 @@ export async function executeSearchBiz({ page, source, credentials, query, limit
     if (source === 'browser') {
       payload = await page.fetchJson(url, { headers });
     } else {
-      const response = await fetchImpl(url, { headers: { ...headers, Cookie: credentials.cookie } });
+      const response = await fetchImpl(url, {
+        headers: { ...headers, Cookie: credentials.cookie },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       if (!response.ok) {
         throw new CommandExecutionError(`WeChat search_biz request failed: HTTP ${response.status}`);
       }
