@@ -156,12 +156,15 @@ export function finalizeRegistryTransaction(
     throw new Error('Cannot finalize an active adapter registration transaction');
   }
   const selectedGroups = groups ?? new Set(transaction.writes.map(write => write.group));
-  const affectedKeys = new Set<string>();
-  for (const write of transaction.writes) {
-    if (!selectedGroups.has(write.group) || transaction.finalizedGroups.has(write.group)) continue;
-    transaction.finalizedGroups.add(write.group);
-    affectedKeys.add(write.key);
-  }
+  const newGroups = new Set(
+    [...selectedGroups].filter(group => !transaction.finalizedGroups.has(group)),
+  );
+  const affectedKeys = new Set(
+    transaction.writes
+      .filter(write => newGroups.has(write.group))
+      .map(write => write.key),
+  );
+  for (const group of newGroups) transaction.finalizedGroups.add(group);
 
   for (const key of affectedKeys) {
     const stillOwned = transaction.writes.some(

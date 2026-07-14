@@ -8,6 +8,7 @@ import {
   resetRegistryTransactionStateForTests,
   rollbackRegistryTransaction,
   runRegistryTransaction,
+  transactionGroupsForKey,
 } from './registry-transaction.js';
 
 function command(site: string, label: string, aliases?: string[]): ConditionalBrowserCliCommand {
@@ -321,6 +322,53 @@ describe('registry transaction ownership', () => {
     expect(registryMutationKeys()).toContain(liveKey);
     finalizeRegistryTransaction(live, getRegistry());
     expect(registryMutationKeys()).not.toContain(liveKey);
+  });
+
+  it('finalizes every canonical and alias key in one registration group idempotently', async () => {
+    const site = `transaction-finalize-aliases-${Date.now()}`;
+    sites.push(site);
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => {
+      registerCommand(command(site, 'registered', ['first-alias', 'second-alias']));
+    });
+    const keys = [`${site}/list`, `${site}/first-alias`, `${site}/second-alias`];
+
+    finalizeRegistryTransaction(transaction, getRegistry());
+    finalizeRegistryTransaction(transaction, getRegistry());
+    for (const key of keys) getRegistry().delete(key);
+
+    for (const key of keys) expect(registryMutationKeys()).not.toContain(key);
+  });
+
+  it('finalizes selected groups without releasing ownership for another live registration group', async () => {
+    const site = `transaction-finalize-groups-${Date.now()}`;
+    sites.push(site);
+    const first = { ...command(site, 'first', ['first-alias']), name: 'first' };
+    const second = { ...command(site, 'second', ['second-alias']), name: 'second' };
+    const firstKeys = [`${site}/first`, `${site}/first-alias`];
+    const secondKeys = [`${site}/second`, `${site}/second-alias`];
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => {
+      registerCommand(first);
+      registerCommand(second);
+    });
+
+    finalizeRegistryTransaction(
+      transaction,
+      getRegistry(),
+      transactionGroupsForKey(transaction, `${site}/first`),
+    );
+    for (const key of [...firstKeys, ...secondKeys]) getRegistry().delete(key);
+
+    for (const key of firstKeys) expect(registryMutationKeys()).not.toContain(key);
+    for (const key of secondKeys) expect(registryMutationKeys()).toContain(key);
+
+    finalizeRegistryTransaction(
+      transaction,
+      getRegistry(),
+      transactionGroupsForKey(transaction, `${site}/second`),
+    );
+    for (const key of secondKeys) expect(registryMutationKeys()).not.toContain(key);
   });
 
   it('instruments a pre-existing plain global Map in place without recording existing entries', async () => {
