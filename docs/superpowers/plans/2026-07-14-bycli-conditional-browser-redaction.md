@@ -10,7 +10,7 @@
 
 **Depends on:** [bycli-plugin-wechat design](../../2026-07-14-bycli-plugin-wechat-design.md)
 
-**Produces:** The `@sovovs/bycli >=2.1.0 <3` capability required by the companion plugin plan.
+**Produces:** The `@sovovs/bycli >=2.1.0 <3.0.0` capability required by the companion plugin plan.
 
 ---
 

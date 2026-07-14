@@ -115,7 +115,7 @@ bycli-plugin-wechat/
     "wechat-article-crawler": "1.0.0"
   },
   "peerDependencies": {
-    "@sovovs/bycli": ">=2.1.0 <3"
+    "@sovovs/bycli": ">=2.1.0 <3.0.0"
   }
 }
 ```
