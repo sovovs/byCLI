@@ -44,7 +44,7 @@ function makeRealPage({ triggerRequest = true } = {}) {
     }),
   };
   vi.stubGlobal('window', {
-    location: { href: 'https://mp.weixin.qq.com/cgi-bin/appmsg?token=token-secret' },
+    location: { href: 'https://mp.weixin.qq.com/cgi-bin/appmsg' },
     fetch: originalFetch,
     XMLHttpRequest: FakeXHR,
     getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
@@ -123,5 +123,24 @@ describe('captureSearchBizFingerprint', () => {
     expect(window.fetch).toBe(originalFetch);
     expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
     expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
+  });
+
+  it('executes real cleanup after a polling error without retaining request secrets', async () => {
+    const { page, originalFetch, originalOpen } = makeRealPage({ triggerRequest: false });
+    page.evaluate.mockImplementation(async (callback, argument) => {
+      if (argument.operation === 'read') {
+        throw new Error('trigger failed after https://mp.weixin.qq.com/cgi-bin/searchbiz?token=token-secret&fingerprint=fp-secret');
+      }
+      return callback(argument);
+    });
+
+    const error = await captureSearchBizFingerprint(page, '微信派', 1_000).catch(value => value);
+
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect(window.fetch).toBe(originalFetch);
+    expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
+    expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
+    expect(JSON.stringify(window)).not.toMatch(/searchbiz|token-secret|fp-secret|cookie/i);
+    expect(page.evaluate.mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ operation: 'cleanup' }));
   });
 });
