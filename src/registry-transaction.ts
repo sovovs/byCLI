@@ -139,19 +139,23 @@ export function rollbackRegistryTransaction(
     .filter(group => !groups || groups.has(group))
     .sort((a, b) => b - a);
   for (const group of groupIds) {
-    const writes = transaction.writes.filter(write => write.group === group);
-    const lastWriteByKey = new Map<string, RegistryTransactionWrite>();
-    for (const write of writes) lastWriteByKey.set(write.key, write);
-    const ownsEntireGroup = [...lastWriteByKey.values()].every(
-      write => (state.revisions.get(write.key) ?? 0) === write.afterRevision,
-    );
-    if (!ownsEntireGroup) continue;
-    for (let index = writes.length - 1; index >= 0; index -= 1) {
-      const write = writes[index];
-      if (write.before.present) registry.set(write.key, write.before.value!);
-      else registry.delete(write.key);
-      if (write.beforeRevision === 0) state.revisions.delete(write.key);
-      else state.revisions.set(write.key, write.beforeRevision);
+    const writesByKey = new Map<string, RegistryTransactionWrite[]>();
+    for (const write of transaction.writes) {
+      if (write.group !== group) continue;
+      const writes = writesByKey.get(write.key) ?? [];
+      writes.push(write);
+      writesByKey.set(write.key, writes);
+    }
+    for (const writes of writesByKey.values()) {
+      const finalWrite = writes.at(-1)!;
+      if ((state.revisions.get(finalWrite.key) ?? 0) !== finalWrite.afterRevision) continue;
+      for (let index = writes.length - 1; index >= 0; index -= 1) {
+        const write = writes[index];
+        if (write.before.present) registry.set(write.key, write.before.value!);
+        else registry.delete(write.key);
+        if (write.beforeRevision === 0) state.revisions.delete(write.key);
+        else state.revisions.set(write.key, write.beforeRevision);
+      }
     }
   }
 }

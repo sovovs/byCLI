@@ -49,7 +49,7 @@ describe('registry transaction ownership', () => {
     expect(getRegistry().get(`${site}/latest-alias`)).toBeUndefined();
   });
 
-  it('does not ABA-rollback an external write of the same command object or its alias state', async () => {
+  it('does not ABA-rollback externally rewritten keys but restores other owned alias state', async () => {
     const site = `transaction-aba-${Date.now()}`;
     sites.push(site);
     const prior = command(site, 'prior', ['prior-alias']);
@@ -63,7 +63,7 @@ describe('registry transaction ownership', () => {
 
     expect(getRegistry().get(`${site}/list`)).toBe(reused);
     expect(getRegistry().get(`${site}/reused-alias`)).toBe(reused);
-    expect(getRegistry().get(`${site}/prior-alias`)).toBeUndefined();
+    expect(getRegistry().get(`${site}/prior-alias`)).toBe(prior);
   });
 
   it('shares transaction context and revisions across independently evaluated module copies', async () => {

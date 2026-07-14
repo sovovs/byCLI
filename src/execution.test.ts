@@ -609,6 +609,61 @@ throw new Error('fail after paused registration');
     }
   });
 
+  it('rolls back each still-owned key when one alias is externally replaced before import failure', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-partial-alias-takeover-'));
+    const site = `partial-alias-takeover-${Date.now()}`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    let markRegistered!: () => void;
+    const registered = new Promise<void>(resolve => { markRegistered = resolve; });
+    let releaseImport!: () => void;
+    const gate = new Promise<void>(resolve => { releaseImport = resolve; });
+    Object.assign(globalThis, {
+      __partialAliasRegistered: markRegistered,
+      __partialAliasGate: gate,
+    });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', aliases: ['claimed-alias', 'other-alias'],
+  access: 'read', browser: () => false, func: async () => 'failed import',
+});
+globalThis.__partialAliasRegistered();
+await globalThis.__partialAliasGate;
+throw new Error('fail after external alias takeover');
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const failingExecution = executeCommand(placeholder, {});
+      await registered;
+      const externalAlias = cli({
+        site, name: 'claimed-alias', access: 'read', browser: false,
+        func: async () => 'external alias',
+      });
+      releaseImport();
+      await expect(failingExecution).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+
+      expect(getRegistry().get(`${site}/claimed-alias`)).toBe(externalAlias);
+      expect(getRegistry().get(`${site}/list`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/old-alias`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/other-alias`)).toBeUndefined();
+    } finally {
+      releaseImport();
+      for (const name of ['list', 'old-alias', 'claimed-alias', 'other-alias']) {
+        getRegistry().delete(`${site}/${name}`);
+      }
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__partialAliasRegistered;
+      delete (globalThis as any).__partialAliasGate;
+    }
+  });
+
   it('rolls back late timed-out module writes without touching ordinary external commands', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-timeout-late-write-'));
     const site = `timeout-late-write-${Date.now()}`;
@@ -1099,7 +1154,7 @@ cli({
     const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
     const previousTimeout = process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
     process.env.BYCLI_CONFIG_DIR = root;
-    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
+    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '5000';
     const site = `poison-cache-${Date.now()}`;
     const moduleDir = path.join(root, 'clis', site);
     const successPath = path.join(moduleDir, 'success.mjs');
@@ -1125,6 +1180,7 @@ cli({ site: ${JSON.stringify(site)}, name: 'success', access: 'read', strategy: 
     registerCommand(timeout);
     try {
       await expect(executeCommand(success, {})).resolves.toBe('cached');
+      process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
       await expect(executeCommand(timeout, {})).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
       await expect(executeCommand(success, {})).resolves.toBe('cached');
 
