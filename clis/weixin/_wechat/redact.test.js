@@ -336,6 +336,41 @@ describe('plugin redaction', () => {
     expect(inspect(result).includes(secret)).toBe(false);
   });
 
+  it('does not let short low-entropy secrets corrupt ordinary object keys', () => {
+    const result = redactValue({ stage: 'download', data: 'ok' }, ['a', '1']);
+
+    expect(Object.keys(result)).toEqual(['stage', 'data']);
+    expect(result).toEqual({ stage: 'download', data: 'ok' });
+  });
+
+  it('preserves canonical array index keys while redacting their values', () => {
+    const result = redactValue(['safe', 'token-secret'], ['1', 'token-secret']);
+
+    expect(Object.keys(result)).toEqual(['0', '1']);
+    expect(result).toEqual(['safe', '[REDACTED]']);
+  });
+
+  it('keeps projected arrays intact through a JSON round trip', () => {
+    const result = redactValue(['zero', 'one'], ['1']);
+
+    expect(JSON.parse(JSON.stringify(result))).toEqual(['zero', 'one']);
+  });
+
+  it('sanitizes a string key that exactly equals a short secret', () => {
+    const result = redactValue({ x: 'safe' }, ['x']);
+
+    expect(Object.keys(result)).toEqual(['[REDACTED]']);
+    expect(result['[REDACTED]']).toBe('safe');
+  });
+
+  it('sanitizes a long secret embedded in a string key', () => {
+    const secret = 'long-credential-secret';
+    const result = redactValue({ [`prefix-${secret}-suffix`]: 'safe' }, [secret]);
+
+    expect(JSON.stringify(result).includes(secret)).toBe(false);
+    expect(inspect(result).includes(secret)).toBe(false);
+  });
+
   it('compiles candidates once for an entire nested value traversal', () => {
     const secret = ['nested', 'credential'].join('-');
     let filterReads = 0;

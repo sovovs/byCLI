@@ -271,6 +271,20 @@ function collisionSafeKey(target, key) {
     }
     return candidate;
 }
+function isCanonicalArrayIndex(target, key) {
+    if (!Array.isArray(target))
+        return false;
+    const index = Number(key);
+    return Number.isInteger(index)
+        && index >= 0
+        && index < target.length
+        && String(index) === key;
+}
+function shouldSanitizeStringKey(target, key, candidates) {
+    if (isCanonicalArrayIndex(target, key))
+        return false;
+    return redactTextWithCandidates(key, candidates) !== key;
+}
 function copyRedactedDescriptors(descriptors, target, candidates, seen, active, skippedKeys = new Set()) {
     for (const key of Reflect.ownKeys(descriptors)) {
         if (skippedKeys.has(key))
@@ -280,7 +294,7 @@ function copyRedactedDescriptors(descriptors, target, candidates, seen, active, 
             continue;
         let safeKey = key;
         if (typeof key === 'string') {
-            if (containsCandidate(key, candidates))
+            if (shouldSanitizeStringKey(target, key, candidates))
                 safeKey = REDACTION;
         }
         else if (key.description !== undefined) {
