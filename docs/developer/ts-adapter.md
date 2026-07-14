@@ -108,12 +108,32 @@ The browser predicate runs after argument defaults, coercion, validation, and
 execution. A conditional command's `func` receives `IPage | null`: it gets a
 page when the predicate returns `true` and `null` when it returns `false`.
 
+Plugins using this API require byCLI 2.1.0 or newer within the current major
+release. Declare the range in both compatibility surfaces; byCLI 2.0 does not
+provide the conditional-browser contract:
+
+`package.json`:
+
+```json
+{
+  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3" }
+}
+```
+
+`bycli-plugin.json`:
+
+```json
+{
+  "bycli": ">=2.1.0 <3"
+}
+```
+
 Conditional commands still expose browser flags such as `--window`,
 `--site-session`, and `--keep-tab`. Structured help, command listings, and the
 CLI manifest serialize the capability as `browser: "conditional"`; the
 predicate itself is never serialized. When a command is discovered from a
-precompiled manifest, byCLI hydrates the real plugin module before browser
-routing so the in-memory predicate is available.
+precompiled manifest, byCLI hydrates the adapter module for that command before
+browser routing so the in-memory predicate is available.
 
 ## Browser Session Reuse
 
@@ -147,6 +167,15 @@ The `page` parameter provides browser interaction methods:
 - `page.waitForSelector(selector)` — Wait for an element
 - `page.click(selector)` — Click an element
 - `page.type(selector, text)` — Type text into an input
+- `page.focusWindow?.()` — Bring the owned browser page to the foreground for
+  an interactive login
+
+`IPage.focusWindow()` is optional so existing page implementations remain
+compatible. On the daemon/Browser Bridge path, byCLI negotiates the
+`focus-window-v1` capability and requires Browser Bridge extension 2.1.0 or
+newer. If the capability is missing, update and reload the extension before
+retrying the login flow. Direct CDP mode implements the same operation with
+`Page.bringToFront` and does not use extension capability negotiation.
 
 ## The `kwargs` Object
 
