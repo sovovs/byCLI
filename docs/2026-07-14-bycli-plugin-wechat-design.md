@@ -33,21 +33,34 @@ bycli wechat save --fakeid <fakeid> --name <nickname> --output-dir <directory>
 
 byCLI 当前使用静态 `browser: true | false` 决定是否在执行命令前连接浏览器。为了让同一命令默认使用浏览器、但在 `--auth-source env` 时完全跳过浏览器，需要增加条件浏览器能力。
 
-建议注册形式：
+插件侧建议注册形式：
 
 ```ts
 browser: (args) => args.authSource !== 'env'
 ```
 
+注册声明与 registry 规范化后的运行时结构必须分离。注册 API 可以接受上述条件函数，但不得把函数直接存入或序列化到命令元数据。规范化结构为：
+
+```ts
+type NormalizedBrowserRequirement = true | false | 'conditional'
+
+interface NormalizedCommand {
+  browser: NormalizedBrowserRequirement
+  requiresBrowser?: (args: unknown) => boolean
+}
+```
+
+条件声明在 registry 阶段规范化为 `browser: 'conditional'` 与内部 `requiresBrowser` 谓词；静态声明只保留布尔值且没有谓词。`requiresBrowser` 是进程内执行细节，不进入 JSON、manifest 或其他对外序列化合同。
+
 要求：
 
 - 现有静态 `browser: true` 和 `browser: false` 行为保持不变。
-- Commander 完成参数解析后，再求值条件函数。
+- Commander 完成参数解析后，由 execution 层求值 `requiresBrowser(args)`；registry 规范化阶段不得提前求值。
 - 条件结果为 `true` 时创建浏览器会话并向命令函数提供 `IPage`。
 - 条件结果为 `false` 时不连接 daemon、extension 或 Chrome，并向命令函数提供 `null` page。
 - 条件命令函数签名为 `(page: IPage | null, args, debug?)`。
 - 条件命令仍显示 `--window`、`--site-session` 和 `--keep-tab` 等浏览器选项。
-- `bycli list -f json` 将浏览器需求序列化为 `"conditional"`；strategy 保持命令声明的 `COOKIE` 或 `INTERCEPT`。
+- `bycli list -f json` 和其他命令元数据序列化器只读取规范化后的 `browser`，输出 `true`、`false` 或 `"conditional"`；不得用 `!!cmd.browser`，也不得序列化 `requiresBrowser`。strategy 保持命令声明的 `COOKIE` 或 `INTERCEPT`。
 - help 明确说明 `--auth-source env` 不依赖浏览器。
 
 预计涉及：
@@ -59,6 +72,8 @@ src/commanderAdapter.ts
 src/help.ts
 src/serialization.ts
 ```
+
+另需同步 CLI 列表输出、plugin manifest/schema、相关类型、snapshot 与回归测试，确保第三态在所有对外元数据路径中含义一致。
 
 ### 3.2 独立插件
 
@@ -157,13 +172,13 @@ bycli wechat list \
   [-f table|json|yaml|plain|md|csv]
 ```
 
-插件调用 crawler 并将 `articles` 映射为行。输出列按顺序为：
+插件调用 crawler 并将 `articles` 映射为行。crawler 的 `publicArticle` 原始字段为 `{ title, url, publishedAt, digest, author }`；`output-mapper` 必须显式重排键，不能依赖原对象插入顺序。byCLI 输出列按顺序为：
 
 ```ts
 ['title', 'author', 'digest', 'publishedAt', 'url']
 ```
 
-字段缺失统一返回 `null`。`publishedAt` 保持 crawler 给出的 ISO 字符串或 `null`。
+字段缺失统一返回 `null`。`publishedAt` 保持 crawler 给出的 ISO 字符串或 `null`。`list` 不包含 `alias`；`alias` 只属于不经过 crawler 的 `search` 命令输出。
 
 插件不暴露 crawler 的 `--output` 参数，因为 byCLI adapter 的 columns 是静态合同，而 crawler 在文件模式下返回不同的确认结构。需要保存结果时，调用者使用 byCLI 格式化输出和 Shell 重定向，例如 `bycli wechat list ... -f json > result.json`。
 
@@ -180,10 +195,12 @@ bycli wechat save \
   [-f table|json|yaml|plain|md|csv]
 ```
 
+插件消费 crawler 的真实 envelope：成功项位于 `files[]`，形状为 `{ title, url, path }`；失败项位于 `errors[]`，形状为 `{ stage, title, url, message }`。crawler 不直接提供 `status` 或 `error` 字段，`output-mapper` 必须把两个数组合成为统一行。
+
 输出同时表达成功与失败，列按顺序为：
 
 ```ts
-['title', 'status', 'path', 'error', 'url']
+['title', 'status', 'stage', 'path', 'error', 'url']
 ```
 
 成功行：
@@ -192,6 +209,7 @@ bycli wechat save \
 {
   "title": "文章标题",
   "status": "saved",
+  "stage": null,
   "path": "/absolute/path/article.md",
   "error": null,
   "url": "https://mp.weixin.qq.com/s/..."
@@ -204,11 +222,17 @@ bycli wechat save \
 {
   "title": "文章标题",
   "status": "failed",
+  "stage": "download",
   "path": null,
   "error": "下载超时",
   "url": "https://mp.weixin.qq.com/s/..."
 }
 ```
+
+映射规则固定为：
+
+- `files[]`：`status = 'saved'`、`stage = null`、`error = null`，其余字段取同名字段。
+- `errors[]`：`status = 'failed'`、`stage = item.stage`、`path = null`、`error = item.message`，其余字段取同名字段。
 
 部分失败保留所有成功文件和失败明细，并保留 crawler 的退出码 `2`。
 
@@ -231,6 +255,13 @@ bycli wechat save \
   → 读取限定域名的完整 Cookie
   → search 命令额外捕获 fingerprint
 ```
+
+“已登录”采用可测试的两阶段判定，不依赖单个脆弱 DOM 选择器：
+
+1. **页面预检信号**：当前页面位于 `mp.weixin.qq.com` 的后台 `/cgi-bin/*` 路径，URL 或页面上下文中存在非空 token，且未重定向到登录页。登录二维码、登录表单等 DOM 只作为“明确未登录”的辅助信号，不能单独证明会话有效。
+2. **命令级权威信号**：真正的微信业务请求返回 HTTP 成功、可解析 JSON 且 `base_resp.ret === 0`。`search` 以自身 `search_biz` 请求为准；`list/save` 以 crawler 首次 `appmsgpublish` 请求的校验结果为准，不额外发送 `search_biz` 探针。
+
+页面预检不通过时，插件必须将登录页置于前台并等待用户登录；预检通过只允许进入命令执行，不代表最终认证成功。业务请求返回已知的未登录或会话失效响应时抛 `AuthRequiredError`；其他未知的非零 `base_resp.ret` 保留为 `CommandExecutionError`，不得把所有微信业务错误都误判为需要登录。
 
 实现约束：
 
@@ -285,6 +316,8 @@ ajax=1
 - `list` 为数组。
 - 每个输出行包含非空 `nickname` 和 `fakeid`。
 
+`base_resp.ret !== 0` 时按显式维护并由 fixture 覆盖的认证失效 code/message allowlist 分类：以 code 为主，message 只允许精确匹配规范化后的已知值；命中 allowlist 才抛 `AuthRequiredError`，未命中则抛 `CommandExecutionError`。禁止只凭非零 ret 或模糊字符串包含关系统一判为认证失败。
+
 搜索结果不做自动选择，也不默认取第一项。
 
 ## 7. crawler 子进程边界
@@ -310,9 +343,13 @@ ajax=1
 | 0 | 成功 | 返回映射后的业务行 |
 | 1 | 参数、凭证或微信接口整体失败 | 根据结构化错误区分认证失败与执行失败 |
 | 2 | 部分文章下载失败 | 返回成功与失败行，并保留 exit 2 |
-| 3 | 结果或 Markdown 写盘失败 | 抛 `CommandExecutionError`，details 保留 `crawlerExitCode: 3` |
+| 3 | 结果或 Markdown 写盘失败 | 抛 `CommandExecutionError`；错误消息或 hint 明确包含 `wechat-crawler exited with code 3` |
 
 ## 8. 错误模型
+
+本设计复用 byCLI `src/errors.ts` 已存在的 CLI typed errors 与退出码，不新增 `ErrorCode`：`ArgumentError/ARGUMENT=2`、`EmptyResultError/EMPTY_RESULT=66`、`BrowserConnectError/BROWSER_CONNECT=69`、`TimeoutError/TIMEOUT=75`、`AuthRequiredError/AUTH_REQUIRED=77`、`CommandExecutionError/COMMAND_EXEC=1`。这些 CLI 错误与 recorder/dashboard/backend envelope 使用的另一套小写 `ErrorCode` 联合类型不是同一合同，因此本次不修改 `adapter-recorder.bundle.json`、`recorder.ts` 或 backend envelope；若实施中确需新增错误类型，必须另行核对并同步全部消费者。
+
+现有 `CommandExecutionError` 没有可承诺的任意 `details` 载荷，因此插件不得依赖或新增 `crawlerExitCode` details；crawler 退出码只进入脱敏后的 message/hint 和测试断言。
 
 | 场景 | byCLI 类型 | exit |
 |---|---|---:|
@@ -321,7 +358,7 @@ ajax=1
 | 环境变量凭证缺失 | `AuthRequiredError` | 77 |
 | 微信明确返回未登录或会话失效 | `AuthRequiredError` | 77 |
 | 用户登录等待超时 | `TimeoutError` | 75 |
-| 浏览器桥不可用 | `CommandExecutionError`，提示执行 `bycli doctor` | 1 |
+| 浏览器桥不可用 | `BrowserConnectError`，提示执行 `bycli doctor` | 69 |
 | HTTP、JSON、微信业务响应或 crawler 协议异常 | `CommandExecutionError` | 1 |
 | crawler 写盘失败 | `CommandExecutionError` | 1 |
 
@@ -353,8 +390,10 @@ rand_info
 
 - 敏感值只存在于单次命令内存和 crawler 子进程环境中。
 - 不写入插件配置、byCLI cache、site memory、fixture、trace、日志、错误 details 或命令输出。
-- 错误消息和 verbose stderr 在输出前执行原值、URL 编码值和常见 header 形式的脱敏。
+- 插件构造单次命令 secret set：完整 token、fingerprint、完整 Cookie header、每个 Cookie value，以及这些值的 URL 编码形式。错误消息和 verbose stderr 在输出前使用该集合执行原值、URL 编码值和常见 header 形式的二次脱敏。
+- crawler 自身当前只按完整 token 与完整 Cookie 做脱敏，范围窄于插件的敏感清单；插件转发 stderr 或包装 crawler 错误时不得假设 crawler 输出已经安全，仍须执行上述二次脱敏。
 - 网络 trace 保留前必须删除或替换敏感请求头与参数。
+- byCLI 核心的 `src/observation/redaction.ts` 与 extension 的 `extension/src/url-redact.ts` 必须把 `fingerprint` 加入认证参数集合；否则 `search_biz?...&fingerprint=...` 仍可能进入 trace。两处规则及其序列化产物均需回归测试。
 - 不把 Cookie 放入进程参数、Shell 命令或调试命令示例。
 - 命令结束后释放浏览器 lease；如果是为登录创建的临时标签页，按 byCLI 的 keep-tab 语义决定是否关闭。
 - 凭证泄露时，文档提示用户退出微信公众平台并重新登录，使旧会话失效。
@@ -369,7 +408,9 @@ rand_info
 - `authSource=browser` 创建浏览器会话并传入 `IPage`。
 - 条件命令的 help 包含浏览器 flags。
 - `bycli list -f json` 输出 `browser: "conditional"`。
+- 条件谓词不进入 JSON/manifest；静态布尔值和 `"conditional"` 均不被真值强转破坏。
 - 条件函数抛错时映射为参数或命令执行错误，不启动 adapter。
+- observation 与 extension URL 脱敏均覆盖 `fingerprint` 的原值和 URL 编码值，trace/fixture 中不得出现秘密原文。
 
 ### 10.2 插件单元测试
 
@@ -377,6 +418,8 @@ rand_info
 
 - 已登录会话直接复用。
 - 未登录后成功登录。
+- 后台 URL、非空 token、非登录页构成页面预检通过；二维码/登录表单与登录重定向构成预检失败。
+- 页面预检通过但首次业务请求认证失效时仍抛 `AuthRequiredError`。
 - 登录等待超时。
 - Cookie 包含 HttpOnly 字段。
 - 过期或非目标域 Cookie 被过滤。
@@ -390,7 +433,7 @@ rand_info
 - fingerprint 透传。
 - 微信成功响应映射。
 - 空结果抛 `EmptyResultError`。
-- `base_resp.ret !== 0` 分类为认证或执行错误。
+- 已知认证失效 `base_resp.ret/message` 映射为 `AuthRequiredError`，未知非零响应映射为 `CommandExecutionError`。
 - 相似名称全部返回，不自动选择。
 
 子进程：
@@ -399,14 +442,17 @@ rand_info
 - 凭证只进入子进程 env。
 - stdout JSON envelope 解析。
 - stderr 脱敏。
+- crawler 仅脱敏 token/Cookie 后，插件仍能清除 fingerprint、单个 Cookie value 及 URL 编码形式。
 - 输出容量上限。
 - 超时和取消时终止进程组。
-- crawler 退出码 0、1、2、3 的映射。
+- crawler 退出码 0、1、2、3 的映射；浏览器连接失败保持 `BrowserConnectError`/69。
 
 输出：
 
 - `search/list/save` columns 名称、顺序和返回 key 完全一致。
 - 可空字段为 `null`。
+- `list` mapper 从 crawler 字段重排为静态列且不生成 `alias`。
+- `save` mapper 从 `files[]` 与 `errors[]` 合成 saved/failed 行，`errors[].message` 映射到 `error`，`errors[].stage` 得到保留。
 - `save` 部分失败同时包含 saved 和 failed 行。
 
 ### 10.3 集成与 E2E
@@ -471,11 +517,12 @@ WECHAT_TOKEN='...' WECHAT_COOKIE='...' \
 
 ## 12. 实施顺序
 
-1. 为 byCLI 增加条件浏览器注册、执行、帮助和序列化能力，并完成回归测试。
-2. 创建 `bycli-plugin-wechat` 独立插件骨架及依赖约束。
-3. 实现认证状态机和环境变量模式。
-4. 实现 `search_biz` 搜索命令。
-5. 实现安全 crawler 子进程运行器。
-6. 实现 `list` 与 `save` 输出映射和错误映射。
-7. 完成单元、集成、verify 与受控浏览器 E2E。
-8. 编写安装、登录、CI、凭证失效和安全说明。
+1. 先扩展 byCLI observation 与 extension URL 脱敏规则，覆盖 `fingerprint`，并用 trace 回归测试锁定。
+2. 建立最小插件骨架与测试 harness，然后定义并测试页面预检、命令级权威登录判据和认证失效 allowlist。
+3. 按 crawler 真实 `files[]`/`errors[]` envelope 实现 `save` 合成映射，并补齐 `list` 重排测试。
+4. 锁定浏览器桥失败为既有 `BrowserConnectError`/69，不降级为通用执行错误。
+5. 移除任意 error details 的实现假设，以脱敏后的 message/hint 表达 crawler exit 3。
+6. 在实现和测试中明确复用 CLI typed errors，不改 recorder/dashboard/backend 的另一套 `ErrorCode` 合同。
+7. 为 byCLI 增加条件浏览器注册能力，同时把运行时谓词与可序列化的 `browser: 'conditional'` 元数据分离。
+8. 在独立的 `bycli-plugin-wechat` 中完成认证、`search_biz`、安全子进程、`list/save` 命令和依赖约束的集成。
+9. 完成单元、集成、verify 与受控浏览器 E2E，并编写安装、登录、CI、凭证失效和安全说明。
