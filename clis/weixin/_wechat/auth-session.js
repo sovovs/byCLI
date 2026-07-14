@@ -9,7 +9,7 @@ const POLL_INTERVAL_MS = 500;
  * @typedef {{token: string, cookie: string, fingerprint?: string}} WechatCredentials
  * @typedef {{url: string | null, hasLoginUi: boolean}} PreflightState
  * @typedef {{timeoutMs?: number, now?: () => number}} ResolveBrowserCredentialsOptions
- * @typedef {{evaluate: Function, getCookies: Function, goto: Function, wait: Function, focusWindow?: Function}} AuthPage
+ * @typedef {Pick<import('@sovovs/bycli/types').IPage, 'evaluate' | 'getCookies' | 'goto' | 'wait' | 'focusWindow'>} AuthPage
  */
 
 /**
@@ -115,7 +115,7 @@ export async function resolveBrowserCredentials(page, options = {}) {
       if (remainingMs <= 0) {
         throw new TimeoutError('WeChat login', timeoutMs / 1000);
       }
-      await page.wait(Math.min(POLL_INTERVAL_MS, remainingMs));
+      await page.wait(Math.min(POLL_INTERVAL_MS, remainingMs) / 1000);
       state = await readPreflight(page);
     }
   }

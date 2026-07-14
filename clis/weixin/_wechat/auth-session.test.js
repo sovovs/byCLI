@@ -26,7 +26,7 @@ function makePage(options = {}) {
     }),
     getCookies: vi.fn(async () => options.cookies ?? []),
     goto: vi.fn(async () => undefined),
-    wait: vi.fn(async milliseconds => options.onWait?.(milliseconds)),
+    wait: vi.fn(async seconds => options.onWait?.(seconds)),
     focusWindow: vi.fn(async () => undefined),
   };
 }
@@ -160,7 +160,7 @@ describe('resolveBrowserCredentials', () => {
     let time = 0;
     const page = makePage({
       states: [{ url: 'https://mp.weixin.qq.com/', hasLoginUi: true }],
-      onWait: () => { time += 500; },
+      onWait: seconds => { time += seconds * 1000; },
     });
 
     await expect(resolveBrowserCredentials(page, { timeoutMs: 1_000, now: () => time }))
@@ -181,12 +181,12 @@ describe('resolveBrowserCredentials', () => {
         { url: 'https://mp.weixin.qq.com/cgi-bin/home?token=789', hasLoginUi: false },
       ],
       cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
-      onWait: milliseconds => { waits.push(milliseconds); time += milliseconds; },
+      onWait: seconds => { waits.push(seconds); time += seconds * 1000; },
     });
 
     await expect(resolveBrowserCredentials(page, { timeoutMs: 750, now: () => time }))
       .resolves.toEqual({ token: '789', cookie: 'slave_sid=sid' });
-    expect(waits).toEqual([500, 250]);
+    expect(waits).toEqual([0.5, 0.25]);
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
   });
 });

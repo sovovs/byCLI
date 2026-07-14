@@ -313,6 +313,48 @@ describe('plugin redaction', () => {
     expect(inspect(result).includes(secret)).toBe(false);
   });
 
+  it('sanitizes secret-bearing string keys in JSON and inspect output', () => {
+    const secret = ['property', 'credential'].join('-');
+    const result = redactValue({ [secret]: 'safe-value' }, [secret]);
+    const json = JSON.stringify(result);
+    const rendered = inspect(result);
+
+    expect(json.includes(secret)).toBe(false);
+    expect(rendered.includes(secret)).toBe(false);
+    expect(Object.keys(result)).toEqual(['[REDACTED]']);
+    expect(result['[REDACTED]']).toBe('safe-value');
+  });
+
+  it('resolves sanitized string-key collisions deterministically without dropping values', () => {
+    const secret = ['collision', 'credential'].join('-');
+    const input = { '[REDACTED]': 'existing', [secret]: 'sanitized' };
+    const result = redactValue(input, [secret]);
+
+    expect(Object.keys(result)).toEqual(['[REDACTED]', '[REDACTED]_2']);
+    expect(Object.values(result)).toEqual(['existing', 'sanitized']);
+    expect(JSON.stringify(result).includes(secret)).toBe(false);
+    expect(inspect(result).includes(secret)).toBe(false);
+  });
+
+  it('compiles candidates once for an entire nested value traversal', () => {
+    const secret = ['nested', 'credential'].join('-');
+    let filterReads = 0;
+    const secrets = new Proxy([secret], {
+      get(target, key, receiver) {
+        if (key === 'filter') filterReads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+
+    const result = redactValue({ first: secret, nested: [secret, { third: secret }] }, secrets);
+
+    expect(result).toEqual({
+      first: '[REDACTED]',
+      nested: ['[REDACTED]', { third: '[REDACTED]' }],
+    });
+    expect(filterReads).toBe(1);
+  });
+
   it('removes inherited and own serialization hooks without invoking them', () => {
     const secret = ['hook', 'credential'].join('-');
     let hookCalls = 0;

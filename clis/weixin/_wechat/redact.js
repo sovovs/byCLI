@@ -226,8 +226,11 @@ function stringifyWithoutHooks(value) {
 }
 /** @param {unknown} value @param {readonly string[]} secrets @returns {string} */
 export function redactText(value, secrets) {
-    const input = stringifyWithoutHooks(value);
     const candidates = candidateList(secrets);
+    return redactTextWithCandidates(value, candidates);
+}
+function redactTextWithCandidates(value, candidates) {
+    const input = stringifyWithoutHooks(value);
     if (candidates.length === 0)
         return input;
     const context = buildTextContext(input);
@@ -255,8 +258,20 @@ function containsCandidate(value, candidates) {
     }
     return false;
 }
-function copyRedactedDescriptors(descriptors, target, secrets, seen, active, skippedKeys = new Set()) {
-    let candidates;
+function collisionSafeKey(target, key) {
+    if (!Object.prototype.hasOwnProperty.call(target, key))
+        return key;
+    if (typeof key === 'symbol')
+        return Symbol();
+    let suffix = 2;
+    let candidate = `${key}_${suffix}`;
+    while (Object.prototype.hasOwnProperty.call(target, candidate)) {
+        suffix += 1;
+        candidate = `${key}_${suffix}`;
+    }
+    return candidate;
+}
+function copyRedactedDescriptors(descriptors, target, candidates, seen, active, skippedKeys = new Set()) {
     for (const key of Reflect.ownKeys(descriptors)) {
         if (skippedKeys.has(key))
             continue;
@@ -264,17 +279,21 @@ function copyRedactedDescriptors(descriptors, target, secrets, seen, active, ski
         if (!descriptor)
             continue;
         let safeKey = key;
-        if (typeof key === 'symbol' && key.description !== undefined) {
-            candidates ??= candidateList(secrets);
+        if (typeof key === 'string') {
+            if (containsCandidate(key, candidates))
+                safeKey = REDACTION;
+        }
+        else if (key.description !== undefined) {
             if (containsCandidate(key.description, candidates))
                 safeKey = Symbol();
         }
+        safeKey = collisionSafeKey(target, safeKey);
         if ('value' in descriptor) {
             Object.defineProperty(target, safeKey, {
                 configurable: true,
                 enumerable: descriptor.enumerable ?? false,
                 writable: true,
-                value: redactRecursive(descriptor.value, secrets, seen, active),
+                value: redactRecursive(descriptor.value, candidates, seen, active),
             });
         }
         else {
@@ -311,7 +330,7 @@ function inheritedErrorString(value, key) {
     }
     return '';
 }
-function defineErrorDefaults(source, descriptors, target, secrets) {
+function defineErrorDefaults(source, descriptors, target, candidates) {
     for (const key of ['name', 'message']) {
         if (Object.prototype.hasOwnProperty.call(descriptors, key))
             continue;
@@ -319,13 +338,13 @@ function defineErrorDefaults(source, descriptors, target, secrets) {
             configurable: true,
             enumerable: false,
             writable: true,
-            value: redactText(inheritedErrorString(source, key), secrets),
+            value: redactTextWithCandidates(inheritedErrorString(source, key), candidates),
         });
     }
 }
-function redactRecursive(value, secrets, seen, active) {
+function redactRecursive(value, candidates, seen, active) {
     if (typeof value === 'string')
-        return redactText(value, secrets);
+        return redactTextWithCandidates(value, candidates);
     if (typeof value === 'function')
         return FUNCTION;
     if (typeof value === 'bigint')
@@ -354,8 +373,8 @@ function redactRecursive(value, secrets, seen, active) {
         seen.set(value, output);
         active.add(value);
         if (error)
-            defineErrorDefaults(value, descriptors, output, secrets);
-        copyRedactedDescriptors(descriptors, output, secrets, seen, active, array ? new Set(['length']) : undefined);
+            defineErrorDefaults(value, descriptors, output, candidates);
+        copyRedactedDescriptors(descriptors, output, candidates, seen, active, array ? new Set(['length']) : undefined);
         active.delete(value);
         return output;
     }
@@ -367,6 +386,6 @@ function redactRecursive(value, secrets, seen, active) {
 }
 /** @param {unknown} value @param {readonly string[]} secrets @returns {unknown} */
 export function redactValue(value, secrets) {
-    return redactRecursive(value, secrets, new WeakMap(), new WeakSet());
+    const candidates = candidateList(secrets);
+    return redactRecursive(value, candidates, new WeakMap(), new WeakSet());
 }
-
