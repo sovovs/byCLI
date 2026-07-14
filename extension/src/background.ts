@@ -518,15 +518,14 @@ async function safeDetach(tabId: number): Promise<void> {
   }
 }
 
-async function removeLeaseSession(leaseKey: string): Promise<void> {
-  const existing = automationSessions.get(leaseKey);
+async function removeLeaseSession(leaseKey: string, expected = automationSessions.get(leaseKey)): Promise<void> {
+  const existing = expected;
+  if (automationSessions.get(leaseKey) !== existing) return;
   if (existing?.idleTimer) clearTimeout(existing.idleTimer);
-  if (automationSessions.get(leaseKey) === existing) {
-    deleteAutomationSession(leaseKey);
-    sessionTimeoutOverrides.delete(leaseKey);
-    sessionWindowModeOverrides.delete(leaseKey);
-    sessionLifecycleOverrides.delete(leaseKey);
-  }
+  deleteAutomationSession(leaseKey);
+  sessionTimeoutOverrides.delete(leaseKey);
+  sessionWindowModeOverrides.delete(leaseKey);
+  sessionLifecycleOverrides.delete(leaseKey);
   scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
   await persistRuntimeState();
 }
@@ -813,10 +812,14 @@ function initialTabIsAvailable(tabId: number | undefined): tabId is number {
 }
 
 async function createOwnedTabLease(leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
-  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst));
+  return withLeaseLock(leaseKey, () => createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst));
 }
 
 async function createOwnedTabLeaseUnlocked(leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
+  return withLeaseMutation(() => createOwnedTabLeaseMutationUnlocked(leaseKey, initialUrl, blankFirst));
+}
+
+async function createOwnedTabLeaseMutationUnlocked(leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
   // blankFirst (M1 P0-1): handleNavigate sets this so a NEW owned tab is created at
   // about:blank and an existing reusable tab is returned as-is (never pre-navigated
   // to the target), so the guarded navigation in handleNavigate is the only path
@@ -1188,6 +1191,10 @@ type ResolvedTab = { tabId: number; tab: chrome.tabs.Tab | null };
  * the Tab object (when available) so callers can skip a redundant chrome.tabs.get().
  */
 async function resolveTab(tabId: number | undefined, leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
+  return withLeaseLock(leaseKey, () => resolveTabUnlocked(tabId, leaseKey, initialUrl, blankFirst));
+}
+
+async function resolveTabUnlocked(tabId: number | undefined, leaseKey: string, initialUrl?: string, blankFirst = false): Promise<ResolvedTab> {
   const existingSession = automationSessions.get(leaseKey);
   // Even when an explicit tabId is provided, validate it is still debuggable.
   if (tabId !== undefined) {
@@ -1226,7 +1233,7 @@ async function resolveTab(tabId: number | undefined, leaseKey: string, initialUr
     } catch (err) {
       if (err instanceof CommandFailure) throw err;
       if (existingSession && !existingSession.owned) {
-        deleteAutomationSession(leaseKey);
+        await removeLeaseSession(leaseKey, existingSession);
         throw new CommandFailure(
           'bound_tab_gone',
           `Bound tab for session "${existingSession.session}" no longer exists.`,
@@ -1252,7 +1259,7 @@ async function resolveTab(tabId: number | undefined, leaseKey: string, initialUr
       }
     } catch (err) {
       if (err instanceof CommandFailure) throw err;
-      await removeLeaseSession(leaseKey);
+      await removeLeaseSession(leaseKey, session);
       if (!session.owned) {
         throw new CommandFailure(
           'bound_tab_gone',
@@ -1260,12 +1267,12 @@ async function resolveTab(tabId: number | undefined, leaseKey: string, initialUr
           'Run "bycli browser bind" again, then retry the command.',
         );
       }
-      return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
+      return createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst);
     }
   }
 
   if (!existingSession || (existingSession.owned && existingSession.preferredTabId === null)) {
-    return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
+    return createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst);
   }
 
   // Get (or create) the dedicated automation container
@@ -1308,27 +1315,36 @@ async function resolveTabId(tabId: number | undefined, leaseKey: string, initial
   return resolved.tabId;
 }
 
-async function listAutomationTabs(leaseKey: string): Promise<chrome.tabs.Tab[]> {
+async function resolveTabIdUnlocked(tabId: number | undefined, leaseKey: string, initialUrl?: string): Promise<number> {
+  const resolved = await resolveTabUnlocked(tabId, leaseKey, initialUrl);
+  return resolved.tabId;
+}
+
+async function listAutomationTabsUnlocked(leaseKey: string): Promise<chrome.tabs.Tab[]> {
   const session = automationSessions.get(leaseKey);
   if (!session) return [];
   if (session.preferredTabId !== null) {
     try {
       return [await chrome.tabs.get(session.preferredTabId)];
     } catch {
-      deleteAutomationSession(leaseKey);
+      await removeLeaseSession(leaseKey, session);
       return [];
     }
   }
   try {
     return await chrome.tabs.query({ windowId: session.windowId });
   } catch {
-    deleteAutomationSession(leaseKey);
+    await removeLeaseSession(leaseKey, session);
     return [];
   }
 }
 
 async function listAutomationWebTabs(leaseKey: string): Promise<chrome.tabs.Tab[]> {
-  const tabs = await listAutomationTabs(leaseKey);
+  return withLeaseLock(leaseKey, () => listAutomationWebTabsUnlocked(leaseKey));
+}
+
+async function listAutomationWebTabsUnlocked(leaseKey: string): Promise<chrome.tabs.Tab[]> {
+  const tabs = await listAutomationTabsUnlocked(leaseKey);
   return tabs.filter((tab) => isDebuggableUrl(tab.url));
 }
 
@@ -1387,7 +1403,7 @@ async function handleNavigateUnlocked(cmd: Command, leaseKey: string): Promise<R
   // below is guarded. New owned tabs are created blank-first (see
   // createOwnedTabLeaseUnlocked) so no unguarded load races ahead of arming.
   const cmdTabId = await resolveCommandTabId(cmd);
-  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url, true);
+  const resolved = await resolveTabUnlocked(cmdTabId, leaseKey, cmd.url, true);
   const tabId = resolved.tabId;
 
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
@@ -1643,7 +1659,7 @@ async function handleTabNewUnlocked(cmd: Command, leaseKey: string): Promise<Res
     return { id: cmd.id, ok: false, error: 'Blocked URL scheme -- only http:// and https:// are allowed' };
   }
   if (!automationSessions.has(leaseKey)) {
-    const created = await createOwnedTabLease(leaseKey, cmd.url);
+    const created = await createOwnedTabLeaseUnlocked(leaseKey, cmd.url);
     return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
   }
   const windowId = await getAutomationWindow(leaseKey);
@@ -1669,7 +1685,7 @@ async function handleTabCloseUnlocked(cmd: Command, leaseKey: string): Promise<R
     return boundTabMutationResult(cmd, lockedSession);
   }
   if (cmd.index !== undefined) {
-    const tabs = await listAutomationWebTabs(leaseKey);
+    const tabs = await listAutomationWebTabsUnlocked(leaseKey);
     const target = tabs[cmd.index];
     if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
     const closedPage = await identity.resolveTargetId(target.id).catch(() => undefined);
@@ -1683,7 +1699,7 @@ async function handleTabCloseUnlocked(cmd: Command, leaseKey: string): Promise<R
     return { id: cmd.id, ok: true, data: { closed: closedPage } };
   }
   const cmdTabId = await resolveCommandTabId(cmd);
-  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  const tabId = await resolveTabIdUnlocked(cmdTabId, leaseKey);
   const closedPage = await identity.resolveTargetId(tabId).catch(() => undefined);
   const currentSession = automationSessions.get(leaseKey);
   if (currentSession?.preferredTabId === tabId) {
@@ -1705,6 +1721,36 @@ function boundTabMutationResult(cmd: Command, session: TargetLease): Result {
   };
 }
 
+async function handleTabSelectUnlocked(cmd: Command, leaseKey: string): Promise<Result> {
+  const lockedSession = automationSessions.get(leaseKey);
+  if (lockedSession && !lockedSession.owned) {
+    return boundTabMutationResult(cmd, lockedSession);
+  }
+  if (cmd.index === undefined && cmd.page === undefined) {
+    return { id: cmd.id, ok: false, error: 'Missing index or page' };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  if (cmdTabId !== undefined) {
+    const session = automationSessions.get(leaseKey);
+    let tab: chrome.tabs.Tab;
+    try {
+      tab = await chrome.tabs.get(cmdTabId);
+    } catch {
+      return { id: cmd.id, ok: false, error: 'Page no longer exists' };
+    }
+    if (!session || tab.windowId !== session.windowId) {
+      return { id: cmd.id, ok: false, error: 'Page is not in the automation container' };
+    }
+    await chrome.tabs.update(cmdTabId, { active: true });
+    return pageScopedResult(cmd.id, cmdTabId, { selected: true });
+  }
+  const tabs = await listAutomationWebTabsUnlocked(leaseKey);
+  const target = tabs[cmd.index!];
+  if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
+  await chrome.tabs.update(target.id, { active: true });
+  return pageScopedResult(cmd.id, target.id, { selected: true });
+}
+
 async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
   const session = automationSessions.get(leaseKey);
   if (session && !session.owned && cmd.op !== 'list') {
@@ -1724,30 +1770,8 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
       return withLeaseLock(leaseKey, () => handleTabNewUnlocked(cmd, leaseKey));
     case 'close':
       return withLeaseLock(leaseKey, () => handleTabCloseUnlocked(cmd, leaseKey));
-    case 'select': {
-      if (cmd.index === undefined && cmd.page === undefined)
-        return { id: cmd.id, ok: false, error: 'Missing index or page' };
-      const cmdTabId = await resolveCommandTabId(cmd);
-      if (cmdTabId !== undefined) {
-        const session = automationSessions.get(leaseKey);
-        let tab: chrome.tabs.Tab;
-        try {
-          tab = await chrome.tabs.get(cmdTabId);
-        } catch {
-          return { id: cmd.id, ok: false, error: `Page no longer exists` };
-        }
-        if (!session || tab.windowId !== session.windowId) {
-          return { id: cmd.id, ok: false, error: `Page is not in the automation container` };
-        }
-        await chrome.tabs.update(cmdTabId, { active: true });
-        return pageScopedResult(cmd.id, cmdTabId, { selected: true });
-      }
-      const tabs = await listAutomationWebTabs(leaseKey);
-      const target = tabs[cmd.index!];
-      if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
-      await chrome.tabs.update(target.id, { active: true });
-      return pageScopedResult(cmd.id, target.id, { selected: true });
-    }
+    case 'select':
+      return withLeaseLock(leaseKey, () => handleTabSelectUnlocked(cmd, leaseKey));
     case 'focus':
       return withLeaseLock(leaseKey, () => handleFocusUnlocked(cmd, leaseKey));
     default:
