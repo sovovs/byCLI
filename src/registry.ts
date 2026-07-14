@@ -24,7 +24,11 @@ export interface Arg {
 }
 
 export type CommandArgs = Record<string, any>;
+export type BrowserRequirementResolver = (args: CommandArgs) => boolean;
+export type BrowserDeclaration = boolean | BrowserRequirementResolver;
+export type NormalizedBrowserRequirement = boolean | 'conditional';
 export type BrowserCommandFunc = (page: IPage, kwargs: CommandArgs, debug?: boolean) => Promise<unknown>;
+export type ConditionalBrowserCommandFunc = (page: IPage | null, kwargs: CommandArgs, debug?: boolean) => Promise<unknown>;
 export type NonBrowserCommandFunc = (kwargs: CommandArgs, debug?: boolean) => Promise<unknown>;
 export type CommandAccess = 'read' | 'write';
 export type SiteSessionMode = 'ephemeral' | 'persistent';
@@ -98,7 +102,14 @@ export interface NonBrowserCliCommand extends BaseCliCommand {
   func?: NonBrowserCommandFunc;
 }
 
-export type CliCommand = BrowserCliCommand | NonBrowserCliCommand;
+export interface ConditionalBrowserCliCommand extends BaseCliCommand {
+  /** Browser use is resolved from the final command arguments at execution time. */
+  browser: 'conditional';
+  requiresBrowser: BrowserRequirementResolver;
+  func?: ConditionalBrowserCommandFunc;
+}
+
+export type CliCommand = BrowserCliCommand | NonBrowserCliCommand | ConditionalBrowserCliCommand;
 
 /**
  * `cli()` 注册 adapter 时使用的内部预归一化命令形态。
@@ -110,9 +121,9 @@ export type CliCommand = BrowserCliCommand | NonBrowserCliCommand;
  */
 type RawCliCommand = BaseCliCommand & {
   /** 预归一化阶段的浏览器需求标记；可省略，之后会由 strategy 推导。 */
-  browser?: boolean;
-  /** 预归一化阶段的执行函数；可能是浏览器签名，也可能是非浏览器签名。 */
-  func?: BrowserCommandFunc | NonBrowserCommandFunc;
+  browser?: BrowserDeclaration;
+  /** 预归一化阶段的执行函数；具体签名由浏览器需求声明决定。 */
+  func?: BrowserCommandFunc | ConditionalBrowserCommandFunc | NonBrowserCommandFunc;
 };
 
 /** Internal extension for lazy-loaded TS modules (not exposed in public API) */
@@ -138,8 +149,11 @@ type NonBrowserCliOptions = Partial<Omit<NonBrowserCliCommand, 'args' | 'descrip
   | { browser: false }
   | { strategy: Strategy.PUBLIC | Strategy.LOCAL; browser?: false }
 );
+type ConditionalBrowserCliOptions = Partial<Omit<ConditionalBrowserCliCommand, 'args' | 'description' | 'browser' | 'requiresBrowser'>>
+  & RequiredCliOptions
+  & { browser: BrowserRequirementResolver };
 
-export type CliOptions = BrowserCliOptions | NonBrowserCliOptions;
+export type CliOptions = BrowserCliOptions | NonBrowserCliOptions | ConditionalBrowserCliOptions;
 
 // Use globalThis to ensure a single shared registry across all module instances.
 // This is critical for TS plugins loaded via npm link / peerDependency — without
@@ -203,8 +217,8 @@ function normalizeCommand(cmd: RawCliCommand): CliCommand {
   assertCommandAccess(cmd);
   assertSiteSession(cmd);
 
-  const strategy = cmd.strategy ?? (cmd.browser === false ? Strategy.PUBLIC : Strategy.COOKIE);
-  const browser = cmd.browser ?? (strategy !== Strategy.PUBLIC && strategy !== Strategy.LOCAL);
+  const declaredBrowser = cmd.browser;
+  const strategy = cmd.strategy ?? (declaredBrowser === false ? Strategy.PUBLIC : Strategy.COOKIE);
 
   let navigateBefore = cmd.navigateBefore;
   if (navigateBefore === undefined) {
@@ -217,6 +231,18 @@ function normalizeCommand(cmd: RawCliCommand): CliCommand {
       navigateBefore = true;
     }
   }
+
+  if (typeof declaredBrowser === 'function') {
+    return {
+      ...cmd,
+      strategy,
+      browser: 'conditional',
+      requiresBrowser: declaredBrowser,
+      navigateBefore,
+    } as ConditionalBrowserCliCommand;
+  }
+
+  const browser = declaredBrowser ?? (strategy !== Strategy.PUBLIC && strategy !== Strategy.LOCAL);
 
   return browser
     ? { ...cmd, strategy, browser: true, navigateBefore } as BrowserCliCommand

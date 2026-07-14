@@ -8,7 +8,16 @@
  */
 
 export { cli, Strategy, getRegistry, fullName, registerCommand } from './registry.js';
-export type { CliCommand, Arg, CliOptions, CommandArgs, SiteSessionMode } from './registry.js';
+export type {
+  CliCommand,
+  Arg,
+  CliOptions,
+  CommandArgs,
+  SiteSessionMode,
+  BrowserDeclaration,
+  BrowserRequirementResolver,
+  NormalizedBrowserRequirement,
+} from './registry.js';
 export type { IPage } from './types.js';
 export { onStartup, onBeforeExecute, onAfterExecute } from './hooks.js';
 export type { HookFn, HookContext, HookName } from './hooks.js';

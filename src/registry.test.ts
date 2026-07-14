@@ -67,6 +67,34 @@ describe('cli() registration', () => {
     expect(cmd.browser).toBe(false);
   });
 
+  it('normalizes a browser predicate without evaluating it', () => {
+    const predicate = (args: Record<string, unknown>) => args['auth-source'] !== 'env';
+    const cmd = cli({
+      site: 'wechat',
+      name: 'search',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      browser: predicate,
+      args: [{ name: 'auth-source', choices: ['browser', 'env'], default: 'browser' }],
+      func: async () => [],
+    });
+
+    expect(cmd.browser).toBe('conditional');
+    expect('requiresBrowser' in cmd && cmd.requiresBrowser).toBe(predicate);
+  });
+
+  it('preserves static browser declarations', () => {
+    const browserCommand = cli({
+      site: 'test-registry', name: 'static-browser', access: 'read', browser: true,
+    });
+    const nonBrowserCommand = cli({
+      site: 'test-registry', name: 'static-no-browser', access: 'read', browser: false,
+    });
+
+    expect(browserCommand.browser).toBe(true);
+    expect(nonBrowserCommand.browser).toBe(false);
+  });
+
   it('overwrites existing command on re-registration', () => {
     cli({ site: 'test-registry', name: 'overwrite', access: 'read', description: 'v1' });
     cli({ site: 'test-registry', name: 'overwrite', access: 'read', description: 'v2' });
