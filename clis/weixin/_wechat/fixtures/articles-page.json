@@ -1,0 +1,4 @@
+{
+  "base_resp": { "ret": 0, "err_msg": "ok" },
+  "publish_page": "{\"total_count\":2,\"publish_list\":[{\"publish_info\":\"{\\\"sent_info\\\":{\\\"time\\\":1767225600},\\\"appmsg_info\\\":[{\\\"title\\\":\\\"Synthetic article\\\",\\\"content_url\\\":\\\"https://mp.weixin.qq.com/s/synthetic\\\",\\\"digest\\\":\\\"Synthetic digest\\\",\\\"author\\\":\\\"Synthetic author\\\"}]}\"},{\"publish_info\":{\"publish_info\":{\"create_time\":1767312000},\"appmsg_info\":[{\"title\":\"Deleted article\",\"content_url\":\"https://mp.weixin.qq.com/s/deleted\",\"is_deleted\":true}]}}]}"
+}
