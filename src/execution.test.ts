@@ -9,8 +9,40 @@ import { cli, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
 import * as runtime from './runtime.js';
 import * as capRouting from './capabilityRouting.js';
+import { clearAllHooks, onAfterExecute, onBeforeExecute, type HookContext } from './hooks.js';
 
 describe('executeCommand — conditional browser routing', () => {
+  it('routes and executes with the same final args after onBeforeExecute mutates them', async () => {
+    const resolver = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
+    const func = vi.fn(async (_page: unknown, _args: Record<string, unknown>, _debug?: boolean) => []);
+    const mockPage = { closeWindow: vi.fn().mockResolvedValue(undefined) } as any;
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => fn(mockPage));
+    let hookArgs: Record<string, unknown> | undefined;
+    onBeforeExecute((ctx) => {
+      ctx.args = { ...ctx.args, 'auth-source': 'env' };
+      hookArgs = ctx.args;
+    });
+    const cmd = cli({
+      site: 'test-execution', name: 'conditional-hook-mutation', access: 'read',
+      browser: resolver,
+      args: [{ name: 'auth-source', default: 'browser', choices: ['browser', 'env'] }],
+      func,
+    });
+
+    try {
+      await executeCommand(cmd, {});
+
+      expect(resolver).toHaveBeenCalledOnce();
+      expect(resolver.mock.calls[0]?.[0]).toBe(hookArgs);
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(func.mock.calls[0]?.[1]).toBe(hookArgs);
+      expect(func).toHaveBeenCalledWith(null, { 'auth-source': 'env' }, false);
+    } finally {
+      clearAllHooks();
+      vi.restoreAllMocks();
+    }
+  });
+
   it('resolves after defaults and skips the browser for environment authentication', async () => {
     const resolver = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
     const func = vi.fn(async () => []);
@@ -78,6 +110,10 @@ describe('executeCommand — conditional browser routing', () => {
 
   it('preserves typed errors thrown by a browser requirement resolver', async () => {
     const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+    const before = vi.fn();
+    let afterContext: HookContext | undefined;
+    onBeforeExecute(before);
+    onAfterExecute((ctx) => { afterContext = ctx; });
     const cmd = cli({
       site: 'test-execution',
       name: 'conditional-typed-error',
@@ -87,15 +123,23 @@ describe('executeCommand — conditional browser routing', () => {
     });
 
     try {
-      await expect(executeCommand(cmd, {})).rejects.toMatchObject({ code: 'ARGUMENT', exitCode: 2 });
+      const error = await executeCommand(cmd, {}).catch((caught) => caught);
+      expect(error).toMatchObject({ code: 'ARGUMENT', exitCode: 2 });
+      expect(before).toHaveBeenCalledOnce();
+      expect(afterContext).toMatchObject({ error, finishedAt: expect.any(Number) });
       expect(browserSessionSpy).not.toHaveBeenCalled();
     } finally {
+      clearAllHooks();
       vi.restoreAllMocks();
     }
   });
 
   it('wraps unknown browser requirement resolver failures as command execution errors', async () => {
     const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+    const before = vi.fn();
+    let afterContext: HookContext | undefined;
+    onBeforeExecute(before);
+    onAfterExecute((ctx) => { afterContext = ctx; });
     const cmd = cli({
       site: 'test-execution',
       name: 'conditional-unknown-error',
@@ -105,9 +149,13 @@ describe('executeCommand — conditional browser routing', () => {
     });
 
     try {
-      await expect(executeCommand(cmd, {})).rejects.toMatchObject({ code: 'COMMAND_EXEC', exitCode: 1 });
+      const error = await executeCommand(cmd, {}).catch((caught) => caught);
+      expect(error).toMatchObject({ code: 'COMMAND_EXEC', exitCode: 1 });
+      expect(before).toHaveBeenCalledOnce();
+      expect(afterContext).toMatchObject({ error, finishedAt: expect.any(Number) });
       expect(browserSessionSpy).not.toHaveBeenCalled();
     } finally {
+      clearAllHooks();
       vi.restoreAllMocks();
     }
   });

@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { Strategy, type CliCommand } from './registry.js';
+import {
+  Strategy,
+  type BrowserCliCommand,
+  type CliCommand,
+  type ConditionalBrowserCliCommand,
+  type NonBrowserCliCommand,
+} from './registry.js';
 import { BROWSER_ONLY_STEPS, _validateBrowserOnlyStepsAgainstRegistry, shouldUseBrowserSession } from './capabilityRouting.js';
 import { getRegisteredStepNames } from './pipeline/registry.js';
 
+function makeCmd(partial: Partial<CliCommand> & { browser: true }): BrowserCliCommand;
+function makeCmd(partial: Partial<CliCommand> & { browser: false }): NonBrowserCliCommand;
+function makeCmd(partial: Partial<CliCommand> & { browser: 'conditional' }): ConditionalBrowserCliCommand;
 function makeCmd(partial: Partial<CliCommand>): CliCommand {
   return {
     site: 'test',
@@ -24,6 +33,26 @@ describe('shouldUseBrowserSession', () => {
 
     expect(shouldUseBrowserSession(cmd, false)).toBe(false);
     expect(shouldUseBrowserSession(cmd, true)).toBe(true);
+  });
+
+  it('rejects an unresolved conditional command when the API is bypassed', () => {
+    const cmd = makeCmd({
+      browser: 'conditional',
+      requiresBrowser: () => false,
+      strategy: Strategy.COOKIE,
+      func: async () => [],
+    });
+
+    // @ts-expect-error conditional commands require an explicit resolved browser result
+    expect(() => shouldUseBrowserSession(cmd)).toThrow(/must be resolved/i);
+  });
+
+  it('keeps one-argument routing available for static commands', () => {
+    const browser = makeCmd({ browser: true, func: async () => [] });
+    const noBrowser = makeCmd({ browser: false, func: async () => [] });
+
+    expect(shouldUseBrowserSession(browser)).toBe(true);
+    expect(shouldUseBrowserSession(noBrowser)).toBe(false);
   });
 
   it('skips browser session for public fetch-only pipelines', () => {

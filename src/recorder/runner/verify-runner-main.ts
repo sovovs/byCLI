@@ -26,6 +26,7 @@ import {
   type ConditionalBrowserCliCommand,
   type InternalCliCommand,
 } from '../../registry.js';
+import { prepareCommandArgs } from '../../execution.js';
 import type { RunnerEvent, RunnerResultEvent } from '@sovovs/bycli-recorder-core';
 
 /** Parsed input.json (written by RunnerPort; raw seed args are execution-only). */
@@ -187,17 +188,18 @@ export async function executeAdapterForVerify(
   }
 
   try {
+    const preparedArgs = prepareCommandArgs(command, opts.seedArgs);
     let rows: unknown;
     if (command.browser === false) {
-      rows = await command.func(opts.seedArgs, false);
+      rows = await command.func(preparedArgs, false);
     } else if (command.browser === 'conditional') {
-      const browserRequired = Boolean(command.requiresBrowser(opts.seedArgs));
+      const browserRequired = Boolean(command.requiresBrowser(preparedArgs));
       if (!browserRequired) {
-        rows = await command.func(null, opts.seedArgs, false);
+        rows = await command.func(null, preparedArgs, false);
       } else {
         const runner = opts.browserRunner ?? defaultBrowserAdapterRunner;
         rows = await runner(command, {
-          seedArgs: opts.seedArgs,
+          seedArgs: preparedArgs,
           contextId: opts.contextId,
           preNavUrl: typeof command.navigateBefore === 'string' ? command.navigateBefore : null,
         });
@@ -208,7 +210,7 @@ export async function executeAdapterForVerify(
       // `true`/`undefined` mean "adapter handles its own navigation".
       const runner = opts.browserRunner ?? defaultBrowserAdapterRunner;
       rows = await runner(command, {
-        seedArgs: opts.seedArgs,
+        seedArgs: preparedArgs,
         contextId: opts.contextId,
         preNavUrl: typeof command.navigateBefore === 'string' ? command.navigateBefore : null,
       });

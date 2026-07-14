@@ -233,9 +233,6 @@ export async function executeCommand(
     throw new ArgumentError(getErrorMessage(err));
   }
 
-  const resolvedBrowser = resolveBrowserRequirement(cmd, kwargs);
-
-  const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
   const traceMode = normalizeTraceMode(opts.trace);
 
   const hookCtx: HookContext = {
@@ -244,9 +241,12 @@ export async function executeCommand(
     startedAt: Date.now(),
   };
   await emitHook('onBeforeExecute', hookCtx);
+  kwargs = hookCtx.args;
 
   let result: unknown;
   try {
+    const resolvedBrowser = resolveBrowserRequirement(cmd, kwargs);
+    const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
     if (shouldUseBrowserSession(cmd, resolvedBrowser)) {
       const electron = isElectronApp(cmd.site);
       let cdpEndpoint: string | undefined;

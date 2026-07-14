@@ -1,4 +1,5 @@
-import type { CliCommand } from './registry.js';
+import type { BrowserCliCommand, CliCommand, NonBrowserCliCommand } from './registry.js';
+import { CommandExecutionError } from './errors.js';
 import { getRegisteredStepNames } from './pipeline/registry.js';
 
 /**
@@ -43,11 +44,19 @@ function pipelineNeedsBrowserSession(pipeline: Record<string, unknown>[]): boole
   });
 }
 
-export function shouldUseBrowserSession(
-  cmd: CliCommand,
-  resolvedBrowser: boolean = cmd.browser !== false,
-): boolean {
-  if (!resolvedBrowser) return false;
+export function shouldUseBrowserSession(cmd: BrowserCliCommand | NonBrowserCliCommand): boolean;
+export function shouldUseBrowserSession(cmd: CliCommand, resolvedBrowser: boolean): boolean;
+export function shouldUseBrowserSession(cmd: CliCommand, resolvedBrowser?: boolean): boolean {
+  let browserRequired = resolvedBrowser;
+  if (browserRequired === undefined) {
+    if (cmd.browser === 'conditional') {
+      throw new CommandExecutionError(
+        `Conditional browser requirement for ${cmd.site}/${cmd.name} must be resolved before capability routing`,
+      );
+    }
+    browserRequired = cmd.browser;
+  }
+  if (!browserRequired) return false;
   if (cmd.func) return true;
   if (!cmd.pipeline || cmd.pipeline.length === 0) return true;
   // normalizeCommand sets navigateBefore to a URL string (needs pre-nav) or

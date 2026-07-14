@@ -15,7 +15,7 @@ const baseInput = (over: Partial<RunnerInput> = {}): RunnerInput => ({
 describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser)', () => {
   it('runs a non-browser adapter and reports rows + fieldCount', async () => {
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
-      func: async () => [{ title: 'a' }, { title: 'b' }] } as unknown as CliCommand;
+      args: [], func: async () => [{ title: 'a' }, { title: 'b' }] } as unknown as CliCommand;
     const r = await executeAdapterForVerify(command, { name: 'demo/search', fixture: 'ignore', seedArgs: {} });
     expect(r.ok).toBe(true);
     expect(r.data.stage).toBe('execute');
@@ -27,7 +27,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
   it('passes seed args through to the adapter func', async () => {
     let received: unknown;
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
-      func: async (args: unknown) => { received = args; return [{ q: 'x' }]; } } as unknown as CliCommand;
+      args: [], func: async (args: unknown) => { received = args; return [{ q: 'x' }]; } } as unknown as CliCommand;
     await executeAdapterForVerify(command, { name: 'demo/search', seedArgs: { keyword: '张三' } });
     expect(received).toEqual({ keyword: '张三' });
   });
@@ -38,40 +38,55 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
     const browserRunner = vi.fn<BrowserAdapterRunner>();
     const command = cli({
       site: 'verify-conditional', name: 'env', access: 'read',
-      browser: resolver, func,
+      browser: resolver,
+      args: [
+        { name: 'auth-source', default: 'env', choices: ['browser', 'env'] },
+        { name: 'limit', type: 'int' },
+      ],
+      func,
     });
 
     const r = await executeAdapterForVerify(command, {
-      name: 'verify-conditional/env', seedArgs: { 'auth-source': 'env' }, browserRunner,
+      name: 'verify-conditional/env', seedArgs: { limit: '5' }, browserRunner,
     });
 
     expect(r.ok).toBe(true);
     expect(resolver).toHaveBeenCalledOnce();
-    expect(resolver).toHaveBeenCalledWith({ 'auth-source': 'env' });
+    expect(resolver).toHaveBeenCalledWith({ 'auth-source': 'env', limit: 5 });
     expect(browserRunner).not.toHaveBeenCalled();
-    expect(func).toHaveBeenCalledWith(null, { 'auth-source': 'env' }, false);
+    expect(func).toHaveBeenCalledWith(null, { 'auth-source': 'env', limit: 5 }, false);
+    expect(func.mock.calls[0]?.[1]).toBe(resolver.mock.calls[0]?.[0]);
   });
 
   it('evaluates a conditional resolver once and runs its function with a page through browserRunner', async () => {
-    const resolver = vi.fn(() => true);
+    const resolver = vi.fn((args: Record<string, unknown>) => args['browser-enabled'] === true);
     const func = vi.fn(async (_page: unknown, _args: Record<string, unknown>, _debug?: boolean) => []);
     const mockPage = { marker: 'page' } as any;
+    let runnerArgs: Record<string, unknown> | undefined;
     const browserRunner: BrowserAdapterRunner = vi.fn(async (browserCommand, opts) => {
+      runnerArgs = opts.seedArgs;
       return browserCommand.func!(mockPage, opts.seedArgs, false);
     });
     const command = cli({
       site: 'verify-conditional', name: 'browser', access: 'read',
-      browser: resolver, func,
+      browser: resolver,
+      args: [
+        { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
+        { name: 'browser-enabled', type: 'boolean' },
+      ],
+      func,
     });
 
     const r = await executeAdapterForVerify(command, {
-      name: 'verify-conditional/browser', seedArgs: { 'auth-source': 'browser' }, browserRunner,
+      name: 'verify-conditional/browser', seedArgs: { 'browser-enabled': 'true' }, browserRunner,
     });
 
     expect(r.ok).toBe(true);
     expect(resolver).toHaveBeenCalledOnce();
+    expect(resolver).toHaveBeenCalledWith({ 'auth-source': 'browser', 'browser-enabled': true });
     expect(browserRunner).toHaveBeenCalledOnce();
-    expect(func).toHaveBeenCalledWith(mockPage, { 'auth-source': 'browser' }, false);
+    expect(runnerArgs).toBe(resolver.mock.calls[0]?.[0]);
+    expect(func).toHaveBeenCalledWith(mockPage, { 'auth-source': 'browser', 'browser-enabled': true }, false);
   });
 
   it('preserves a typed conditional resolver error code in the verify envelope', async () => {
@@ -100,10 +115,30 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
     if (!r.ok) expect(r.error).toMatchObject({ code: 'adapter_runtime_error', message: 'predicate bug' });
   });
 
+  it('returns the typed argument envelope when seed argument preparation fails', async () => {
+    const resolver = vi.fn(() => false);
+    const func = vi.fn(async () => []);
+    const command = cli({
+      site: 'verify-conditional', name: 'invalid-seed', access: 'read',
+      browser: resolver,
+      args: [{ name: 'limit', type: 'int' }],
+      func,
+    });
+
+    const r = await executeAdapterForVerify(command, {
+      name: 'verify-conditional/invalid-seed', seedArgs: { limit: 'not-a-number' },
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatchObject({ code: 'ARGUMENT' });
+    expect(resolver).not.toHaveBeenCalled();
+    expect(func).not.toHaveBeenCalled();
+  });
+
   it('browser adapter → runs via injected browserRunner (M6b), reports rows + fieldCount', async () => {
     // The runner owns the Page; the adapter func must NOT be called directly here.
     const command = { site: 'demo', name: 'x', access: 'read', browser: true,
-      func: async () => { throw new Error('func must go through the page-bearing browserRunner'); } } as unknown as CliCommand;
+      args: [], func: async () => { throw new Error('func must go through the page-bearing browserRunner'); } } as unknown as CliCommand;
     let seen: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null } | undefined;
     const browserRunner = async (_cmd: unknown, o: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null }) => { seen = o; return [{ title: 'a' }, { title: 'b' }]; };
     const r = await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: { q: 'hi' }, browserRunner });
@@ -114,7 +149,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
   });
 
   it('string navigateBefore → preNavUrl passed to runner; true/undefined → null', async () => {
-    const mk = (navigateBefore: unknown) => ({ site: 'demo', name: 'x', access: 'read', browser: true, navigateBefore,
+    const mk = (navigateBefore: unknown) => ({ site: 'demo', name: 'x', access: 'read', browser: true, args: [], navigateBefore,
       func: async () => [] } as unknown as CliCommand);
     let preNavUrl: string | null | undefined;
     const browserRunner = async (_c: unknown, o: { preNavUrl: string | null }) => { preNavUrl = o.preNavUrl; return []; };
@@ -127,7 +162,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
   });
 
   it('passes contextId through to the browserRunner', async () => {
-    const command = { site: 'demo', name: 'x', access: 'read', browser: true, func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     let ctx: string | undefined = 'unset';
     const browserRunner = async (_c: unknown, o: { contextId?: string }) => { ctx = o.contextId; return []; };
     await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: {}, contextId: 'work', browserRunner });
@@ -135,7 +170,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
   });
 
   it('omitted browser flag is treated as browser → goes through browserRunner', async () => {
-    const command = { site: 'demo', name: 'x', access: 'read', func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', args: [], func: async () => [] } as unknown as CliCommand;
     let called = false;
     const browserRunner = async () => { called = true; return [{ a: 1 }]; };
     const r = await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: {}, browserRunner });
@@ -144,7 +179,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
   });
 
   it('browser adapter error preserves its code (e.g. auth_required)', async () => {
-    const command = { site: 'demo', name: 'x', access: 'read', browser: true, func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     const browserRunner = async () => { throw Object.assign(new Error('login'), { code: 'auth_required' }); };
     const r = await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: {}, browserRunner });
     expect(r.ok).toBe(false);
@@ -165,7 +200,7 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
 
   it('adapter func throwing a plain error → adapter_runtime_error', async () => {
     const command = { site: 'demo', name: 'x', access: 'read', browser: false,
-      func: async () => { throw new Error('boom'); } } as unknown as CliCommand;
+      args: [], func: async () => { throw new Error('boom'); } } as unknown as CliCommand;
     const r = await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: {} });
     expect(r.ok).toBe(false);
     if (!r.ok) {
@@ -176,14 +211,14 @@ describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser
 
   it('adapter func throwing an error WITH a code preserves that code (e.g. auth_required)', async () => {
     const command = { site: 'demo', name: 'x', access: 'read', browser: false,
-      func: async () => { throw Object.assign(new Error('login'), { code: 'auth_required' }); } } as unknown as CliCommand;
+      args: [], func: async () => { throw Object.assign(new Error('login'), { code: 'auth_required' }); } } as unknown as CliCommand;
     const r = await executeAdapterForVerify(command, { name: 'demo/x', seedArgs: {} });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('auth_required');
   });
 
   it('update fixture policy → fixture.status updated', async () => {
-    const command = { site: 'demo', name: 'x', access: 'read', browser: false, func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', browser: false, args: [], func: async () => [] } as unknown as CliCommand;
     const r = await executeAdapterForVerify(command, { name: 'demo/x', fixture: 'update', seedArgs: {} });
     expect(r.data.fixture).toEqual({ status: 'updated' });
   });
@@ -193,7 +228,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
   it('emits started then a success result for a non-browser adapter', async () => {
     const events: RunnerEvent[] = [];
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
-      func: async () => [{ title: 'a' }] } as unknown as CliCommand;
+      args: [], func: async () => [{ title: 'a' }] } as unknown as CliCommand;
     await runVerifyRunner(baseInput(), (e) => events.push(e), async () => command);
 
     expect(events[0].type).toBe('started');
@@ -234,7 +269,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
   it('does not leak raw seed args into emitted events', async () => {
     const events: RunnerEvent[] = [];
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
-      func: async () => [{ title: 'a' }] } as unknown as CliCommand;
+      args: [], func: async () => [{ title: 'a' }] } as unknown as CliCommand;
     await runVerifyRunner(baseInput({ executionSeedArgs: { secret: 'TOPSECRET-TOKEN' } }),
       (e) => events.push(e), async () => command);
     expect(JSON.stringify(events)).not.toContain('TOPSECRET-TOKEN');
@@ -242,7 +277,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
 
   it('threads the injected browserRunner through to a browser adapter (M6b)', async () => {
     const events: RunnerEvent[] = [];
-    const command = { site: 'demo', name: 'x', access: 'read', browser: true, func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     let called = false;
     const browserRunner = async () => { called = true; return [{ title: 'a' }]; };
     await runVerifyRunner(baseInput({ name: 'demo/x' }), (e) => events.push(e), async () => command, browserRunner);
@@ -253,7 +288,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
   });
 
   it('threads contextId from input.json into the browserRunner (M6b)', async () => {
-    const command = { site: 'demo', name: 'x', access: 'read', browser: true, func: async () => [] } as unknown as CliCommand;
+    const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     let ctx: string | undefined = 'unset';
     const browserRunner = async (_c: unknown, o: { contextId?: string }) => { ctx = o.contextId; return []; };
     await runVerifyRunner(baseInput({ name: 'demo/x', contextId: 'profileA' }), () => {}, async () => command, browserRunner);
