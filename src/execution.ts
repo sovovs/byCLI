@@ -37,6 +37,14 @@ import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 import { ObservationSession, exportObservationSession, type ObservationExportResult, type ObservationExportStatus } from './observation/index.js';
 import { resolveAdapterSourcePath } from './adapter-source.js';
 import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
+import {
+  capturedRegistryValues,
+  createRegistryTransaction,
+  rollbackRegistryTransaction,
+  runRegistryTransaction,
+  transactionGroupsForKey,
+  type RegistryTransaction,
+} from './registry-transaction.js';
 
 interface ModuleLoadEntry {
   promise: Promise<void>;
@@ -44,16 +52,7 @@ interface ModuleLoadEntry {
   generation: number;
   /** Commands registered by this exact import generation. */
   registeredCommands: Map<string, CliCommand>;
-  registryDelta: RegistryDeltaEntry[];
-  rolledBack: boolean;
-}
-
-interface RegistryDeltaEntry {
-  key: string;
-  hadBefore: boolean;
-  before: CliCommand | undefined;
-  hadAfter: boolean;
-  after: CliCommand | undefined;
+  transaction: RegistryTransaction;
 }
 
 const _loadedModules = new Map<string, ModuleLoadEntry>();
@@ -172,48 +171,22 @@ function moduleFingerprint(modulePath: string): string | undefined {
   }
 }
 
-function captureRegistryDelta(before: Map<string, CliCommand>): RegistryDeltaEntry[] {
-  const registry = getRegistry();
-  const keys = new Set([...before.keys(), ...registry.keys()]);
-  const delta: RegistryDeltaEntry[] = [];
-  for (const key of keys) {
-    const hadBefore = before.has(key);
-    const hadAfter = registry.has(key);
-    const beforeValue = before.get(key);
-    const afterValue = registry.get(key);
-    if (hadBefore === hadAfter && beforeValue === afterValue) continue;
-    delta.push({ key, hadBefore, before: beforeValue, hadAfter, after: afterValue });
-  }
-  return delta;
+function refreshCapturedCommands(entry: ModuleLoadEntry): void {
+  entry.registeredCommands = capturedRegistryValues(entry.transaction);
 }
 
-function rollbackRegistryDelta(entry: ModuleLoadEntry): void {
-  if (entry.rolledBack) return;
-  const registry = getRegistry();
-  for (const change of entry.registryDelta) {
-    const currentMatchesAfter = change.hadAfter
-      ? registry.has(change.key) && registry.get(change.key) === change.after
-      : !registry.has(change.key);
-    if (!currentMatchesAfter) continue;
-    if (change.hadBefore) registry.set(change.key, change.before!);
-    else registry.delete(change.key);
-  }
-  entry.rolledBack = true;
+function rollbackImport(entry: ModuleLoadEntry): void {
+  rollbackRegistryTransaction(entry.transaction, getRegistry());
 }
 
-function recordRegistryDelta(entry: ModuleLoadEntry, before: Map<string, CliCommand>): void {
-  entry.registryDelta = captureRegistryDelta(before);
-  entry.rolledBack = false;
-  entry.registeredCommands.clear();
-  for (const change of entry.registryDelta) {
-    if (change.hadAfter && change.after) entry.registeredCommands.set(change.key, change.after);
-  }
+function rollbackCommandRegistration(entry: ModuleLoadEntry, key: string): void {
+  const groups = transactionGroupsForKey(entry.transaction, key);
+  rollbackRegistryTransaction(entry.transaction, getRegistry(), groups);
 }
 
 async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
   if (_registrationImportsPoisoned) throw poisonedImportError();
-  const registryBefore = new Map(getRegistry());
-  const settlement = import(importUrl).then(
+  const settlement = runRegistryTransaction(entry.transaction, () => import(importUrl)).then(
     () => ({ ok: true as const }),
     (error: unknown) => ({ ok: false as const, error }),
   );
@@ -224,11 +197,10 @@ async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: stri
   const outcome = await Promise.race([settlement, timeout]);
   if ('timeout' in outcome) {
     _registrationImportsPoisoned = true;
-    recordRegistryDelta(entry, registryBefore);
-    rollbackRegistryDelta(entry);
+    rollbackImport(entry);
     void settlement.then(() => {
-      recordRegistryDelta(entry, registryBefore);
-      rollbackRegistryDelta(entry);
+      refreshCapturedCommands(entry);
+      rollbackImport(entry);
     });
     throw adapterLoadError(
       `Adapter module ${modulePath} registration timed out after ${adapterImportTimeoutMs()}ms.`,
@@ -236,9 +208,9 @@ async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: stri
     );
   }
   if (timeoutId) clearTimeout(timeoutId);
-  recordRegistryDelta(entry, registryBefore);
+  refreshCapturedCommands(entry);
   if (!outcome.ok) {
-    rollbackRegistryDelta(entry);
+    rollbackImport(entry);
     throw adapterLoadError(
       `Failed to load adapter module ${modulePath}: ${getErrorMessage(outcome.error)}`,
       'Check that the adapter file exists and has no syntax errors.',
@@ -276,8 +248,7 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadE
       fingerprint,
       generation,
       registeredCommands: new Map(),
-      registryDelta: [],
-      rolledBack: false,
+      transaction: createRegistryTransaction(),
     };
     createdEntry.promise = scheduleRegistrationImport(createdEntry, importUrl, modulePath).catch((error) => {
       invalidateLazyModule(modulePath, createdEntry);
@@ -315,7 +286,7 @@ function assertMatchingArgSchema(
     const moduleSchema = canonicalizeManifestArgSchema(hydrated.args, `Hydrated command ${key}`);
     if (manifestSchema === moduleSchema) return;
   } catch (error) {
-    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
     invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
     if (!(error instanceof ManifestSchemaError)) throw error;
     throw new CommandExecutionError(
@@ -323,7 +294,7 @@ function assertMatchingArgSchema(
       'Use only JSON-safe defaults and string choices, then rebuild the CLI manifest.',
     );
   }
-  if (loadedEntry) rollbackRegistryDelta(loadedEntry);
+  if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
   invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
   throw new CommandExecutionError(
     `Conditional adapter ${key} argument schema does not match its manifest`,
@@ -358,7 +329,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || fullName(hydrated) !== key
     || hydrated.browser !== 'conditional';
   if (invalidReplacement) {
-    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
     invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
@@ -373,7 +344,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || hydratedInternal._lazy === true
     || hydratedInternal._modulePath !== undefined
   ) {
-    if (loadedEntry) rollbackRegistryDelta(loadedEntry);
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
     invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,

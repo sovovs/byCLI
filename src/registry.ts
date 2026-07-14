@@ -3,6 +3,7 @@
  */
 
 import type { IPage } from './types.js';
+import { recordRegistryMutation, withRegistryMutationGroup } from './registry-transaction.js';
 
 export enum Strategy {
   PUBLIC = 'public',
@@ -337,19 +338,34 @@ export function registerCommand(cmd: RawCliCommand | CliCommand): void {
 }
 
 function registerCommandInput(cmd: RawCliCommand | CliCommand): void {
-  assertCommandAccess(cmd);
-  assertSiteSession(cmd);
+  withRegistryMutationGroup(() => {
+    assertCommandAccess(cmd);
+    assertSiteSession(cmd);
 
-  if (cmd.browser === 'conditional') {
-    if (typeof cmd.requiresBrowser !== 'function') {
-      const key = `${cmd.site}/${cmd.name}`;
-      throw new Error(`Command ${key} requiresBrowser must be a function`);
+    if (cmd.browser === 'conditional') {
+      if (typeof cmd.requiresBrowser !== 'function') {
+        const key = `${cmd.site}/${cmd.name}`;
+        throw new Error(`Command ${key} requiresBrowser must be a function`);
+      }
+      insertNormalizedCommand(cmd);
+      return;
     }
-    insertNormalizedCommand(cmd);
-    return;
-  }
 
-  insertNormalizedCommand(normalizeCommand(cmd));
+    insertNormalizedCommand(normalizeCommand(cmd));
+  });
+}
+
+function setRegistryValue(key: string, value: CliCommand): void {
+  const before = { present: _registry.has(key), value: _registry.get(key) };
+  recordRegistryMutation(key, before, { present: true, value });
+  _registry.set(key, value);
+}
+
+function deleteRegistryValue(key: string): void {
+  const before = { present: _registry.has(key), value: _registry.get(key) };
+  if (!before.present) return;
+  recordRegistryMutation(key, before, { present: false, value: undefined });
+  _registry.delete(key);
 }
 
 function insertNormalizedCommand(normalized: CliCommand): void {
@@ -357,15 +373,15 @@ function insertNormalizedCommand(normalized: CliCommand): void {
   const existing = _registry.get(canonicalKey);
   if (existing?.aliases) {
     for (const alias of existing.aliases) {
-      _registry.delete(`${existing.site}/${alias}`);
+      deleteRegistryValue(`${existing.site}/${alias}`);
     }
   }
 
   const aliases = normalizeAliases(normalized.aliases, normalized.name);
   normalized.aliases = aliases.length > 0 ? aliases : undefined;
-  _registry.set(canonicalKey, normalized);
+  setRegistryValue(canonicalKey, normalized);
   for (const alias of aliases) {
-    _registry.set(`${normalized.site}/${alias}`, normalized);
+    setRegistryValue(`${normalized.site}/${alias}`, normalized);
   }
 }
 

@@ -314,6 +314,77 @@ cli({ site: ${JSON.stringify(site)}, name: 'status', access: 'read', browser: ()
     }
   });
 
+  it('isolates malformed rollback from an overlapping failing module transaction', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-overlap-rollback-'));
+    const firstSite = `overlap-first-${Date.now()}`;
+    const secondSite = `overlap-second-${Date.now()}`;
+    const firstPath = path.join(root, 'first.mjs');
+    const secondPath = path.join(root, 'second.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    let markSecondStarted!: () => void;
+    const secondStarted = new Promise<void>(resolve => { markSecondStarted = resolve; });
+    let releaseSecond!: () => void;
+    const secondGate = new Promise<void>(resolve => { releaseSecond = resolve; });
+    Object.assign(globalThis, { __overlapSecondStarted: markSecondStarted, __overlapSecondGate: secondGate });
+    fs.writeFileSync(firstPath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+cli({ site: ${JSON.stringify(firstSite)}, name: 'list', aliases: ['bad-first'], access: 'read', strategy: Strategy.PUBLIC, browser: false, func: async () => 'bad' });
+`);
+    fs.writeFileSync(secondPath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__overlapSecondStarted();
+await globalThis.__overlapSecondGate;
+cli({ site: ${JSON.stringify(secondSite)}, name: 'list', aliases: ['bad-second'], access: 'read', browser: () => false, func: async () => 'bad' });
+throw new Error('second import failure');
+`);
+    const first: InternalCliCommand = {
+      site: firstSite, name: 'list', aliases: ['prior-first'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: firstPath, _hydrateBeforeBrowserRouting: true,
+    };
+    const second: InternalCliCommand = {
+      site: secondSite, name: 'list', aliases: ['prior-second'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: secondPath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(first);
+    registerCommand(second);
+
+    try {
+      const firstExecution = executeCommand(first, {}).catch(error => error);
+      const secondExecution = executeCommand(second, {}).catch(error => error);
+      await secondStarted;
+      await expect(firstExecution).resolves.toMatchObject({ code: 'COMMAND_EXEC' });
+      expect(getRegistry().get(`${firstSite}/list`)).toBe(first);
+      expect(getRegistry().get(`${firstSite}/prior-first`)).toBe(first);
+      expect(getRegistry().get(`${firstSite}/bad-first`)).toBeUndefined();
+
+      releaseSecond();
+      await expect(secondExecution).resolves.toMatchObject({ code: 'ADAPTER_LOAD' });
+      expect(getRegistry().get(`${secondSite}/list`)).toBe(second);
+      expect(getRegistry().get(`${secondSite}/prior-second`)).toBe(second);
+      expect(getRegistry().get(`${secondSite}/bad-second`)).toBeUndefined();
+
+      fs.writeFileSync(secondPath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({ site: ${JSON.stringify(secondSite)}, name: 'list', aliases: ['fresh-second'], access: 'read', browser: () => false, func: async () => 'fresh' });
+`);
+      await expect(executeCommand(second, {})).resolves.toBe('fresh');
+      expect(getRegistry().get(`${secondSite}/fresh-second`)).toBe(getRegistry().get(`${secondSite}/list`));
+    } finally {
+      releaseSecond();
+      for (const [site, names] of [
+        [firstSite, ['list', 'prior-first', 'bad-first']],
+        [secondSite, ['list', 'prior-second', 'bad-second', 'fresh-second']],
+      ] as const) {
+        for (const name of names) getRegistry().delete(`${site}/${name}`);
+      }
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__overlapSecondStarted;
+      delete (globalThis as any).__overlapSecondGate;
+    }
+  });
+
   it('hydrates a conditional manifest placeholder before routing and validates once with its matching schema', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-hydrate-'));
     const site = `conditional-hydrate-${Date.now()}`;
@@ -479,6 +550,153 @@ cli({
       getRegistry().delete(`${site}/bad-alias`);
       getRegistry().delete(`${site}/fresh-alias`);
       fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not attribute an ordinary external registration to a paused failing import', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-external-during-import-'));
+    const site = `external-during-import-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    let releaseImport!: () => void;
+    const gate = new Promise<void>(resolve => { releaseImport = resolve; });
+    Object.assign(globalThis, { __externalImportStarted: markStarted, __externalImportGate: gate });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__externalImportStarted();
+await globalThis.__externalImportGate;
+cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['bad-alias'], access: 'read', browser: () => false, func: async () => 'bad' });
+throw new Error('fail after paused registration');
+`);
+    const sentinel = vi.fn(() => { throw new Error('sentinel ran'); });
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', aliases: ['old-alias'], access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinel,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const failingExecution = executeCommand(placeholder, {});
+      await started;
+      const ordinary = cli({
+        site, name: 'ordinary', access: 'read', browser: false, func: async () => 'ordinary',
+      });
+      releaseImport();
+      await expect(failingExecution).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      expect(getRegistry().get(`${site}/ordinary`)).toBe(ordinary);
+      await expect(executeCommand(ordinary, {})).resolves.toBe('ordinary');
+      expect(getRegistry().get(key)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/bad-alias`)).toBeUndefined();
+    } finally {
+      releaseImport();
+      for (const name of ['list', 'old-alias', 'bad-alias', 'ordinary']) getRegistry().delete(`${site}/${name}`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__externalImportStarted;
+      delete (globalThis as any).__externalImportGate;
+    }
+  });
+
+  it('rolls back late timed-out module writes without touching ordinary external commands', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-timeout-late-write-'));
+    const site = `timeout-late-write-${Date.now()}`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const previousTimeout = process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+    process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = '25';
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    let releaseImport!: () => void;
+    const gate = new Promise<void>(resolve => { releaseImport = resolve; });
+    let markLateDone!: () => void;
+    const lateDone = new Promise<void>(resolve => { markLateDone = resolve; });
+    Object.assign(globalThis, {
+      __lateImportStarted: markStarted, __lateImportGate: gate, __lateImportDone: markLateDone,
+    });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__lateImportStarted();
+await globalThis.__lateImportGate;
+cli({ site: ${JSON.stringify(site)}, name: 'list', aliases: ['late-alias'], access: 'read', browser: () => false, func: async () => 'late' });
+globalThis.__lateImportDone();
+`);
+    const sentinel = vi.fn(() => { throw new Error('sentinel ran'); });
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinel,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const timedOut = executeCommand(placeholder, {});
+      await started;
+      await expect(timedOut).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      const ordinary = cli({
+        site, name: 'ordinary-late', access: 'read', browser: false, func: async () => 'ordinary',
+      });
+      releaseImport();
+      await lateDone;
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(getRegistry().get(`${site}/ordinary-late`)).toBe(ordinary);
+      expect(getRegistry().get(`${site}/list`)).toBe(placeholder);
+      expect(getRegistry().get(`${site}/late-alias`)).toBeUndefined();
+    } finally {
+      releaseImport();
+      _resetLazyModuleStateForTests();
+      for (const name of ['list', 'late-alias', 'ordinary-late']) getRegistry().delete(`${site}/${name}`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__lateImportStarted;
+      delete (globalThis as any).__lateImportGate;
+      delete (globalThis as any).__lateImportDone;
+      if (previousTimeout === undefined) delete process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS;
+      else process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS = previousTimeout;
+    }
+  });
+
+  it('rejects registration work scheduled after an import transaction closes', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-delayed-registration-'));
+    const site = `delayed-registration-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    let markDelayed!: () => void;
+    const delayed = new Promise<void>(resolve => { markDelayed = resolve; });
+    Object.assign(globalThis, { __delayedRegistrationDone: markDelayed, __delayedRegistrationError: undefined });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({ site: ${JSON.stringify(site)}, name: 'list', access: 'read', browser: () => false, func: async () => 'main' });
+setTimeout(() => {
+  try {
+    cli({ site: ${JSON.stringify(site)}, name: 'delayed', access: 'read', browser: false, func: async () => 'delayed' });
+  } catch (error) {
+    globalThis.__delayedRegistrationError = error.message;
+  } finally {
+    globalThis.__delayedRegistrationDone();
+  }
+}, 0);
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => false,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      await expect(executeCommand(placeholder, {})).resolves.toBe('main');
+      await delayed;
+      expect(getRegistry().get(`${site}/delayed`)).toBeUndefined();
+      expect((globalThis as any).__delayedRegistrationError).toMatch(/transaction.*closed/i);
+    } finally {
+      getRegistry().delete(key);
+      getRegistry().delete(`${site}/delayed`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__delayedRegistrationDone;
+      delete (globalThis as any).__delayedRegistrationError;
     }
   });
 
