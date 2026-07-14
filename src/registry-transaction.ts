@@ -103,6 +103,17 @@ export function recordRegistryMutation(
   });
 }
 
+/**
+ * Keys with revision ownership, including absent-key tombstones.
+ *
+ * Tombstones intentionally remain until a later mutation or rollback supersedes
+ * them. Pruning an absent revision while an overlapping transaction may still
+ * reference it would allow an older rollback to resurrect the key.
+ */
+export function registryMutationKeys(): string[] {
+  return [...state.revisions.keys()];
+}
+
 export function capturedRegistryValue(
   transaction: RegistryTransaction,
   key: string,

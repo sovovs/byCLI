@@ -3,7 +3,11 @@
  */
 
 import type { IPage } from './types.js';
-import { recordRegistryMutation, withRegistryMutationGroup } from './registry-transaction.js';
+import {
+  recordRegistryMutation,
+  registryMutationKeys,
+  withRegistryMutationGroup,
+} from './registry-transaction.js';
 
 export enum Strategy {
   PUBLIC = 'public',
@@ -199,19 +203,20 @@ class TrackedRegistryMap extends Map<string, CliCommand> implements TrackedRegis
   }
 
   override delete(key: string): boolean {
-    if (!this.has(key)) return false;
-    const before = { present: true, value: this.get(key) };
+    const before = { present: this.has(key), value: this.get(key) };
     recordRegistryMutation(key, before, { present: false, value: undefined });
     return Map.prototype.delete.call(this, key) as boolean;
   }
 
   override clear(): void {
-    if (this.size === 0) return;
+    const keys = new Set([...this.keys(), ...registryMutationKeys()]);
+    if (keys.size === 0) return;
     withRegistryMutationGroup(() => {
-      for (const [key, value] of this) {
+      for (const key of keys) {
+        const present = this.has(key);
         recordRegistryMutation(
           key,
-          { present: true, value },
+          { present, value: present ? this.get(key) : undefined },
           { present: false, value: undefined },
         );
       }

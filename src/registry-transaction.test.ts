@@ -112,6 +112,44 @@ describe('registry transaction ownership', () => {
     }
   });
 
+  it('does not resurrect a transaction-deleted alias after an external clear', async () => {
+    const site = `transaction-clear-tombstone-${Date.now()}`;
+    sites.push(site);
+    const prior = command(site, 'prior', ['old-alias']);
+    const replacement = command(site, 'replacement', ['new-alias']);
+    registerCommand(prior);
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => registerCommand(replacement));
+    const registrySnapshot = [...getRegistry().entries()];
+
+    try {
+      getRegistry().clear();
+      rollbackRegistryTransaction(transaction, getRegistry());
+
+      expect(getRegistry().has(`${site}/list`)).toBe(false);
+      expect(getRegistry().has(`${site}/old-alias`)).toBe(false);
+      expect(getRegistry().has(`${site}/new-alias`)).toBe(false);
+    } finally {
+      for (const [key, value] of registrySnapshot) getRegistry().set(key, value);
+    }
+  });
+
+  it('does not resurrect a transaction-deleted alias after an external delete of the absent key', async () => {
+    const site = `transaction-delete-tombstone-${Date.now()}`;
+    sites.push(site);
+    const prior = command(site, 'prior', ['old-alias']);
+    const replacement = command(site, 'replacement', ['new-alias']);
+    registerCommand(prior);
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => registerCommand(replacement));
+
+    expect(getRegistry().has(`${site}/old-alias`)).toBe(false);
+    expect(getRegistry().delete(`${site}/old-alias`)).toBe(false);
+    rollbackRegistryTransaction(transaction, getRegistry());
+
+    expect(getRegistry().has(`${site}/old-alias`)).toBe(false);
+  });
+
   it('captures direct Map writes in an active transaction and rolls back clear as one group', async () => {
     const site = `transaction-direct-active-${Date.now()}`;
     sites.push(site);
@@ -130,7 +168,8 @@ describe('registry transaction ownership', () => {
 
     const clearGroup = transaction.writes.at(-1)!.group;
     const clearWrites = transaction.writes.filter(write => write.group === clearGroup);
-    expect(clearWrites).toHaveLength(before.size);
+    expect(clearWrites).toHaveLength(before.size + 1);
+    expect(new Set(clearWrites.map(write => write.key)).size).toBe(clearWrites.length);
     expect(clearWrites.every(write => write.after.present === false)).toBe(true);
 
     rollbackRegistryTransaction(transaction, getRegistry());
@@ -200,6 +239,24 @@ describe('registry transaction ownership', () => {
     expect(getRegistry().get(`${site}/list`)).toBe(external);
     expect(getRegistry().get(`${site}/prior-alias`)).toBe(prior);
     expect(getRegistry().get(`${site}/plugin-alias`)).toBeUndefined();
+  });
+
+  it('shares absent-key tombstone barriers across independently evaluated registry copies', async () => {
+    const site = `transaction-copy-tombstone-${Date.now()}`;
+    sites.push(site);
+    const prior = command(site, 'prior', ['old-alias']);
+    const replacement = command(site, 'replacement', ['new-alias']);
+    registerCommand(prior);
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => registerCommand(replacement));
+    // @ts-expect-error Vite treats a query-suffixed module as a separate module instance.
+    const registryCopy = await import('./registry.ts?copy=tombstone-copy');
+
+    expect(registryCopy.getRegistry().delete(`${site}/old-alias`)).toBe(false);
+    rollbackRegistryTransaction(transaction, getRegistry());
+
+    expect(getRegistry().has(`${site}/old-alias`)).toBe(false);
+    expect(registryCopy.getRegistry()).toBe(getRegistry());
   });
 
   it('records each normal registerCommand key exactly once', async () => {
