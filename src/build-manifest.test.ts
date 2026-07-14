@@ -100,6 +100,37 @@ describe('manifest helper rules', () => {
     getRegistry().delete(key);
   });
 
+  it('serializes conditional browser metadata without executable predicates', async () => {
+    const site = `manifest-conditional-${Date.now()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    const entries = await loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site,
+        name: 'list',
+        access: 'read',
+        browser: args => args['auth-source'] !== 'env',
+        args: [{ name: 'auth-source', default: 'browser' }],
+        func: async () => [],
+      }),
+    }));
+
+    expect(entries).toContainEqual(expect.objectContaining({
+      site,
+      name: 'list',
+      browser: 'conditional',
+    }));
+    const serialized = JSON.stringify(entries);
+    expect(serialized).not.toContain('requiresBrowser');
+    expect(serialized).not.toContain('auth-source]');
+
+    getRegistry().delete(key);
+  });
+
   it('falls back to registry delta for side-effect-only cli modules', async () => {
     const site = `manifest-side-effect-${Date.now()}`;
     const key = `${site}/legacy`;

@@ -144,6 +144,7 @@ type RawCliCommand = RawBrowserCliCommand | RawNonBrowserCliCommand | RawConditi
 export type InternalCliCommand = CliCommand & {
   _lazy?: boolean;
   _modulePath?: string;
+  _hydrateBeforeBrowserRouting?: boolean;
 };
 
 type RequiredCliOptions = {

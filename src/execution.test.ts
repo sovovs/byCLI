@@ -2,16 +2,260 @@ import { describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { CliCommand } from './registry.js';
+import type { CliCommand, InternalCliCommand } from './registry.js';
 import { executeCommand, prepareCommandArgs } from './execution.js';
 import { ArgumentError, TimeoutError, toEnvelope } from './errors.js';
-import { cli, Strategy } from './registry.js';
+import { cli, getRegistry, registerCommand, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
 import * as runtime from './runtime.js';
 import * as capRouting from './capabilityRouting.js';
 import { clearAllHooks, onAfterExecute, onBeforeExecute, type HookContext } from './hooks.js';
 
 describe('executeCommand — conditional browser routing', () => {
+  it('keeps ordinary static manifest commands on the lazy run path', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-static-lazy-'));
+    const site = `static-lazy-${Date.now()}`;
+    const key = `${site}/status`;
+    const modulePath = path.join(root, 'status.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const funcTracker = vi.fn(async () => []);
+    (globalThis as any).__staticLazyFunc = funcTracker;
+    fs.writeFileSync(modulePath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'status', access: 'read',
+  strategy: Strategy.PUBLIC, browser: false,
+  func: async (args, debug) => globalThis.__staticLazyFunc(args, debug),
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'status', access: 'read', description: '', args: [],
+      browser: false, _lazy: true, _modulePath: modulePath,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await executeCommand(placeholder, {});
+      expect(funcTracker).toHaveBeenCalledWith({}, false);
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__staticLazyFunc;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('hydrates a conditional manifest placeholder before routing and validates once with its matching schema', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-hydrate-'));
+    const site = `conditional-hydrate-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const resolverTracker = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
+    const funcTracker = vi.fn(async () => []);
+    const validationTracker = vi.fn();
+    Object.assign(globalThis, { __hydrateResolver: resolverTracker, __hydrateFunc: funcTracker, __hydrateValidate: validationTracker });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  browser: args => globalThis.__hydrateResolver(args),
+  args: [
+    { name: 'auth-source', default: 'env', choices: ['browser', 'env'] },
+    { name: 'limit', type: 'int', default: 10 },
+  ],
+  validateArgs: args => globalThis.__hydrateValidate(args),
+  func: async (page, args, debug) => globalThis.__hydrateFunc(page, args, debug),
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '',
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      args: [
+        { name: 'auth-source', default: 'env', choices: ['browser', 'env'] },
+        { name: 'limit', type: 'int', default: 10 },
+      ],
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await executeCommand(placeholder, { limit: '3' });
+
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+      expect(resolverTracker).toHaveBeenCalledWith(expect.objectContaining({ 'auth-source': 'env', limit: 3 }));
+      expect(funcTracker).toHaveBeenCalledWith(null, expect.objectContaining({ 'auth-source': 'env', limit: 3 }), false);
+      expect(validationTracker).toHaveBeenCalledTimes(1);
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__hydrateResolver;
+      delete (globalThis as any).__hydrateFunc;
+      delete (globalThis as any).__hydrateValidate;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('rejects a conditional hydration module that does not replace its placeholder', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-malformed-'));
+    const site = `conditional-malformed-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    fs.writeFileSync(modulePath, 'export const unrelated = true;\n');
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'COMMAND_EXEC',
+        message: expect.stringContaining(key),
+      });
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('shares concurrent conditional hydration without evaluating the sentinel', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-concurrent-'));
+    const site = `conditional-concurrent-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const funcTracker = vi.fn(async () => []);
+    Object.assign(globalThis, { __hydrateImportCount: 0, __concurrentHydrateFunc: funcTracker });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__hydrateImportCount += 1;
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  browser: args => args['auth-source'] !== 'env',
+  args: [{ name: 'auth-source', default: 'env' }],
+  func: async (page, args, debug) => globalThis.__concurrentHydrateFunc(page, args, debug),
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '',
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      args: [{ name: 'auth-source', default: 'env' }],
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await Promise.all([
+        executeCommand(placeholder, {}),
+        executeCommand(placeholder, {}),
+      ]);
+      expect((globalThis as any).__hydrateImportCount).toBe(1);
+      expect(funcTracker).toHaveBeenCalledTimes(2);
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__hydrateImportCount;
+      delete (globalThis as any).__concurrentHydrateFunc;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('rejects a hydrated module whose argument schema is stale before validation or routing', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-schema-'));
+    const site = `conditional-schema-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const validationTracker = vi.fn();
+    (globalThis as any).__schemaHydrateValidate = validationTracker;
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  browser: () => false,
+  args: [{ name: 'auth-source', default: 'browser' }],
+  validateArgs: args => globalThis.__schemaHydrateValidate(args),
+  func: async () => [],
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '',
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      args: [{ name: 'auth-source', default: 'env' }],
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'COMMAND_EXEC',
+        message: expect.stringContaining('argument schema does not match'),
+      });
+      expect(validationTracker).not.toHaveBeenCalled();
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__schemaHydrateValidate;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('rejects a static replacement for a conditional manifest placeholder', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-static-'));
+    const site = `conditional-static-${Date.now()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    fs.writeFileSync(modulePath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  strategy: Strategy.PUBLIC, browser: false, func: async () => [],
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'COMMAND_EXEC',
+        message: expect.stringContaining('valid hydrated conditional command'),
+      });
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      vi.restoreAllMocks();
+    }
+  });
+
   it('routes and executes with the same final args after onBeforeExecute mutates them', async () => {
     const resolver = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
     const func = vi.fn(async (_page: unknown, _args: Record<string, unknown>, _debug?: boolean) => []);

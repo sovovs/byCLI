@@ -16,7 +16,7 @@ export interface ManifestEntry {
   example?: string;
   domain?: string;
   strategy: string;
-  browser: boolean;
+  browser: boolean | 'conditional';
   args: Array<{
     name: string;
     type?: string;

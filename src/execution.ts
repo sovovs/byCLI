@@ -107,37 +107,7 @@ async function runCommand(
 ): Promise<unknown> {
   const internal = cmd as InternalCliCommand;
   if (internal._lazy && internal._modulePath) {
-    const modulePath = internal._modulePath;
-    // Hot-reload: if a user adapter's file has changed on disk, invalidate cache
-    const isUserAdapter = modulePath.startsWith(userClisPrefix());
-    if (isUserAdapter && _loadedModules.has(modulePath)) {
-      try {
-        const stat = fs.statSync(modulePath);
-        const prevMtime = _moduleMtimes.get(modulePath);
-        if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
-          _loadedModules.delete(modulePath);
-          _moduleMtimes.delete(modulePath);
-        }
-      } catch { /* file may have been deleted; let import below handle it */ }
-    }
-    if (!_loadedModules.has(modulePath)) {
-      const url = pathToFileURL(modulePath).href;
-      const importUrl = _moduleMtimes.has(modulePath) ? `${url}?t=${Date.now()}` : url;
-      const loadPromise = import(importUrl).then(
-        () => {
-          try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
-        },
-        (err) => {
-          _loadedModules.delete(modulePath);
-          throw adapterLoadError(
-            `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
-            'Check that the adapter file exists and has no syntax errors.',
-          );
-        },
-      );
-      _loadedModules.set(modulePath, loadPromise);
-    }
-    await _loadedModules.get(modulePath);
+    await loadLazyModule(internal);
 
     const updated = getRegistry().get(fullName(cmd));
     if (updated?.func) {
@@ -152,6 +122,113 @@ async function runCommand(
     `Command ${fullName(cmd)} has no func or pipeline`,
     'This is likely a bug in the adapter definition. Please report this issue.',
   );
+}
+
+async function loadLazyModule(internal: InternalCliCommand): Promise<void> {
+  const modulePath = internal._modulePath;
+  if (!internal._lazy || !modulePath) return;
+
+  // Hot-reload: if a user adapter's file has changed on disk, invalidate cache.
+  const isUserAdapter = modulePath.startsWith(userClisPrefix());
+  if (isUserAdapter && _loadedModules.has(modulePath)) {
+    try {
+      const stat = fs.statSync(modulePath);
+      const prevMtime = _moduleMtimes.get(modulePath);
+      if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
+        _loadedModules.delete(modulePath);
+        _moduleMtimes.delete(modulePath);
+      }
+    } catch { /* file may have been deleted; let import below handle it */ }
+  }
+
+  if (!_loadedModules.has(modulePath)) {
+    const url = pathToFileURL(modulePath).href;
+    const importUrl = _moduleMtimes.has(modulePath) ? `${url}?t=${Date.now()}` : url;
+    const loadPromise = import(importUrl).then(
+      () => {
+        try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
+      },
+      (err) => {
+        _loadedModules.delete(modulePath);
+        throw adapterLoadError(
+          `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
+          'Check that the adapter file exists and has no syntax errors.',
+        );
+      },
+    );
+    _loadedModules.set(modulePath, loadPromise);
+  }
+  await _loadedModules.get(modulePath);
+}
+
+function normalizedArgSchema(args: Arg[]): unknown[] {
+  return args.map(arg => ({
+    name: arg.name,
+    type: arg.type ?? 'str',
+    default: arg.default,
+    required: Boolean(arg.required),
+    valueRequired: Boolean(arg.valueRequired),
+    positional: Boolean(arg.positional),
+    help: arg.help ?? '',
+    choices: arg.choices,
+  }));
+}
+
+function hasMatchingArgSchema(placeholder: CliCommand, hydrated: CliCommand): boolean {
+  return JSON.stringify(normalizedArgSchema(placeholder.args))
+    === JSON.stringify(normalizedArgSchema(hydrated.args));
+}
+
+async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
+  const internal = cmd as InternalCliCommand;
+  const key = fullName(cmd);
+  if (cmd.browser !== 'conditional') {
+    throw new CommandExecutionError(
+      `Conditional adapter placeholder ${key} has invalid browser metadata`,
+      'Rebuild the CLI manifest with the current byCLI version.',
+    );
+  }
+  const placeholderResolver = cmd.requiresBrowser;
+  try {
+    await loadLazyModule(internal);
+  } catch (error) {
+    throw new CommandExecutionError(
+      `Failed to hydrate conditional adapter ${key}: ${getErrorMessage(error)}`,
+      'Rebuild or reinstall the adapter so its manifest and module are both available.',
+    );
+  }
+
+  const hydrated = getRegistry().get(key);
+  const invalidReplacement = !hydrated
+    || hydrated === cmd
+    || fullName(hydrated) !== key
+    || hydrated.browser !== 'conditional';
+  if (invalidReplacement) {
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} did not register a valid hydrated conditional command`,
+      'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
+    );
+  }
+  const hydratedInternal = hydrated as InternalCliCommand;
+  if (
+    typeof hydrated.requiresBrowser !== 'function'
+    || hydrated.requiresBrowser === placeholderResolver
+    || hydratedInternal._hydrateBeforeBrowserRouting === true
+    || hydratedInternal._lazy === true
+    || hydratedInternal._modulePath !== undefined
+  ) {
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} did not register a valid hydrated conditional command`,
+      'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
+    );
+  }
+  if (!hasMatchingArgSchema(cmd, hydrated)) {
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} argument schema does not match its manifest`,
+      'Rebuild the CLI manifest so defaults, coercion, and validation use the adapter module schema.',
+    );
+  }
+  return hydrated;
 }
 
 function runCommandFunc(cmd: CliCommand, page: IPage | null, kwargs: CommandArgs, debug: boolean): Promise<unknown> {
@@ -228,6 +305,19 @@ export async function executeCommand(
   let kwargs = opts.prepared
     ? rawKwargs
     : prepareCommandArgsOrThrowArgumentError(cmd, rawKwargs);
+
+  if ((cmd as InternalCliCommand)._hydrateBeforeBrowserRouting) {
+    cmd = await hydrateConditionalCommand(cmd);
+    // Manifest placeholders cannot serialize adapter validators. The matching
+    // schema above guarantees coercion/defaults stay valid; run only the real
+    // module validator here so custom validation has exactly one side effect.
+    try {
+      cmd.validateArgs?.(kwargs);
+    } catch (error) {
+      if (error instanceof ArgumentError) throw error;
+      throw new ArgumentError(getErrorMessage(error));
+    }
+  }
 
   const traceMode = normalizeTraceMode(opts.trace);
 
