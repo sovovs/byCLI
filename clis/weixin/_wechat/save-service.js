@@ -3,6 +3,8 @@ import path from 'node:path';
 import { CommandExecutionError } from '@sovovs/bycli/errors';
 import { cleanMarkdownFilename, wechatArticleToMarkdown } from './markdown.js';
 
+export const MAX_FILENAME_ATTEMPTS = 100;
+
 function commandError(action, error) {
   return new CommandExecutionError(`Failed to ${action}: ${error instanceof Error ? error.message : String(error)}`);
 }
@@ -36,7 +38,7 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
     const base = cleanMarkdownFilename(article.title);
     let suffix = 1;
     let target;
-    while (true) {
+    while (suffix <= MAX_FILENAME_ATTEMPTS) {
       const name = suffix === 1 ? base : `${base}-${suffix}`;
       target = path.resolve(root, `${name}.md`);
       assertInside(root, target);
@@ -50,11 +52,21 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
         if (error instanceof CommandExecutionError) throw error;
         if (error?.code !== 'ENOENT') throw commandError('inspect article target', error);
       }
-      break;
+      try {
+        fsImpl.writeFileSync(target, markdown, { encoding: 'utf8', flag: 'wx' });
+        reserved.add(target);
+        break;
+      } catch (error) {
+        if (error?.code === 'EEXIST') {
+          suffix += 1;
+          continue;
+        }
+        throw commandError('write article Markdown', error);
+      }
     }
-    reserved.add(target);
-    try { fsImpl.writeFileSync(target, markdown, { encoding: 'utf8', flag: 'wx' }); }
-    catch (error) { throw commandError('write article Markdown', error); }
+    if (suffix > MAX_FILENAME_ATTEMPTS) {
+      throw new CommandExecutionError(`Failed to reserve an article filename after ${MAX_FILENAME_ATTEMPTS} attempts`);
+    }
     rows.push({ title: article.title || '', url: article.url || '', status: 'saved', saved: target });
   }
   return rows;
