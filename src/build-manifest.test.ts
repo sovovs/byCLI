@@ -131,6 +131,28 @@ describe('manifest helper rules', () => {
     getRegistry().delete(key);
   });
 
+  it('fails manifest generation with adapter and arg context for unsafe defaults', async () => {
+    const site = `manifest-unsafe-${Date.now()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    await expect(loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site,
+        name: 'list',
+        access: 'read',
+        browser: false,
+        args: [{ name: 'unsafe', default: () => true }],
+        func: async () => [],
+      }),
+    }))).rejects.toThrow(new RegExp(`${site}/list.*unsafe`));
+
+    getRegistry().delete(key);
+  });
+
   it('falls back to registry delta for side-effect-only cli modules', async () => {
     const site = `manifest-side-effect-${Date.now()}`;
     const key = `${site}/legacy`;

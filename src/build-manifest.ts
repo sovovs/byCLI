@@ -30,6 +30,7 @@ import { fullName, getRegistry, type CliCommand } from './registry.js';
 import { findPackageRoot, getCliManifestPath } from './package-paths.js';
 import type { ManifestEntry } from './manifest-types.js';
 import { isRecord } from './utils.js';
+import { canonicalizeManifestArgSchema } from './manifest-schema.js';
 
 export type { ManifestEntry } from './manifest-types.js';
 
@@ -77,7 +78,7 @@ function toManifestArgs(args: CliCommand['args']): ManifestEntry['args'] {
   return args.map(arg => ({
     name: arg.name,
     type: arg.type ?? 'str',
-    default: arg.default,
+    ...(Object.prototype.hasOwnProperty.call(arg, 'default') ? { default: arg.default } : {}),
     required: !!arg.required,
     valueRequired: !!arg.valueRequired || undefined,
     positional: arg.positional || undefined,
@@ -109,6 +110,7 @@ function isCliCommandValue(value: unknown, site: string): value is CliCommand {
 }
 
 function toManifestEntry(cmd: CliCommand, modulePath: string, sourceFile?: string): ManifestEntry {
+  canonicalizeManifestArgSchema(cmd.args, `Command ${fullName(cmd)}`);
   return {
     site: cmd.site,
     name: cmd.name,

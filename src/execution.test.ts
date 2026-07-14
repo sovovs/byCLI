@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { CliCommand, InternalCliCommand } from './registry.js';
 import { executeCommand, prepareCommandArgs } from './execution.js';
-import { ArgumentError, TimeoutError, toEnvelope } from './errors.js';
+import { ArgumentError, CliError, TimeoutError, toEnvelope } from './errors.js';
 import { cli, getRegistry, registerCommand, Strategy } from './registry.js';
 import { withTimeoutMs } from './runtime.js';
 import * as runtime from './runtime.js';
@@ -44,6 +44,52 @@ cli({
       fs.rmSync(root, { recursive: true, force: true });
       delete (globalThis as any).__staticLazyFunc;
       vi.restoreAllMocks();
+    }
+  });
+
+  it('cache-busts a changed successful user adapter and caches the new generation', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-user-lazy-reload-'));
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = root;
+    const site = `static-reload-${Date.now()}`;
+    const key = `${site}/status`;
+    const moduleDir = path.join(root, 'clis', site);
+    const modulePath = path.join(moduleDir, 'status.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    fs.mkdirSync(moduleDir, { recursive: true });
+    Object.assign(globalThis, { __reloadImports: 0, __reloadResults: [] });
+    const writeVersion = (version: number) => fs.writeFileSync(modulePath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+globalThis.__reloadImports += 1;
+cli({
+  site: ${JSON.stringify(site)}, name: 'status', access: 'read',
+  strategy: Strategy.PUBLIC, browser: false,
+  func: async () => { globalThis.__reloadResults.push(${version}); return ${version}; },
+});
+`);
+    writeVersion(1);
+    const placeholder: InternalCliCommand = {
+      site, name: 'status', access: 'read', description: '', args: [],
+      browser: false, _lazy: true, _modulePath: modulePath,
+    };
+    registerCommand(placeholder);
+
+    try {
+      await expect(executeCommand(placeholder, {})).resolves.toBe(1);
+      writeVersion(2);
+      const future = new Date(Date.now() + 2_000);
+      fs.utimesSync(modulePath, future, future);
+      await expect(executeCommand(placeholder, {})).resolves.toBe(2);
+      await expect(executeCommand(placeholder, {})).resolves.toBe(2);
+      expect((globalThis as any).__reloadImports).toBe(2);
+      expect((globalThis as any).__reloadResults).toEqual([1, 2, 2]);
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+      delete (globalThis as any).__reloadImports;
+      delete (globalThis as any).__reloadResults;
     }
   });
 
@@ -98,6 +144,62 @@ cli({
       delete (globalThis as any).__hydrateFunc;
       delete (globalThis as any).__hydrateValidate;
       vi.restoreAllMocks();
+    }
+  });
+
+  it('preserves typed adapter-load failures for conditional hydration like static lazy loading', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-import-error-'));
+    const conditionalSite = `conditional-import-error-${Date.now()}`;
+    const staticSite = `${conditionalSite}-static`;
+    const conditionalPath = path.join(root, 'conditional.mjs');
+    const staticPath = path.join(root, 'static.mjs');
+    fs.writeFileSync(conditionalPath, 'this is not valid javascript !!!');
+    fs.writeFileSync(staticPath, 'this is not valid javascript !!!');
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    const conditional: InternalCliCommand = {
+      site: conditionalSite, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: conditionalPath, _hydrateBeforeBrowserRouting: true,
+    };
+    const staticCommand: InternalCliCommand = {
+      site: staticSite, name: 'list', access: 'read', description: '', args: [],
+      browser: false, _lazy: true, _modulePath: staticPath,
+    };
+    registerCommand(conditional);
+    registerCommand(staticCommand);
+
+    try {
+      const conditionalError = await executeCommand(conditional, {}).catch(error => error);
+      const staticError = await executeCommand(staticCommand, {}).catch(error => error);
+      if (!(staticError instanceof CliError)) throw new Error('expected typed static adapter load error');
+      expect(conditionalError).toMatchObject({
+        code: 'ADAPTER_LOAD', exitCode: 69,
+        hint: 'Check that the adapter file exists and has no syntax errors.',
+      });
+      expect(conditionalError).toMatchObject({
+        code: staticError.code, exitCode: staticError.exitCode, hint: staticError.hint,
+      });
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+
+      const retryFunc = vi.fn(async () => []);
+      const registryUrl = new URL('./registry.ts', import.meta.url).href;
+      (globalThis as any).__syntaxRetryFunc = retryFunc;
+      fs.writeFileSync(conditionalPath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(conditionalSite)}, name: 'list', access: 'read',
+  browser: () => false,
+  func: async (page, args, debug) => globalThis.__syntaxRetryFunc(page, args, debug),
+});
+`);
+      await expect(executeCommand(conditional, {})).resolves.toEqual([]);
+      expect(retryFunc).toHaveBeenCalledOnce();
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(`${conditionalSite}/list`);
+      getRegistry().delete(`${staticSite}/list`);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__syntaxRetryFunc;
     }
   });
 
@@ -167,6 +269,9 @@ cli({
       expect(funcTracker).toHaveBeenCalledTimes(2);
       expect(sentinelPredicate).not.toHaveBeenCalled();
       expect(browserSessionSpy).not.toHaveBeenCalled();
+      await executeCommand(placeholder, {});
+      expect((globalThis as any).__hydrateImportCount).toBe(1);
+      expect(funcTracker).toHaveBeenCalledTimes(3);
     } finally {
       getRegistry().delete(key);
       fs.rmSync(root, { recursive: true, force: true });
@@ -249,9 +354,27 @@ cli({
       });
       expect(sentinelPredicate).not.toHaveBeenCalled();
       expect(browserSessionSpy).not.toHaveBeenCalled();
+
+      const retryFunc = vi.fn(async () => []);
+      Object.assign(globalThis, { __staticRetryImports: 0, __staticRetryFunc: retryFunc });
+      fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__staticRetryImports += 1;
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  browser: () => false,
+  func: async (page, args, debug) => globalThis.__staticRetryFunc(page, args, debug),
+});
+`);
+      await Promise.all([executeCommand(placeholder, {}), executeCommand(placeholder, {})]);
+      expect((globalThis as any).__staticRetryImports).toBe(1);
+      expect(retryFunc).toHaveBeenCalledTimes(2);
+      expect(sentinelPredicate).not.toHaveBeenCalled();
     } finally {
       getRegistry().delete(key);
       fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__staticRetryImports;
+      delete (globalThis as any).__staticRetryFunc;
       vi.restoreAllMocks();
     }
   });

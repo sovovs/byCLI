@@ -37,10 +37,13 @@ import { isElectronApp } from './electron-apps.js';
 import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 import { ObservationSession, exportObservationSession, type ObservationExportResult, type ObservationExportStatus } from './observation/index.js';
 import { resolveAdapterSourcePath } from './adapter-source.js';
+import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
 
 const _loadedModules = new Map<string, Promise<void>>();
 /** Track mtime of loaded user adapter files for hot-reload in daemon mode. */
 const _moduleMtimes = new Map<string, number>();
+/** Independent cache-busting generation; retained when an import promise is discarded. */
+const _moduleImportGenerations = new Map<string, number>();
 /** User adapter dir with a trailing separator, so `startsWith` can't match a sibling
  * like `clis-foo`. Resolved per-call (config-paths.ts rationale) — no import-time freeze. */
 function userClisPrefix(): string {
@@ -135,21 +138,21 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<void> {
       const stat = fs.statSync(modulePath);
       const prevMtime = _moduleMtimes.get(modulePath);
       if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
-        _loadedModules.delete(modulePath);
-        _moduleMtimes.delete(modulePath);
+        invalidateLazyModule(modulePath);
       }
     } catch { /* file may have been deleted; let import below handle it */ }
   }
 
   if (!_loadedModules.has(modulePath)) {
     const url = pathToFileURL(modulePath).href;
-    const importUrl = _moduleMtimes.has(modulePath) ? `${url}?t=${Date.now()}` : url;
+    const generation = _moduleImportGenerations.get(modulePath) ?? 0;
+    const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
     const loadPromise = import(importUrl).then(
       () => {
         try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
       },
       (err) => {
-        _loadedModules.delete(modulePath);
+        invalidateLazyModule(modulePath);
         throw adapterLoadError(
           `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
           'Check that the adapter file exists and has no syntax errors.',
@@ -161,22 +164,30 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<void> {
   await _loadedModules.get(modulePath);
 }
 
-function normalizedArgSchema(args: Arg[]): unknown[] {
-  return args.map(arg => ({
-    name: arg.name,
-    type: arg.type ?? 'str',
-    default: arg.default,
-    required: Boolean(arg.required),
-    valueRequired: Boolean(arg.valueRequired),
-    positional: Boolean(arg.positional),
-    help: arg.help ?? '',
-    choices: arg.choices,
-  }));
+function invalidateLazyModule(modulePath: string | undefined): void {
+  if (!modulePath || !_loadedModules.delete(modulePath)) return;
+  _moduleImportGenerations.set(modulePath, (_moduleImportGenerations.get(modulePath) ?? 0) + 1);
 }
 
-function hasMatchingArgSchema(placeholder: CliCommand, hydrated: CliCommand): boolean {
-  return JSON.stringify(normalizedArgSchema(placeholder.args))
-    === JSON.stringify(normalizedArgSchema(hydrated.args));
+function assertMatchingArgSchema(placeholder: CliCommand, hydrated: CliCommand): void {
+  const key = fullName(placeholder);
+  try {
+    const manifestSchema = canonicalizeManifestArgSchema(placeholder.args, `Manifest command ${key}`);
+    const moduleSchema = canonicalizeManifestArgSchema(hydrated.args, `Hydrated command ${key}`);
+    if (manifestSchema === moduleSchema) return;
+  } catch (error) {
+    invalidateLazyModule((placeholder as InternalCliCommand)._modulePath);
+    if (!(error instanceof ManifestSchemaError)) throw error;
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} has an unsafe argument schema: ${error.message}`,
+      'Use only JSON-safe defaults and string choices, then rebuild the CLI manifest.',
+    );
+  }
+  invalidateLazyModule((placeholder as InternalCliCommand)._modulePath);
+  throw new CommandExecutionError(
+    `Conditional adapter ${key} argument schema does not match its manifest`,
+    'Rebuild the CLI manifest so defaults, coercion, and validation use the adapter module schema.',
+  );
 }
 
 async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
@@ -192,6 +203,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
   try {
     await loadLazyModule(internal);
   } catch (error) {
+    if (error instanceof CliError) throw error;
     throw new CommandExecutionError(
       `Failed to hydrate conditional adapter ${key}: ${getErrorMessage(error)}`,
       'Rebuild or reinstall the adapter so its manifest and module are both available.',
@@ -204,6 +216,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || fullName(hydrated) !== key
     || hydrated.browser !== 'conditional';
   if (invalidReplacement) {
+    invalidateLazyModule(internal._modulePath);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
       'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
@@ -217,17 +230,13 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || hydratedInternal._lazy === true
     || hydratedInternal._modulePath !== undefined
   ) {
+    invalidateLazyModule(internal._modulePath);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
       'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
     );
   }
-  if (!hasMatchingArgSchema(cmd, hydrated)) {
-    throw new CommandExecutionError(
-      `Conditional adapter ${key} argument schema does not match its manifest`,
-      'Rebuild the CLI manifest so defaults, coercion, and validation use the adapter module schema.',
-    );
-  }
+  assertMatchingArgSchema(cmd, hydrated);
   return hydrated;
 }
 
