@@ -131,6 +131,8 @@ export interface IPage {
    * Useful for rich editors that ignore synthetic DOM value/text mutations.
    */
   insertText?(text: string): Promise<void>;
+  /** Focus the browser window containing the active page for interactive login. */
+  focusWindow?(): Promise<void>;
   closeWindow?(): Promise<void>;
   /** Returns the current page URL, or null if unavailable. */
   getCurrentUrl?(): Promise<string | null>;

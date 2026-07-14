@@ -1504,7 +1504,7 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
       id: cmd.id,
       ok: false,
       errorCode: 'bound_tab_mutation_blocked',
-      error: `Session "${session.session}" is bound to a user tab; tab new/select/close requires an owned byCLI session.`,
+      error: `Session "${session.session}" is bound to a user tab; tab new/select/close/focus requires an owned byCLI session.`,
       errorHint: 'Unbind the session first, or use a different session for owned byCLI tabs.',
     };
   }
@@ -1593,6 +1593,37 @@ async function handleTabs(cmd: Command, leaseKey: string): Promise<Result> {
       if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
       await chrome.tabs.update(target.id, { active: true });
       return pageScopedResult(cmd.id, target.id, { selected: true });
+    }
+    case 'focus': {
+      const currentSession = automationSessions.get(leaseKey);
+      if (!currentSession?.owned || currentSession.preferredTabId === null) {
+        return { id: cmd.id, ok: false, error: 'No owned tab is leased to the current automation session' };
+      }
+
+      const cmdTabId = await resolveCommandTabId(cmd);
+      const tabId = cmdTabId ?? currentSession.preferredTabId;
+      if (tabId !== currentSession.preferredTabId) {
+        return { id: cmd.id, ok: false, error: 'Page is not leased to the current automation session' };
+      }
+
+      let tab: chrome.tabs.Tab;
+      try {
+        tab = await chrome.tabs.get(tabId);
+      } catch {
+        return { id: cmd.id, ok: false, error: 'Current automation session tab no longer exists' };
+      }
+      if (!Number.isInteger(tab.windowId) || tab.windowId < 0 || tab.windowId !== currentSession.windowId) {
+        return { id: cmd.id, ok: false, error: 'Current automation session tab is outside its owned window' };
+      }
+
+      const updateWindow = (chrome.windows as unknown as {
+        update?: (windowId: number, updateInfo: { focused?: boolean }) => Promise<unknown>;
+      }).update;
+      if (typeof updateWindow !== 'function') throw new Error('chrome.windows.update is unavailable');
+
+      await updateWindow(tab.windowId, { focused: true });
+      await chrome.tabs.update(tabId, { active: true });
+      return { id: cmd.id, ok: true, data: { focused: true } };
     }
     default:
       return { id: cmd.id, ok: false, error: `Unknown tabs op: ${cmd.op}` };

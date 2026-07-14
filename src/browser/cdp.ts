@@ -302,6 +302,10 @@ class CDPPage extends BasePage {
       : cookies;
   }
 
+  async focusWindow(): Promise<void> {
+    await this.bridge.send('Page.bringToFront');
+  }
+
   async screenshot(options: ScreenshotOptions = {}): Promise<string> {
     const fullPage = options.fullPage === true;
     const overrideWidth = options.width && options.width > 0 ? Math.ceil(options.width) : undefined;

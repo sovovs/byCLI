@@ -20,6 +20,34 @@ vi.mock('../logger.js', () => ({
 
 import { Page } from './page.js';
 
+describe('Page.focusWindow', () => {
+  beforeEach(() => {
+    sendCommandMock.mockReset();
+    sendCommandFullMock.mockReset();
+    warnMock.mockReset();
+  });
+
+  it('asks the bridge to focus the active page in its automation session', async () => {
+    sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
+
+    const page = new Page('wechat', 45, 'profile-1', 'background', 'adapter', 'persistent');
+    page.setActivePage('target-7');
+
+    await page.focusWindow();
+
+    expect(sendCommandFullMock).toHaveBeenCalledWith('tabs', {
+      op: 'focus',
+      session: 'wechat',
+      surface: 'adapter',
+      contextId: 'profile-1',
+      page: 'target-7',
+      idleTimeout: 45,
+      windowMode: 'background',
+      siteSession: 'persistent',
+    });
+  });
+});
+
 describe('Page.getCurrentUrl', () => {
   beforeEach(() => {
     sendCommandMock.mockReset();

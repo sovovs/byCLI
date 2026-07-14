@@ -185,6 +185,14 @@ export class Page extends BasePage {
     return Array.isArray(result) ? result : [];
   }
 
+  async focusWindow(): Promise<void> {
+    await sendCommandFull('tabs', {
+      op: 'focus',
+      ...this._cmdOpts(),
+      ...this._sessionOpts(),
+    });
+  }
+
   /** Release the current browser session lease in the extension */
   async closeWindow(): Promise<void> {
     try {
