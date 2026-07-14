@@ -3,6 +3,8 @@ import { getRegistry, registerCommand, type ConditionalBrowserCliCommand } from 
 import {
   closeRegistryTransaction,
   createRegistryTransaction,
+  finalizeRegistryTransaction,
+  registryMutationKeys,
   resetRegistryTransactionStateForTests,
   rollbackRegistryTransaction,
   runRegistryTransaction,
@@ -274,7 +276,54 @@ describe('registry transaction ownership', () => {
     rollbackRegistryTransaction(transaction, getRegistry());
   });
 
-  it('migrates a pre-existing plain global Map without recording copied entries', async () => {
+  it('keeps revision identities monotonic across a test reset so stale rollback cannot win ABA', async () => {
+    const site = `transaction-reset-aba-${Date.now()}`;
+    sites.push(site);
+    const key = `${site}/list`;
+    const stale = command(site, 'stale');
+    const external = command(site, 'external');
+    const transaction = createRegistryTransaction();
+    await runRegistryTransaction(transaction, async () => {
+      getRegistry().set(key, stale);
+    });
+
+    resetRegistryTransactionStateForTests();
+    getRegistry().set(key, external);
+    rollbackRegistryTransaction(transaction, getRegistry());
+
+    expect(getRegistry().get(key)).toBe(external);
+  });
+
+  it('prunes finalized absent-key revisions but retains live transaction tombstones', async () => {
+    const site = `transaction-tombstone-churn-${Date.now()}`;
+    sites.push(site);
+    const baseline = new Set(registryMutationKeys());
+    const liveKey = `${site}/live`;
+    const live = createRegistryTransaction();
+    await runRegistryTransaction(live, async () => {
+      getRegistry().set(liveKey, command(site, 'live'));
+      getRegistry().delete(liveKey);
+    });
+    expect(registryMutationKeys()).toContain(liveKey);
+
+    for (let index = 0; index < 100; index += 1) {
+      const key = `${site}/finalized-${index}`;
+      const transaction = createRegistryTransaction();
+      await runRegistryTransaction(transaction, async () => {
+        getRegistry().set(key, command(site, `finalized-${index}`));
+        getRegistry().delete(key);
+      });
+      finalizeRegistryTransaction(transaction, getRegistry());
+    }
+
+    expect(registryMutationKeys().filter(key => key.startsWith(`${site}/finalized-`))).toEqual([]);
+    for (const key of baseline) expect(registryMutationKeys()).toContain(key);
+    expect(registryMutationKeys()).toContain(liveKey);
+    finalizeRegistryTransaction(live, getRegistry());
+    expect(registryMutationKeys()).not.toContain(liveKey);
+  });
+
+  it('instruments a pre-existing plain global Map in place without recording existing entries', async () => {
     const originalRegistry = getRegistry();
     const site = `transaction-plain-migration-${Date.now()}`;
     const migrated = command(site, 'migrated');
@@ -291,10 +340,41 @@ describe('registry transaction ownership', () => {
       });
 
       expect(transaction.writes).toHaveLength(0);
-      expect(registryCopy!.getRegistry()).not.toBe(plainRegistry);
+      expect(registryCopy!.getRegistry()).toBe(plainRegistry);
       expect(globalThis.__bycli_registry__).toBe(registryCopy!.getRegistry());
       expect(registryCopy!.getRegistry().get(key)).toBe(migrated);
       expect((registryCopy!.getRegistry() as any)[Symbol.for('@sovovs/bycli/tracked-registry')]).toBe(true);
+
+      const replacement = command(site, 'replacement');
+      const trackedWrite = createRegistryTransaction();
+      await runRegistryTransaction(trackedWrite, async () => {
+        plainRegistry.set(key, replacement);
+        registryCopy!.getRegistry().set(`${site}/copy-alias`, replacement);
+      });
+      expect(trackedWrite.writes.map(write => write.key)).toEqual([key, `${site}/copy-alias`]);
+      expect(plainRegistry.get(`${site}/copy-alias`)).toBe(replacement);
+      rollbackRegistryTransaction(trackedWrite, plainRegistry);
+      expect(plainRegistry.get(key)).toBe(migrated);
+      expect(plainRegistry.has(`${site}/copy-alias`)).toBe(false);
+
+      const closed = createRegistryTransaction();
+      let lateError: unknown;
+      let finish!: () => void;
+      const finished = new Promise<void>(resolve => { finish = resolve; });
+      await runRegistryTransaction(closed, async () => {
+        setTimeout(() => {
+          try {
+            plainRegistry.set(`${site}/late`, replacement);
+          } catch (error) {
+            lateError = error;
+          } finally {
+            finish();
+          }
+        }, 0);
+      });
+      await finished;
+      expect(lateError).toMatchObject({ message: expect.stringMatching(/transaction.*closed/i) });
+      expect(plainRegistry.has(`${site}/late`)).toBe(false);
     } finally {
       globalThis.__bycli_registry__ = originalRegistry;
     }

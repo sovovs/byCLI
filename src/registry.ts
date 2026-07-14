@@ -4,6 +4,7 @@
 
 import type { IPage } from './types.js';
 import {
+  pruneRegistryMutationKey,
   recordRegistryMutation,
   registryMutationKeys,
   withRegistryMutationGroup,
@@ -185,55 +186,56 @@ type TrackedRegistry = Map<string, CliCommand> & {
   [TRACKED_REGISTRY_MARKER]: true;
 };
 
-class TrackedRegistryMap extends Map<string, CliCommand> implements TrackedRegistry {
-  declare [TRACKED_REGISTRY_MARKER]: true;
-
-  constructor(existing?: ReadonlyMap<string, CliCommand>) {
-    super();
-    Object.defineProperty(this, TRACKED_REGISTRY_MARKER, { value: true });
-    if (existing) {
-      for (const [key, value] of existing) Map.prototype.set.call(this, key, value);
-    }
-  }
-
-  override set(key: string, value: CliCommand): this {
-    const before = { present: this.has(key), value: this.get(key) };
-    recordRegistryMutation(key, before, { present: true, value });
-    return Map.prototype.set.call(this, key, value) as this;
-  }
-
-  override delete(key: string): boolean {
-    const before = { present: this.has(key), value: this.get(key) };
-    recordRegistryMutation(key, before, { present: false, value: undefined });
-    return Map.prototype.delete.call(this, key) as boolean;
-  }
-
-  override clear(): void {
-    const keys = new Set([...this.keys(), ...registryMutationKeys()]);
-    if (keys.size === 0) return;
-    withRegistryMutationGroup(() => {
-      for (const key of keys) {
-        const present = this.has(key);
-        recordRegistryMutation(
-          key,
-          { present, value: present ? this.get(key) : undefined },
-          { present: false, value: undefined },
-        );
-      }
-      Map.prototype.clear.call(this);
-    });
-  }
-}
-
 function isTrackedRegistry(registry: Map<string, CliCommand> | undefined): registry is TrackedRegistry {
   return registry !== undefined
     && (registry as Partial<TrackedRegistry>)[TRACKED_REGISTRY_MARKER] === true;
 }
 
-const existingRegistry = globalThis.__bycli_registry__;
-const _registry: TrackedRegistry = isTrackedRegistry(existingRegistry)
-  ? existingRegistry
-  : new TrackedRegistryMap(existingRegistry);
+function instrumentRegistry(registry: Map<string, CliCommand>): TrackedRegistry {
+  if (isTrackedRegistry(registry)) return registry;
+
+  Object.defineProperties(registry, {
+    set: {
+      value(this: Map<string, CliCommand>, key: string, value: CliCommand): Map<string, CliCommand> {
+        const before = { present: this.has(key), value: this.get(key) };
+        recordRegistryMutation(key, before, { present: true, value });
+        return Map.prototype.set.call(this, key, value) as Map<string, CliCommand>;
+      },
+    },
+    delete: {
+      value(this: Map<string, CliCommand>, key: string): boolean {
+        const before = { present: this.has(key), value: this.get(key) };
+        recordRegistryMutation(key, before, { present: false, value: undefined });
+        const deleted = Map.prototype.delete.call(this, key) as boolean;
+        pruneRegistryMutationKey(key, this);
+        return deleted;
+      },
+    },
+    clear: {
+      value(this: Map<string, CliCommand>): void {
+        const keys = new Set([...this.keys(), ...registryMutationKeys()]);
+        if (keys.size === 0) return;
+        withRegistryMutationGroup(() => {
+          for (const key of keys) {
+            const present = this.has(key);
+            recordRegistryMutation(
+              key,
+              { present, value: present ? this.get(key) : undefined },
+              { present: false, value: undefined },
+            );
+          }
+          Map.prototype.clear.call(this);
+          for (const key of keys) pruneRegistryMutationKey(key, this);
+        });
+      },
+    },
+    [TRACKED_REGISTRY_MARKER]: { value: true },
+  });
+  return registry as TrackedRegistry;
+}
+
+const existingRegistry = globalThis.__bycli_registry__ ?? new Map<string, CliCommand>();
+const _registry = instrumentRegistry(existingRegistry);
 globalThis.__bycli_registry__ = _registry;
 
 export function cli(opts: ConditionalBrowserCliOptions): ConditionalBrowserCliCommand;

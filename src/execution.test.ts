@@ -15,6 +15,7 @@ import { withTimeoutMs } from './runtime.js';
 import * as runtime from './runtime.js';
 import * as capRouting from './capabilityRouting.js';
 import { clearAllHooks, onAfterExecute, onBeforeExecute, type HookContext } from './hooks.js';
+import { registryMutationKeys } from './registry-transaction.js';
 
 describe('executeCommand — conditional browser routing', () => {
   it('keeps ordinary static manifest commands on the lazy run path', async () => {
@@ -1962,6 +1963,63 @@ describe('executeCommand — non-browser timeout', () => {
       else process.env.BYCLI_CONFIG_DIR = prevConfigDir;
       stderrSpy.mockRestore();
       fs.rmSync(baseDir, { recursive: true, force: true });
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps manifest placeholder provenance when conditional hydration creates a trace', async () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-trace-source-'));
+    const modulePath = path.join(baseDir, 'conditional.mjs');
+    const site = `conditional-trace-source-${Date.now()}`;
+    const key = `${site}/list`;
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = baseDir;
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read', browser: () => true,
+  func: async () => [{ ok: true }],
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: () => { throw new Error('sentinel ran'); },
+      source: `manifest:${site}/list`,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const onTraceExport = vi.fn();
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const mockPage = {
+      closeWindow: vi.fn().mockResolvedValue(undefined),
+      startNetworkCapture: vi.fn().mockResolvedValue(true),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+      consoleMessages: vi.fn().mockResolvedValue([]),
+      snapshot: vi.fn().mockResolvedValue('snapshot'),
+      screenshot: vi.fn().mockResolvedValue(undefined),
+      getCurrentUrl: vi.fn().mockResolvedValue('https://example.com'),
+      getActivePage: vi.fn().mockReturnValue('tab-conditional-trace'),
+    } as any;
+    vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => fn(mockPage));
+
+    try {
+      await expect(executeCommand(placeholder, {}, false, { trace: 'on', onTraceExport }))
+        .resolves.toEqual([{ ok: true }]);
+      expect(onTraceExport).toHaveBeenCalledWith(expect.objectContaining({
+        receipt: expect.objectContaining({
+          scope: expect.objectContaining({ adapterSourcePath: modulePath }),
+        }),
+      }));
+      getRegistry().delete(key);
+      expect(registryMutationKeys()).not.toContain(key);
+    } finally {
+      _resetLazyModuleStateForTests();
+      getRegistry().delete(key);
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+      fs.rmSync(baseDir, { recursive: true, force: true });
+      stderrSpy.mockRestore();
       vi.restoreAllMocks();
     }
   });

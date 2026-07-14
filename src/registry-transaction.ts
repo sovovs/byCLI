@@ -20,6 +20,8 @@ export interface RegistryTransaction {
   readonly id: number;
   active: boolean;
   currentGroup: number | undefined;
+  finalized: boolean;
+  readonly finalizedGroups: Set<number>;
 }
 
 interface RegistryTransactionGlobalState {
@@ -28,6 +30,8 @@ interface RegistryTransactionGlobalState {
   groupCounter: number;
   revisionCounter: number;
   revisions: Map<string, number>;
+  transactions: Map<number, RegistryTransaction>;
+  owners: Map<string, Set<number>>;
 }
 
 const TRANSACTION_STATE_KEY = Symbol.for('@sovovs/bycli/registry-transaction-state');
@@ -40,10 +44,23 @@ const state = globalState[TRANSACTION_STATE_KEY] ??= {
   groupCounter: 0,
   revisionCounter: 0,
   revisions: new Map<string, number>(),
+  transactions: new Map<number, RegistryTransaction>(),
+  owners: new Map<string, Set<number>>(),
 };
+state.transactions ??= new Map<number, RegistryTransaction>();
+state.owners ??= new Map<string, Set<number>>();
 
 export function createRegistryTransaction(): RegistryTransaction {
-  return { writes: [], id: ++state.transactionCounter, active: false, currentGroup: undefined };
+  const transaction: RegistryTransaction = {
+    writes: [],
+    id: ++state.transactionCounter,
+    active: false,
+    currentGroup: undefined,
+    finalized: false,
+    finalizedGroups: new Set<number>(),
+  };
+  state.transactions.set(transaction.id, transaction);
+  return transaction;
 }
 
 export function closeRegistryTransaction(transaction: RegistryTransaction): void {
@@ -55,6 +72,9 @@ export async function runRegistryTransaction<T>(
   transaction: RegistryTransaction,
   operation: () => Promise<T>,
 ): Promise<T> {
+  if (transaction.finalized) {
+    throw new Error('Adapter registration transaction is finalized');
+  }
   transaction.active = true;
   return state.storage.run(transaction, async () => {
     try {
@@ -89,18 +109,25 @@ export function recordRegistryMutation(
   if (transaction && !transaction.active) {
     throw new Error('Adapter registration transaction is closed; delayed registration is not allowed');
   }
+  if (transaction?.finalized) {
+    throw new Error('Adapter registration transaction is finalized');
+  }
   const beforeRevision = state.revisions.get(key) ?? 0;
   const afterRevision = ++state.revisionCounter;
   state.revisions.set(key, afterRevision);
   if (!transaction) return;
+  const group = transaction.currentGroup ?? ++state.groupCounter;
   transaction.writes.push({
     key,
     before,
     after,
-    group: transaction.currentGroup ?? ++state.groupCounter,
+    group,
     beforeRevision,
     afterRevision,
   });
+  const owners = state.owners.get(key) ?? new Set<number>();
+  owners.add(transaction.id);
+  state.owners.set(key, owners);
 }
 
 /**
@@ -112,6 +139,49 @@ export function recordRegistryMutation(
  */
 export function registryMutationKeys(): string[] {
   return [...state.revisions.keys()];
+}
+
+export function pruneRegistryMutationKey(key: string, registry: ReadonlyMap<string, CliCommand>): void {
+  if (registry.has(key)) return;
+  if ((state.owners.get(key)?.size ?? 0) > 0) return;
+  state.revisions.delete(key);
+}
+
+export function finalizeRegistryTransaction(
+  transaction: RegistryTransaction,
+  registry: ReadonlyMap<string, CliCommand>,
+  groups?: ReadonlySet<number>,
+): void {
+  if (transaction.active) {
+    throw new Error('Cannot finalize an active adapter registration transaction');
+  }
+  const selectedGroups = groups ?? new Set(transaction.writes.map(write => write.group));
+  const affectedKeys = new Set<string>();
+  for (const write of transaction.writes) {
+    if (!selectedGroups.has(write.group) || transaction.finalizedGroups.has(write.group)) continue;
+    transaction.finalizedGroups.add(write.group);
+    affectedKeys.add(write.key);
+  }
+
+  for (const key of affectedKeys) {
+    const stillOwned = transaction.writes.some(
+      write => write.key === key && !transaction.finalizedGroups.has(write.group),
+    );
+    if (!stillOwned) {
+      const owners = state.owners.get(key);
+      owners?.delete(transaction.id);
+      if (owners?.size === 0) state.owners.delete(key);
+    }
+    pruneRegistryMutationKey(key, registry);
+  }
+
+  const hasUnfinalizedWrites = transaction.writes.some(
+    write => !transaction.finalizedGroups.has(write.group),
+  );
+  if (!hasUnfinalizedWrites) {
+    transaction.finalized = true;
+    state.transactions.delete(transaction.id);
+  }
 }
 
 export function capturedRegistryValue(
@@ -147,7 +217,7 @@ export function rollbackRegistryTransaction(
   groups?: ReadonlySet<number>,
 ): void {
   const groupIds = [...new Set(transaction.writes.map(write => write.group))]
-    .filter(group => !groups || groups.has(group))
+    .filter(group => !transaction.finalizedGroups.has(group) && (!groups || groups.has(group)))
     .sort((a, b) => b - a);
   for (const group of groupIds) {
     const writesByKey = new Map<string, RegistryTransactionWrite[]>();
@@ -169,11 +239,16 @@ export function rollbackRegistryTransaction(
       }
     }
   }
+  finalizeRegistryTransaction(transaction, registry, new Set(groupIds));
 }
 
 export function resetRegistryTransactionStateForTests(): void {
+  for (const transaction of state.transactions.values()) {
+    closeRegistryTransaction(transaction);
+    transaction.finalized = true;
+    for (const write of transaction.writes) transaction.finalizedGroups.add(write.group);
+  }
+  state.transactions.clear();
+  state.owners.clear();
   state.revisions.clear();
-  state.transactionCounter = 0;
-  state.groupCounter = 0;
-  state.revisionCounter = 0;
 }

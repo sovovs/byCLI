@@ -42,6 +42,7 @@ import {
   capturedRegistryValues,
   closeRegistryTransaction,
   createRegistryTransaction,
+  finalizeRegistryTransaction,
   resetRegistryTransactionStateForTests,
   rollbackRegistryTransaction,
   runRegistryTransaction,
@@ -160,10 +161,14 @@ async function runCommand(
     // generation may already be queued/current, but an execution that began
     // on the older generation is allowed to finish with its own command.
     const updated = loadedEntry?.registeredCommands.get(fullName(cmd));
-    if (updated?.func) {
+    if (loadedEntry && updated?.func) {
+      finalizeCommandRegistration(loadedEntry, fullName(cmd));
       return runCommandFunc(updated, page, kwargs, debug);
     }
-    if (updated?.pipeline) return executePipeline(page, updated.pipeline, { args: kwargs, debug });
+    if (loadedEntry && updated?.pipeline) {
+      finalizeCommandRegistration(loadedEntry, fullName(cmd));
+      return executePipeline(page, updated.pipeline, { args: kwargs, debug });
+    }
   }
 
   if (cmd.func) return runCommandFunc(cmd, page, kwargs, debug);
@@ -199,6 +204,11 @@ function rollbackImport(entry: ModuleLoadEntry): void {
 function rollbackCommandRegistration(entry: ModuleLoadEntry, key: string): void {
   const groups = transactionGroupsForKey(entry.transaction, key);
   rollbackRegistryTransaction(entry.transaction, getRegistry(), groups);
+}
+
+function finalizeCommandRegistration(entry: ModuleLoadEntry, key: string): void {
+  const groups = transactionGroupsForKey(entry.transaction, key);
+  finalizeRegistryTransaction(entry.transaction, getRegistry(), groups);
 }
 
 async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
@@ -297,6 +307,14 @@ function invalidateLazyModule(
   if (!modulePath) return;
   const currentEntry = _loadedModules.get(modulePath);
   if (!currentEntry || (expectedEntry && currentEntry !== expectedEntry)) return;
+  if (currentEntry.transaction.active) {
+    void currentEntry.promise.then(
+      () => finalizeRegistryTransaction(currentEntry.transaction, getRegistry()),
+      () => finalizeRegistryTransaction(currentEntry.transaction, getRegistry()),
+    );
+  } else {
+    finalizeRegistryTransaction(currentEntry.transaction, getRegistry());
+  }
   _loadedModules.delete(modulePath);
   _moduleImportGenerations.set(
     modulePath,
@@ -381,6 +399,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     );
   }
   assertMatchingArgSchema(cmd, hydrated, loadedEntry);
+  if (loadedEntry) finalizeCommandRegistration(loadedEntry, key);
   return hydrated;
 }
 
@@ -455,6 +474,7 @@ export async function executeCommand(
     onTraceExport?: (trace: ObservationExportResult) => void;
   } = {},
 ): Promise<unknown> {
+  const initialTraceCommand = cmd as InternalCliCommand;
   let kwargs = opts.prepared
     ? rawKwargs
     : prepareCommandArgsOrThrowArgumentError(cmd, rawKwargs);
@@ -524,7 +544,8 @@ export async function executeCommand(
               target: page.getActivePage?.(),
               site: cmd.site,
               command: fullName(cmd),
-              adapterSourcePath: resolveAdapterSourcePath(internal),
+              adapterSourcePath: resolveAdapterSourcePath(internal)
+                ?? resolveAdapterSourcePath(initialTraceCommand),
             },
           });
         if (observation) {
