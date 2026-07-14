@@ -34,12 +34,49 @@ function canonicalJsonValue(
   ancestors.add(value);
   try {
     if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype) {
+        fail(context, path, 'must be a standard JSON array (custom array instances are not supported)');
+      }
+      if (Object.getOwnPropertySymbols(value).length > 0) {
+        fail(context, path, 'symbol-keyed array properties cannot be represented in JSON');
+      }
+      const propertyNames = Object.getOwnPropertyNames(value);
+      const expectedNames = new Set(['length']);
+      for (let index = 0; index < value.length; index += 1) expectedNames.add(String(index));
+      for (const propertyName of propertyNames) {
+        if (!expectedNames.has(propertyName)) {
+          fail(context, `${path}.${propertyName}`, 'extra array properties cannot be represented in JSON');
+        }
+      }
+      if (propertyNames.length !== expectedNames.size) {
+        fail(context, path, 'sparse arrays cannot be represented faithfully in JSON');
+      }
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+      if (
+        !lengthDescriptor
+        || !('value' in lengthDescriptor)
+        || lengthDescriptor.value !== value.length
+        || lengthDescriptor.enumerable
+        || lengthDescriptor.configurable
+        || !lengthDescriptor.writable
+      ) {
+        fail(context, `${path}.length`, 'non-standard array length descriptors cannot be represented faithfully in JSON');
+      }
       const items: string[] = [];
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.prototype.hasOwnProperty.call(value, index)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor) {
           fail(context, `${path}[${index}]`, 'sparse arrays cannot be represented faithfully in JSON');
         }
-        items.push(canonicalJsonValue(value[index], context, `${path}[${index}]`, ancestors));
+        if (
+          !('value' in descriptor)
+          || !descriptor.enumerable
+          || !descriptor.configurable
+          || !descriptor.writable
+        ) {
+          fail(context, `${path}[${index}]`, 'non-standard array item descriptors cannot be represented faithfully in JSON');
+        }
+        items.push(canonicalJsonValue(descriptor.value, context, `${path}[${index}]`, ancestors));
       }
       return `array:[${items.join(',')}]`;
     }
@@ -54,7 +91,12 @@ function canonicalJsonValue(
     const entries: string[] = [];
     for (const key of propertyNames.sort()) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (!descriptor?.enumerable || !('value' in descriptor)) {
+      if (
+        !descriptor?.enumerable
+        || !('value' in descriptor)
+        || !descriptor.configurable
+        || !descriptor.writable
+      ) {
         fail(context, `${path}.${key}`, 'only enumerable data properties can be represented faithfully in JSON');
       }
       entries.push(`${JSON.stringify(key)}:${canonicalJsonValue(descriptor.value, context, `${path}.${key}`, ancestors)}`);

@@ -79,10 +79,13 @@ cli({
       writeVersion(2);
       const future = new Date(Date.now() + 2_000);
       fs.utimesSync(modulePath, future, future);
-      await expect(executeCommand(placeholder, {})).resolves.toBe(2);
+      await expect(Promise.all([
+        executeCommand(placeholder, {}),
+        executeCommand(placeholder, {}),
+      ])).resolves.toEqual([2, 2]);
       await expect(executeCommand(placeholder, {})).resolves.toBe(2);
       expect((globalThis as any).__reloadImports).toBe(2);
-      expect((globalThis as any).__reloadResults).toEqual([1, 2, 2]);
+      expect((globalThis as any).__reloadResults).toEqual([1, 2, 2, 2]);
     } finally {
       getRegistry().delete(key);
       fs.rmSync(root, { recursive: true, force: true });
@@ -90,6 +93,61 @@ cli({
       else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
       delete (globalThis as any).__reloadImports;
       delete (globalThis as any).__reloadResults;
+    }
+  });
+
+  it('does not let a stale rejected import delete a newer successful generation', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-user-stale-import-'));
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = root;
+    const site = `stale-import-${Date.now()}`;
+    const key = `${site}/status`;
+    const moduleDir = path.join(root, 'clis', site);
+    const modulePath = path.join(moduleDir, 'status.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    fs.mkdirSync(moduleDir, { recursive: true });
+    let markOldStarted!: () => void;
+    const oldStarted = new Promise<void>(resolve => { markOldStarted = resolve; });
+    let rejectOld!: (reason: Error) => void;
+    const oldGate = new Promise<never>((_resolve, reject) => { rejectOld = reject; });
+    Object.assign(globalThis, { __oldImportStarted: markOldStarted, __oldImportGate: oldGate, __newImportCount: 0 });
+    fs.writeFileSync(modulePath, `
+globalThis.__oldImportStarted();
+await globalThis.__oldImportGate;
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'status', access: 'read', description: '', args: [],
+      browser: false, _lazy: true, _modulePath: modulePath,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const staleExecution = executeCommand(placeholder, {});
+      await oldStarted;
+      fs.writeFileSync(modulePath, `
+import { cli, Strategy } from ${JSON.stringify(registryUrl)};
+globalThis.__newImportCount += 1;
+cli({
+  site: ${JSON.stringify(site)}, name: 'status', access: 'read',
+  strategy: Strategy.PUBLIC, browser: false, func: async () => 'fresh',
+});
+`);
+      const future = new Date(Date.now() + 2_000);
+      fs.utimesSync(modulePath, future, future);
+
+      await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
+      rejectOld(new Error('stale import failed'));
+      await expect(staleExecution).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
+      expect((globalThis as any).__newImportCount).toBe(1);
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+      delete (globalThis as any).__oldImportStarted;
+      delete (globalThis as any).__oldImportGate;
+      delete (globalThis as any).__newImportCount;
     }
   });
 
@@ -321,6 +379,63 @@ cli({
       getRegistry().delete(key);
       fs.rmSync(root, { recursive: true, force: true });
       delete (globalThis as any).__schemaHydrateValidate;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each([
+    ['extra property', () => Object.assign([], { meta: true })],
+    ['symbol property', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, Symbol('meta'), { value: true, enumerable: true });
+      return value;
+    }],
+    ['accessor', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, '0', { get: () => true, enumerable: true, configurable: true });
+      return value;
+    }],
+    ['non-enumerable property', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, 'meta', { value: true, enumerable: false });
+      return value;
+    }],
+  ])('rejects hydrated array defaults with unsafe %s before routing', async (_label, makeDefault) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-conditional-array-schema-'));
+    const site = `conditional-array-schema-${Date.now()}-${Math.random()}`;
+    const key = `${site}/list`;
+    const modulePath = path.join(root, 'list.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    (globalThis as any).__unsafeHydratedArray = makeDefault();
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+cli({
+  site: ${JSON.stringify(site)}, name: 'list', access: 'read',
+  browser: () => false,
+  args: [{ name: 'unsafe-array', default: globalThis.__unsafeHydratedArray }],
+  func: async () => [],
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'list', access: 'read', description: '',
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      args: [{ name: 'unsafe-array', default: [] }],
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+
+    try {
+      await expect(executeCommand(placeholder, {})).rejects.toMatchObject({
+        code: 'COMMAND_EXEC', message: expect.stringContaining('unsafe argument schema'),
+      });
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+      expect(browserSessionSpy).not.toHaveBeenCalled();
+    } finally {
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      delete (globalThis as any).__unsafeHydratedArray;
       vi.restoreAllMocks();
     }
   });

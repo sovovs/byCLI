@@ -63,4 +63,37 @@ describe('manifest argument schema canonicalization', () => {
       { name: 'choice', choices: ['ok', undefined] as unknown as string[] },
     ], 'test/choice')).toThrow(/choice/i);
   });
+
+  it('accepts valid dense nested arrays', () => {
+    expect(() => canonicalizeManifestArgSchema([
+      { name: 'matrix', default: [[1, 2], [3, { ok: true }]] },
+    ], 'test/dense-arrays')).not.toThrow();
+  });
+
+  it.each([
+    ['extra string property', () => {
+      const value: unknown[] & { meta?: string } = [];
+      value.meta = 'lost';
+      return value;
+    }],
+    ['symbol property', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, Symbol('meta'), { value: true, enumerable: true });
+      return value;
+    }],
+    ['accessor index', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, '0', { get: () => 'lost', enumerable: true, configurable: true });
+      return value;
+    }],
+    ['non-enumerable extra', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, 'meta', { value: true, enumerable: false });
+      return value;
+    }],
+  ])('rejects array %s metadata that JSON cannot faithfully preserve', (_label, makeValue) => {
+    expect(() => canonicalizeManifestArgSchema([
+      { name: 'unsafe-array', default: makeValue() },
+    ], 'test/unsafe-array')).toThrow(ManifestSchemaError);
+  });
 });

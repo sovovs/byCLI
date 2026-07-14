@@ -39,9 +39,13 @@ import { ObservationSession, exportObservationSession, type ObservationExportRes
 import { resolveAdapterSourcePath } from './adapter-source.js';
 import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
 
-const _loadedModules = new Map<string, Promise<void>>();
-/** Track mtime of loaded user adapter files for hot-reload in daemon mode. */
-const _moduleMtimes = new Map<string, number>();
+interface ModuleLoadEntry {
+  promise: Promise<void>;
+  observedMtime: number | undefined;
+  generation: number;
+}
+
+const _loadedModules = new Map<string, ModuleLoadEntry>();
 /** Independent cache-busting generation; retained when an import promise is discarded. */
 const _moduleImportGenerations = new Map<string, number>();
 /** User adapter dir with a trailing separator, so `startsWith` can't match a sibling
@@ -127,63 +131,82 @@ async function runCommand(
   );
 }
 
-async function loadLazyModule(internal: InternalCliCommand): Promise<void> {
+function moduleMtime(modulePath: string): number | undefined {
+  try {
+    return fs.statSync(modulePath).mtimeMs;
+  } catch {
+    return undefined;
+  }
+}
+
+async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadEntry | undefined> {
   const modulePath = internal._modulePath;
   if (!internal._lazy || !modulePath) return;
 
-  // Hot-reload: if a user adapter's file has changed on disk, invalidate cache.
   const isUserAdapter = modulePath.startsWith(userClisPrefix());
-  if (isUserAdapter && _loadedModules.has(modulePath)) {
-    try {
-      const stat = fs.statSync(modulePath);
-      const prevMtime = _moduleMtimes.get(modulePath);
-      if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
-        invalidateLazyModule(modulePath);
-      }
-    } catch { /* file may have been deleted; let import below handle it */ }
+  const observedMtime = isUserAdapter ? moduleMtime(modulePath) : undefined;
+  let entry = _loadedModules.get(modulePath);
+  if (entry && isUserAdapter && entry.observedMtime !== observedMtime) {
+    invalidateLazyModule(modulePath, entry);
+    entry = undefined;
   }
 
-  if (!_loadedModules.has(modulePath)) {
+  if (!entry) {
     const url = pathToFileURL(modulePath).href;
     const generation = _moduleImportGenerations.get(modulePath) ?? 0;
     const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
+    let createdEntry!: ModuleLoadEntry;
     const loadPromise = import(importUrl).then(
-      () => {
-        try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
-      },
+      () => undefined,
       (err) => {
-        invalidateLazyModule(modulePath);
+        invalidateLazyModule(modulePath, createdEntry);
         throw adapterLoadError(
           `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
           'Check that the adapter file exists and has no syntax errors.',
         );
       },
     );
-    _loadedModules.set(modulePath, loadPromise);
+    createdEntry = { promise: loadPromise, observedMtime, generation };
+    _loadedModules.set(modulePath, createdEntry);
+    entry = createdEntry;
   }
-  await _loadedModules.get(modulePath);
+  await entry.promise;
+  return entry;
 }
 
-function invalidateLazyModule(modulePath: string | undefined): void {
-  if (!modulePath || !_loadedModules.delete(modulePath)) return;
-  _moduleImportGenerations.set(modulePath, (_moduleImportGenerations.get(modulePath) ?? 0) + 1);
+function invalidateLazyModule(
+  modulePath: string | undefined,
+  expectedEntry?: ModuleLoadEntry,
+): void {
+  if (!modulePath) return;
+  const currentEntry = _loadedModules.get(modulePath);
+  if (!currentEntry || (expectedEntry && currentEntry !== expectedEntry)) return;
+  _loadedModules.delete(modulePath);
+  _moduleImportGenerations.set(
+    modulePath,
+    Math.max(_moduleImportGenerations.get(modulePath) ?? 0, currentEntry.generation) + 1,
+  );
 }
 
-function assertMatchingArgSchema(placeholder: CliCommand, hydrated: CliCommand): void {
+function assertMatchingArgSchema(
+  placeholder: CliCommand,
+  hydrated: CliCommand,
+  loadedEntry: ModuleLoadEntry | undefined,
+): void {
   const key = fullName(placeholder);
   try {
     const manifestSchema = canonicalizeManifestArgSchema(placeholder.args, `Manifest command ${key}`);
     const moduleSchema = canonicalizeManifestArgSchema(hydrated.args, `Hydrated command ${key}`);
     if (manifestSchema === moduleSchema) return;
   } catch (error) {
-    invalidateLazyModule((placeholder as InternalCliCommand)._modulePath);
+    invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
     if (!(error instanceof ManifestSchemaError)) throw error;
     throw new CommandExecutionError(
       `Conditional adapter ${key} has an unsafe argument schema: ${error.message}`,
       'Use only JSON-safe defaults and string choices, then rebuild the CLI manifest.',
     );
   }
-  invalidateLazyModule((placeholder as InternalCliCommand)._modulePath);
+  invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
   throw new CommandExecutionError(
     `Conditional adapter ${key} argument schema does not match its manifest`,
     'Rebuild the CLI manifest so defaults, coercion, and validation use the adapter module schema.',
@@ -200,8 +223,9 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     );
   }
   const placeholderResolver = cmd.requiresBrowser;
+  let loadedEntry: ModuleLoadEntry | undefined;
   try {
-    await loadLazyModule(internal);
+    loadedEntry = await loadLazyModule(internal);
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CommandExecutionError(
@@ -216,7 +240,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || fullName(hydrated) !== key
     || hydrated.browser !== 'conditional';
   if (invalidReplacement) {
-    invalidateLazyModule(internal._modulePath);
+    invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
       'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
@@ -230,13 +254,13 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     || hydratedInternal._lazy === true
     || hydratedInternal._modulePath !== undefined
   ) {
-    invalidateLazyModule(internal._modulePath);
+    invalidateLazyModule(internal._modulePath, loadedEntry);
     throw new CommandExecutionError(
       `Conditional adapter ${key} did not register a valid hydrated conditional command`,
       'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
     );
   }
-  assertMatchingArgSchema(cmd, hydrated);
+  assertMatchingArgSchema(cmd, hydrated, loadedEntry);
   return hydrated;
 }
 
