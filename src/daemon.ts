@@ -37,6 +37,8 @@ import { resolveTempPolicy, resolveRunnerConfig, resolveTempCapacity } from './r
 import { defaultSessionKeyRegistry } from './recorder/runner/session-keys.js';
 import { recordExtensionVersion } from './update-check.js';
 import {
+  EXTENSION_CAPABILITY_MISSING_ERROR_CODE,
+  EXTENSION_CAPABILITY_MISSING_HTTP_STATUS,
   extensionCapabilityHint,
   missingRequiredExtensionCapability,
   normalizeExtensionCapabilities,
@@ -475,10 +477,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
       const requiredCapability = missingRequiredExtensionCapability(body, route.connection.extensionCapabilities);
       if (requiredCapability) {
-        jsonResponse(res, 409, {
+        jsonResponse(res, EXTENSION_CAPABILITY_MISSING_HTTP_STATUS, {
           id: body.id,
           ok: false,
-          errorCode: 'extension_capability_missing',
+          errorCode: EXTENSION_CAPABILITY_MISSING_ERROR_CODE,
           error: `Connected Browser Bridge does not advertise ${requiredCapability}.`,
           errorHint: extensionCapabilityHint(requiredCapability),
         });

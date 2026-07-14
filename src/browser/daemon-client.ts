@@ -204,7 +204,7 @@ async function sendCommandRaw(
           throw new BrowserCommandError(result.error ?? 'Browser command result is unknown', result.errorCode, result.errorHint);
         }
         const isDuplicateCommandId = res.status === 409
-          || (result.error ?? '').includes('Duplicate command id');
+          && (result.error ?? '').includes('Duplicate command id');
         if (isDuplicateCommandId && attempt < maxRetries) {
           continue;
         }

@@ -50,6 +50,12 @@ describe('daemon-client', () => {
     await expect(fetchDaemonStatus()).resolves.toBeNull();
   });
 
+  it('fetchDaemonStatus returns null for an HTTP 500 response', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
+
+    await expect(fetchDaemonStatus()).resolves.toBeNull();
+  });
+
   it('requestDaemonShutdown POSTs to the shared shutdown endpoint', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue({ ok: true } as Response);
@@ -240,6 +246,28 @@ describe('daemon-client', () => {
       name: 'BrowserCommandError',
       code: 'command_result_unknown',
       hint: 'Inspect state before retrying.',
+    } satisfies Partial<BrowserCommandError>);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a missing extension capability once without duplicate-id retries', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 412,
+      json: () => Promise.resolve({
+        id: 'server',
+        ok: false,
+        errorCode: 'extension_capability_missing',
+        error: 'Connected Browser Bridge does not advertise focus-window-v1.',
+        errorHint: 'Update and reload the byCLI Browser Bridge extension, then retry the login flow.',
+      }),
+    } as Response);
+
+    await expect(sendCommand('tabs', { op: 'focus' })).rejects.toMatchObject({
+      name: 'BrowserCommandError',
+      code: 'extension_capability_missing',
+      hint: expect.stringMatching(/update.*reload/i),
     } satisfies Partial<BrowserCommandError>);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

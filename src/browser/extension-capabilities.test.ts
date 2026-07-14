@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EXTENSION_CAPABILITY_MISSING_HTTP_STATUS,
   FOCUS_WINDOW_CAPABILITY,
   missingRequiredExtensionCapability,
   normalizeExtensionCapabilities,
@@ -7,6 +8,10 @@ import {
 } from './extension-capabilities.js';
 
 describe('extension capability negotiation', () => {
+  it('uses a non-conflict HTTP status for missing capabilities', () => {
+    expect(EXTENSION_CAPABILITY_MISSING_HTTP_STATUS).toBe(412);
+  });
+
   it('normalizes only unique string capabilities from extension hello', () => {
     expect(normalizeExtensionCapabilities(['focus-window-v1', 42, 'focus-window-v1', ''])).toEqual([
       FOCUS_WINDOW_CAPABILITY,

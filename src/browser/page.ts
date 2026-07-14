@@ -188,7 +188,14 @@ export class Page extends BasePage {
 
   async focusWindow(): Promise<void> {
     const status = await fetchDaemonStatus(this.contextId ? { contextId: this.contextId } : undefined);
-    if (!status?.extensionConnected || !status.extensionCapabilities?.includes(FOCUS_WINDOW_CAPABILITY)) {
+    const selectedExtensionIsConnected = status?.extensionConnected === true
+      && status.profileRequired !== true
+      && status.profileDisconnected !== true;
+    const capabilities = status?.extensionCapabilities;
+    const capabilityListIsDefinitive = Array.isArray(capabilities);
+    if (selectedExtensionIsConnected
+      && capabilityListIsDefinitive
+      && !capabilities.includes(FOCUS_WINDOW_CAPABILITY)) {
       throw new Error(
         `Connected Browser Bridge does not advertise ${FOCUS_WINDOW_CAPABILITY}. ${extensionCapabilityHint(FOCUS_WINDOW_CAPABILITY)}`,
       );

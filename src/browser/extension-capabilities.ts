@@ -1,4 +1,6 @@
 export const FOCUS_WINDOW_CAPABILITY = 'focus-window-v1';
+export const EXTENSION_CAPABILITY_MISSING_ERROR_CODE = 'extension_capability_missing';
+export const EXTENSION_CAPABILITY_MISSING_HTTP_STATUS = 412;
 
 export function normalizeExtensionCapabilities(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
