@@ -135,9 +135,12 @@ cli({
       const future = new Date(Date.now() + 2_000);
       fs.utimesSync(modulePath, future, future);
 
-      await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
+      const freshExecution = executeCommand(placeholder, {});
+      await new Promise(resolve => setTimeout(resolve, 25));
+      expect((globalThis as any).__newImportCount).toBe(0);
       rejectOld(new Error('stale import failed'));
       await expect(staleExecution).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      await expect(freshExecution).resolves.toBe('fresh');
       await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
       expect((globalThis as any).__newImportCount).toBe(1);
     } finally {
@@ -148,6 +151,92 @@ cli({
       delete (globalThis as any).__oldImportStarted;
       delete (globalThis as any).__oldImportGate;
       delete (globalThis as any).__newImportCount;
+    }
+  });
+
+  it('serializes import generations so a stale successful registration cannot overwrite fresh state', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-user-stale-success-'));
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = root;
+    const site = `stale-success-${Date.now()}`;
+    const key = `${site}/status`;
+    const moduleDir = path.join(root, 'clis', site);
+    const modulePath = path.join(moduleDir, 'status.mjs');
+    const registryUrl = new URL('./registry.ts', import.meta.url).href;
+    fs.mkdirSync(moduleDir, { recursive: true });
+    let markOldStarted!: () => void;
+    const oldStarted = new Promise<void>(resolve => { markOldStarted = resolve; });
+    let releaseOld!: () => void;
+    const oldGate = new Promise<void>(resolve => { releaseOld = resolve; });
+    let markFreshStarted!: () => void;
+    const freshStarted = new Promise<void>(resolve => { markFreshStarted = resolve; });
+    const sentinelPredicate = vi.fn(() => { throw new Error('placeholder predicate ran'); });
+    Object.assign(globalThis, {
+      __staleSuccessStarted: markOldStarted,
+      __staleSuccessGate: oldGate,
+      __registrationOrder: [],
+      __freshSuccessImports: 0,
+      __freshSuccessStarted: markFreshStarted,
+    });
+    fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__staleSuccessStarted();
+await globalThis.__staleSuccessGate;
+globalThis.__registrationOrder.push('stale');
+cli({
+  site: ${JSON.stringify(site)}, name: 'status', access: 'read',
+  browser: () => false, func: async () => 'stale',
+});
+`);
+    const placeholder: InternalCliCommand = {
+      site, name: 'status', access: 'read', description: '', args: [],
+      browser: 'conditional', requiresBrowser: sentinelPredicate,
+      _lazy: true, _modulePath: modulePath, _hydrateBeforeBrowserRouting: true,
+    };
+    registerCommand(placeholder);
+
+    try {
+      const staleExecution = executeCommand(placeholder, {});
+      await oldStarted;
+      fs.writeFileSync(modulePath, `
+import { cli } from ${JSON.stringify(registryUrl)};
+globalThis.__freshSuccessStarted();
+globalThis.__freshSuccessImports += 1;
+globalThis.__registrationOrder.push('fresh');
+cli({
+  site: ${JSON.stringify(site)}, name: 'status', access: 'read',
+  browser: () => false, func: async () => 'fresh',
+});
+`);
+      const future = new Date(Date.now() + 2_000);
+      fs.utimesSync(modulePath, future, future);
+      const freshExecution = executeCommand(placeholder, {});
+
+      const stateBeforeRelease = await Promise.race([
+        freshStarted.then(() => 'started'),
+        new Promise<'blocked'>(resolve => setTimeout(() => resolve('blocked'), 100)),
+      ]);
+      expect(stateBeforeRelease).toBe('blocked');
+      expect((globalThis as any).__freshSuccessImports).toBe(0);
+      releaseOld();
+      await expect(Promise.all([staleExecution, freshExecution])).resolves.toEqual(['stale', 'fresh']);
+      expect((globalThis as any).__registrationOrder).toEqual(['stale', 'fresh']);
+      expect((globalThis as any).__freshSuccessImports).toBe(1);
+      expect(getRegistry().get(key)?.browser).toBe('conditional');
+      await expect(executeCommand(placeholder, {})).resolves.toBe('fresh');
+      expect((globalThis as any).__freshSuccessImports).toBe(1);
+      expect(sentinelPredicate).not.toHaveBeenCalled();
+    } finally {
+      releaseOld();
+      getRegistry().delete(key);
+      fs.rmSync(root, { recursive: true, force: true });
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+      delete (globalThis as any).__staleSuccessStarted;
+      delete (globalThis as any).__staleSuccessGate;
+      delete (globalThis as any).__registrationOrder;
+      delete (globalThis as any).__freshSuccessImports;
+      delete (globalThis as any).__freshSuccessStarted;
     }
   });
 

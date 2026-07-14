@@ -43,6 +43,8 @@ interface ModuleLoadEntry {
   promise: Promise<void>;
   observedMtime: number | undefined;
   generation: number;
+  /** Commands registered by this exact import generation. */
+  registeredCommands: Map<string, CliCommand>;
 }
 
 const _loadedModules = new Map<string, ModuleLoadEntry>();
@@ -114,9 +116,12 @@ async function runCommand(
 ): Promise<unknown> {
   const internal = cmd as InternalCliCommand;
   if (internal._lazy && internal._modulePath) {
-    await loadLazyModule(internal);
+    const loadedEntry = await loadLazyModule(internal);
 
-    const updated = getRegistry().get(fullName(cmd));
+    // Use the command registered by this import generation. A newer file
+    // generation may already be queued/current, but an execution that began
+    // on the older generation is allowed to finish with its own command.
+    const updated = loadedEntry?.registeredCommands.get(fullName(cmd));
     if (updated?.func) {
       return runCommandFunc(updated, page, kwargs, debug);
     }
@@ -146,7 +151,9 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadE
   const isUserAdapter = modulePath.startsWith(userClisPrefix());
   const observedMtime = isUserAdapter ? moduleMtime(modulePath) : undefined;
   let entry = _loadedModules.get(modulePath);
+  let predecessor: ModuleLoadEntry | undefined;
   if (entry && isUserAdapter && entry.observedMtime !== observedMtime) {
+    predecessor = entry;
     invalidateLazyModule(modulePath, entry);
     entry = undefined;
   }
@@ -156,17 +163,31 @@ async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadE
     const generation = _moduleImportGenerations.get(modulePath) ?? 0;
     const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
     let createdEntry!: ModuleLoadEntry;
-    const loadPromise = import(importUrl).then(
-      () => undefined,
-      (err) => {
+    const loadPromise = (async () => {
+      // Serialize module side effects. Successor callers may continue after a
+      // predecessor failure, while callers awaiting the predecessor still see
+      // its original rejection.
+      if (predecessor) await predecessor.promise.catch(() => undefined);
+      const registryBefore = new Map(getRegistry());
+      try {
+        await import(importUrl);
+      } catch (err) {
         invalidateLazyModule(modulePath, createdEntry);
         throw adapterLoadError(
           `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
           'Check that the adapter file exists and has no syntax errors.',
         );
-      },
-    );
-    createdEntry = { promise: loadPromise, observedMtime, generation };
+      }
+      for (const [key, command] of getRegistry()) {
+        if (registryBefore.get(key) !== command) createdEntry.registeredCommands.set(key, command);
+      }
+    })();
+    createdEntry = {
+      promise: loadPromise,
+      observedMtime,
+      generation,
+      registeredCommands: new Map(),
+    };
     _loadedModules.set(modulePath, createdEntry);
     entry = createdEntry;
   }
@@ -234,7 +255,7 @@ async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
     );
   }
 
-  const hydrated = getRegistry().get(key);
+  const hydrated = loadedEntry?.registeredCommands.get(key);
   const invalidReplacement = !hydrated
     || hydrated === cmd
     || fullName(hydrated) !== key
