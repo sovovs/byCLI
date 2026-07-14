@@ -11,8 +11,8 @@ const SENSITIVE_HEADER_NAMES = new Set([
   'x-xsrf-token',
 ]);
 
-const SENSITIVE_FIELD_PATTERN = /(password|passwd|pwd|token|secret|authorization|cookie|set-cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?id|csrf|xsrf)/i;
-const SENSITIVE_URL_PARAMS = /([?&])(token|key|secret|password|auth|access_token|api_key|session_id|csrf|xsrf)=[^&]*/gi;
+const SENSITIVE_FIELD_PATTERN = /(password|passwd|pwd|token|secret|fingerprint|authorization|cookie|set-cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?id|csrf|xsrf)/i;
+const SENSITIVE_URL_PARAMS = /([?&])(token|key|secret|fingerprint|password|auth|access_token|api_key|session_id|csrf|xsrf)=[^&]*/gi;
 
 export interface RedactionOptions {
   allowlist?: string[];
@@ -43,8 +43,8 @@ export function redactText(text: string, opts: RedactionOptions = {}): string {
   const max = opts.maxStringLength ?? 50_000;
   let out = text
     .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]')
-    .replace(/(["'])(password|passwd|pwd|token|secret|api_key|apikey|access_token|session_id)\1\s*:\s*(["'])(.*?)\3/gi, '$1$2$1:$3[REDACTED]$3')
-    .replace(/(token|secret|password|api_key|apikey|access_token|session_id)[=:]\s*['"]?[^'"\s,;}&]+['"]?/gi, '$1=[REDACTED]')
+    .replace(/(["'])(password|passwd|pwd|token|secret|fingerprint|api_key|apikey|access_token|session_id)\1\s*:\s*(["'])(.*?)\3/gi, '$1$2$1:$3[REDACTED]$3')
+    .replace(/(token|secret|fingerprint|password|api_key|apikey|access_token|session_id)[=:]\s*['"]?[^'"\s,;}&]+['"]?/gi, '$1=[REDACTED]')
     .replace(/(cookie[=:]\s*)[^\n;]{3,}/gi, '$1[REDACTED]')
     .replace(/eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '[REDACTED_JWT]');
   if (out.length > max) out = out.slice(0, max) + `\n...[truncated, ${out.length - max} chars omitted]`;
