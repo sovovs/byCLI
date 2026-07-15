@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AuthRequiredError, CommandExecutionError, TimeoutError, toEnvelope } from '@sovovs/bycli/errors';
 import { getRegistry } from '../../src/registry.js';
 import { render } from '../../src/output.js';
@@ -12,6 +12,24 @@ const secrets = {
   fingerprint: 'fingerprint+A/B=history-secret',
 };
 const cookie = `session=${secrets.cookieValue}; editor=secondary-cookie-secret`;
+const wechatEnvironmentKeys = ['WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT'] as const;
+type WechatEnvironmentSnapshot = Record<(typeof wechatEnvironmentKeys)[number], string | undefined>;
+
+function snapshotWechatEnvironment(): WechatEnvironmentSnapshot {
+  return Object.fromEntries(
+    wechatEnvironmentKeys.map(key => [key, process.env[key]]),
+  ) as WechatEnvironmentSnapshot;
+}
+
+const initialWechatEnvironment = snapshotWechatEnvironment();
+
+function restoreWechatEnvironment(snapshot = initialWechatEnvironment) {
+  for (const key of wechatEnvironmentKeys) {
+    const value = snapshot[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
 
 beforeAll(async () => {
   await Promise.all([
@@ -24,10 +42,10 @@ beforeAll(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
-  delete process.env.WECHAT_TOKEN;
-  delete process.env.WECHAT_COOKIE;
-  delete process.env.WECHAT_FINGERPRINT;
+  restoreWechatEnvironment();
 });
+
+afterAll(() => restoreWechatEnvironment());
 
 function command(name: string) {
   const value = getRegistry().get(`weixin/${name}`);
@@ -74,6 +92,22 @@ async function captureRender(data: unknown, fmt: string, columns?: string[]) {
 }
 
 describe('built-in weixin history workflow', () => {
+  it('restores pre-existing WeChat environment values exactly', () => {
+    process.env.WECHAT_TOKEN = 'pre-existing-token';
+    process.env.WECHAT_COOKIE = 'pre-existing-cookie';
+    process.env.WECHAT_FINGERPRINT = 'pre-existing-fingerprint';
+    const snapshot = snapshotWechatEnvironment();
+    process.env.WECHAT_TOKEN = 'temporary-token';
+    process.env.WECHAT_COOKIE = 'temporary-cookie';
+    delete process.env.WECHAT_FINGERPRINT;
+
+    restoreWechatEnvironment(snapshot);
+
+    expect(process.env.WECHAT_TOKEN).toBe('pre-existing-token');
+    expect(process.env.WECHAT_COOKIE).toBe('pre-existing-cookie');
+    expect(process.env.WECHAT_FINGERPRINT).toBe('pre-existing-fingerprint');
+  });
+
   it('runs the registered browser accounts command and preserves two similar candidates', async () => {
     let preflightReads = 0;
     let fingerprintReads = 0;
@@ -146,7 +180,7 @@ describe('built-in weixin history workflow', () => {
       expect(rows[1]).toMatchObject({ stage: 'download', path: null, error: 'article download failed' });
       const savedPath = String(rows[0].path);
       expect(path.relative(fs.realpathSync(output), savedPath)).not.toMatch(/^\.\.(?:[/\\]|$)/);
-      expect(fs.statSync(savedPath).mode & 0o777).toBe(0o600);
+      if (process.platform !== 'win32') expect(fs.statSync(savedPath).mode & 0o777).toBe(0o600);
       expect(fs.readFileSync(savedPath, 'utf8')).toContain('Saved body');
       assertSecretFree(rows);
       assertSecretFree(fs.readFileSync(savedPath, 'utf8'));
