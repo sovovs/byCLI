@@ -10,11 +10,12 @@ const browserRequired = args => readAuthSource(args) === 'browser';
 
 export const accountsCommand = cli({
   site: 'weixin', name: 'accounts', access: 'read', domain: DOMAIN,
+  description: 'Search WeChat official accounts and return their fakeids',
   strategy: Strategy.INTERCEPT, browser: browserRequired,
   args: [
     { name: 'query', positional: true, required: true, help: 'Official-account name to search for' },
-    { name: 'limit', type: 'int', default: 10 },
-    { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
+    { name: 'limit', type: 'int', default: 10, help: 'Maximum number of matching accounts to return' },
+    { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
   columns: ['nickname', 'fakeid', 'alias'],
   func: async (page, args) => {

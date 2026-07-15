@@ -27807,7 +27807,7 @@
   {
     "site": "weixin",
     "name": "accounts",
-    "description": "",
+    "description": "Search WeChat official accounts and return their fakeids",
     "access": "read",
     "domain": "mp.weixin.qq.com",
     "strategy": "intercept",
@@ -27825,14 +27825,14 @@
         "type": "int",
         "default": 10,
         "required": false,
-        "help": ""
+        "help": "Maximum number of matching accounts to return"
       },
       {
         "name": "auth-source",
         "type": "str",
         "default": "browser",
         "required": false,
-        "help": "",
+        "help": "Credential source: browser session or environment variables",
         "choices": [
           "browser",
           "env"
@@ -27852,7 +27852,7 @@
   {
     "site": "weixin",
     "name": "articles",
-    "description": "",
+    "description": "List published articles from a WeChat official account",
     "access": "read",
     "domain": "mp.weixin.qq.com",
     "strategy": "cookie",
@@ -27869,26 +27869,26 @@
         "name": "name",
         "type": "str",
         "required": false,
-        "help": ""
+        "help": "Optional official-account name for display context"
       },
       {
         "name": "limit",
         "type": "int",
         "required": false,
-        "help": ""
+        "help": "Maximum number of articles to return"
       },
       {
         "name": "max-pages",
         "type": "int",
         "required": false,
-        "help": ""
+        "help": "Maximum number of history pages to scan"
       },
       {
         "name": "auth-source",
         "type": "str",
         "default": "browser",
         "required": false,
-        "help": "",
+        "help": "Credential source: browser session or environment variables",
         "choices": [
           "browser",
           "env"
@@ -28044,7 +28044,7 @@
   {
     "site": "weixin",
     "name": "save-articles",
-    "description": "",
+    "description": "Download WeChat official-account articles as Markdown files",
     "access": "write",
     "domain": "mp.weixin.qq.com",
     "strategy": "cookie",
@@ -28061,33 +28061,33 @@
         "name": "name",
         "type": "str",
         "required": false,
-        "help": ""
+        "help": "Official-account name used in Markdown metadata"
       },
       {
         "name": "output",
         "type": "str",
         "default": "./weixin-articles",
         "required": false,
-        "help": ""
+        "help": "Directory for saved Markdown files"
       },
       {
         "name": "limit",
         "type": "int",
         "required": false,
-        "help": ""
+        "help": "Maximum number of articles to save"
       },
       {
         "name": "max-pages",
         "type": "int",
         "required": false,
-        "help": ""
+        "help": "Maximum number of history pages to scan"
       },
       {
         "name": "auth-source",
         "type": "str",
         "default": "browser",
         "required": false,
-        "help": "",
+        "help": "Credential source: browser session or environment variables",
         "choices": [
           "browser",
           "env"

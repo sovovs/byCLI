@@ -1,7 +1,8 @@
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { MAX_WECHAT_HTML_BYTES } from '@sovovs/bycli/download/wechat-article';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
-import { collectArticles } from './_wechat/article-service.js';
+import { collectArticles, isTrustedWechatArticleUrl } from './_wechat/article-service.js';
 import { saveArticles } from './_wechat/save-service.js';
 import { createWechatApi } from './_wechat/wechat-api.js';
 import { readAuthSource } from './_wechat/args.js';
@@ -9,24 +10,82 @@ import { readAuthSource } from './_wechat/args.js';
 const DOMAIN = 'mp.weixin.qq.com';
 const browserRequired = args => readAuthSource(args) === 'browser';
 
-async function fetchArticleHtml(article) {
+const MAX_REDIRECTS = 5;
+
+async function readBoundedHtml(response) {
+  const lengthValue = response.headers?.get?.('content-length');
+  if (lengthValue !== null && lengthValue !== undefined && lengthValue !== '') {
+    const length = Number(lengthValue);
+    if (!Number.isSafeInteger(length) || length < 0 || length > MAX_WECHAT_HTML_BYTES) {
+      throw new CommandExecutionError('Article response exceeds the allowed size');
+    }
+  }
+  if (!response.body?.getReader) {
+    if (typeof response.text !== 'function') throw new CommandExecutionError('Article response has no readable body');
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_WECHAT_HTML_BYTES) {
+      throw new CommandExecutionError('Article response exceeds the allowed size');
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!(value instanceof Uint8Array)) throw new CommandExecutionError('Article response returned invalid body data');
+    total += value.byteLength;
+    if (total > MAX_WECHAT_HTML_BYTES) {
+      try { await reader.cancel(); } catch { /* best-effort stream cleanup */ }
+      throw new CommandExecutionError('Article response exceeds the allowed size');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+}
+
+export async function fetchArticleHtml(article, { fetchImpl = fetch, timeoutMs = 30_000 } = {}) {
   try {
-    const response = await fetch(article.url, { signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) throw new CommandExecutionError(`Article request failed: HTTP ${response.status}`);
-    return await response.text();
+    if (!isTrustedWechatArticleUrl(article?.url)) throw new CommandExecutionError('Article request rejected an untrusted URL');
+    let current = new URL(article.url).href;
+    const seen = new Set([current]);
+    for (let redirects = 0; ; redirects += 1) {
+      const response = await fetchImpl(current, {
+        signal: AbortSignal.timeout(timeoutMs), redirect: 'manual',
+      });
+      if (response.status >= 300 && response.status < 400) {
+        if (redirects >= MAX_REDIRECTS) throw new CommandExecutionError('Article request exceeded the redirect limit');
+        const location = response.headers?.get?.('location');
+        if (!location) throw new CommandExecutionError('Article redirect was missing a destination');
+        let next;
+        try { next = new URL(location, current).href; } catch { throw new CommandExecutionError('Article redirect was invalid'); }
+        if (!isTrustedWechatArticleUrl(next)) throw new CommandExecutionError('Article redirect was rejected');
+        if (seen.has(next)) throw new CommandExecutionError('Article redirect loop was rejected');
+        seen.add(next);
+        current = next;
+        continue;
+      }
+      if (!response.ok) throw new CommandExecutionError(`Article request failed: HTTP ${response.status}`);
+      return await readBoundedHtml(response);
+    }
   } catch (error) {
     if (error instanceof CommandExecutionError) throw error;
-    throw new CommandExecutionError(`Article request failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new CommandExecutionError('Article request failed');
   }
 }
 
 export const saveArticlesCommand = cli({
   site: 'weixin', name: 'save-articles', access: 'write', domain: DOMAIN,
+  description: 'Download WeChat official-account articles as Markdown files',
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
-    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name' },
-    { name: 'output', default: './weixin-articles' }, { name: 'limit', type: 'int' },
-    { name: 'max-pages', type: 'int' }, { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
+    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name', help: 'Official-account name used in Markdown metadata' },
+    { name: 'output', default: './weixin-articles', help: 'Directory for saved Markdown files' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to save' },
+    { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' }, { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
   columns: ['title', 'status', 'stage', 'path', 'error', 'url'],
   func: async (page, args) => {

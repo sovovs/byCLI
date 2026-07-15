@@ -10,11 +10,12 @@ const browserRequired = args => readAuthSource(args) === 'browser';
 
 export const articlesCommand = cli({
   site: 'weixin', name: 'articles', access: 'read', domain: DOMAIN,
+  description: 'List published articles from a WeChat official account',
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
     { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' },
-    { name: 'name' }, { name: 'limit', type: 'int' }, { name: 'max-pages', type: 'int' },
-    { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
+    { name: 'name', help: 'Optional official-account name for display context' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to return' }, { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' },
+    { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
   columns: ['title', 'author', 'digest', 'publishedAt', 'url'],
   func: async (page, args) => {

@@ -4,12 +4,26 @@ export const MAX_PAGES = 100;
 export const MAX_PAGE_SIZE = 10;
 export const MAX_ARTICLES = 1000;
 
+export function isTrustedWechatArticleUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'mp.weixin.qq.com'
+      && url.port === ''
+      && url.username === ''
+      && url.password === ''
+      && (url.pathname === '/s' || url.pathname.startsWith('/s/'));
+  } catch {
+    return false;
+  }
+}
+
 /** @param {any} article */
 export function isUsableArticle(article) {
   return Boolean(article)
     && article.isDeleted !== true
     && typeof article.url === 'string'
-    && article.url.length > 0
+    && isTrustedWechatArticleUrl(article.url)
     && !article.url.includes('tempkey=');
 }
 

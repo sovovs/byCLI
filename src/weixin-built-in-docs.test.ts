@@ -72,6 +72,11 @@ describe('built-in weixin history command release artifacts', () => {
     const byName = new Map(
       manifest.filter(entry => entry.site === 'weixin').map(entry => [entry.name, entry]),
     );
+    for (const name of ['accounts', 'articles', 'save-articles']) {
+      const command = byName.get(name) as { description?: string; args?: Array<{ help?: string }> };
+      expect(command.description?.trim(), `${name} manifest description`).toBeTruthy();
+      expect(command.args?.every(arg => Boolean(arg.help?.trim())), `${name} manifest arg help`).toBe(true);
+    }
 
     expect(byName.get('accounts')).toMatchObject({
       browser: 'conditional',

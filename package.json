@@ -32,6 +32,7 @@
     "./download/article-download": "./dist/src/download/article-download.js",
     "./download/media-download": "./dist/src/download/media-download.js",
     "./download/progress": "./dist/src/download/progress.js",
+    "./download/wechat-article": "./dist/src/download/wechat-article.js",
     "./pipeline": "./dist/src/pipeline/index.js"
   },
   "files": [

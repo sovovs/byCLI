@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import {
   MAX_ARTICLES, MAX_PAGES, MAX_PAGE_SIZE, collectArticles, isUsableArticle,
+  isTrustedWechatArticleUrl,
 } from './article-service.js';
 
 const article = (id, extra = {}) => ({
@@ -20,6 +21,27 @@ describe('isUsableArticle', () => {
     expect(isUsableArticle(article('deleted', { isDeleted: true }))).toBe(false);
     expect(isUsableArticle(article('empty', { url: '' }))).toBe(false);
     expect(isUsableArticle(article('temp', { url: 'https://mp.weixin.qq.com/s/x?tempkey=1' }))).toBe(false);
+  });
+
+  it.each([
+    'http://mp.weixin.qq.com/s/x',
+    'https://user:pass@mp.weixin.qq.com/s/x',
+    'https://mp.weixin.qq.com:444/s/x',
+    'https://mp.weixin.qq.com.evil.test/s/x',
+    'https://localhost/s/x',
+    'data:text/html,x',
+    'file:///etc/passwd',
+    'https://mp.weixin.qq.com/cgi-bin/home',
+  ])('rejects untrusted article URL %s', url => {
+    expect(isTrustedWechatArticleUrl(url)).toBe(false);
+    expect(isUsableArticle(article('bad', { url }))).toBe(false);
+  });
+
+  it.each([
+    'https://mp.weixin.qq.com/s/x',
+    'https://mp.weixin.qq.com/s?__biz=x&mid=1',
+  ])('accepts trusted article URL %s', url => {
+    expect(isTrustedWechatArticleUrl(url)).toBe(true);
   });
 });
 
