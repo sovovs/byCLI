@@ -105,7 +105,11 @@ describe('RunnerPort · mechanism (controlled child)', () => {
   it('writes input.json 0600 in a 0700 temp dir, then cleans it up on settle', async () => {
     const { child, captured, spawnImpl } = fakeChild();
     const port = createRunnerPort({ config: mkConfig(), spawnImpl, launcher: { command: 'node', prefixArgs: [] } });
-    const { requestId } = await port.startVerify(seed({ rawSeedArgs: { secret: 'S3CR3T-RAW' } }));
+    const expectedSourceSha256 = 'a'.repeat(64);
+    const { requestId } = await port.startVerify(seed({
+      rawSeedArgs: { secret: 'S3CR3T-RAW' },
+      expectedSourceSha256,
+    }));
 
     const inputPath = inputPathOf(captured.args!);
     const tempRoot = path.dirname(inputPath);
@@ -114,6 +118,8 @@ describe('RunnerPort · mechanism (controlled child)', () => {
     expect(fs.statSync(tempRoot).mode & 0o777).toBe(0o700);
     // raw seed args DO live in input.json (execution-only)
     expect(fs.readFileSync(inputPath, 'utf8')).toContain('S3CR3T-RAW');
+    expect(JSON.parse(fs.readFileSync(inputPath, 'utf8')).expectedSourceSha256)
+      .toBe(expectedSourceSha256);
 
     // emit a terminal result, then the child exits
     child.protocol.emit('data', Buffer.from(JSON.stringify({ type: 'result', requestId, ok: true, data: { rows: 1 } }) + '\n'));

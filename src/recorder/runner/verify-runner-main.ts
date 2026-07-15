@@ -17,7 +17,8 @@
  */
 
 import * as fs from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { register } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import {
   getRegistry,
@@ -36,6 +37,8 @@ export interface RunnerInput {
   name: string;
   /** Resolved adapter module file to import. */
   adapterPath: string;
+  /** Expected hash supplied by the caller; mismatch means the captured module is never loaded. */
+  expectedSourceSha256?: string;
   /** Browser profile contextId for browser adapters (M6b). Omitted → daemon default profile. */
   contextId?: string;
   /** Raw seed args — prepared before resolver/adapter calls and never echoed into events. */
@@ -114,10 +117,59 @@ function fieldCountOf(rows: unknown): number | undefined {
  * Load an adapter by importing its module (which registers via `cli()`), then look it up
  * in the registry by name. Mirrors execution.ts's lazy-import pattern (118-135).
  */
-export async function loadAdapterByName(adapterPath: string, name: string): Promise<CliCommand | undefined> {
-  const url = pathToFileURL(adapterPath).href; // runner-side; a bad path surfaces verbatim
+export interface AdapterSourceSnapshot {
+  canonicalUrl: string;
+  source: ArrayBuffer;
+  sourceSha256: string;
+}
+
+const SNAPSHOT_LOADER_URL = `data:text/javascript,${encodeURIComponent(`
+  let targetSpecifier = '';
+  let targetUrl = '';
+  let source = new ArrayBuffer(0);
+  export function initialize(data) {
+    targetSpecifier = data.targetSpecifier;
+    targetUrl = data.targetUrl;
+    source = data.source;
+  }
+  export async function resolve(specifier, context, nextResolve) {
+    if (specifier === targetSpecifier) {
+      return { url: targetUrl, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  }
+  export async function load(url, context, nextLoad) {
+    if (url === targetUrl) {
+      return { format: 'module', shortCircuit: true, source: new Uint8Array(source) };
+    }
+    return nextLoad(url, context);
+  }
+`)}`;
+
+/** Read the main module once. The same exact bytes are hashed and transferred to the ESM loader. */
+export function captureAdapterSource(adapterPath: string): AdapterSourceSnapshot {
+  const canonicalPath = fs.realpathSync(adapterPath);
+  const bytes = fs.readFileSync(canonicalPath);
+  const source = Uint8Array.from(bytes).buffer;
+  return {
+    canonicalUrl: pathToFileURL(canonicalPath).href,
+    source,
+    sourceSha256: createHash('sha256').update(new Uint8Array(source)).digest('hex'),
+  };
+}
+
+/** Import exactly the captured main-module bytes while preserving its canonical URL as import base. */
+export async function loadAdapterSnapshot(
+  snapshot: AdapterSourceSnapshot,
+  name: string,
+): Promise<CliCommand | undefined> {
   try {
-    await import(url);
+    const targetSpecifier = `bycli-verify-snapshot:${randomUUID()}`;
+    register(SNAPSHOT_LOADER_URL, import.meta.url, {
+      data: { targetSpecifier, targetUrl: snapshot.canonicalUrl, source: snapshot.source },
+      transferList: [snapshot.source],
+    });
+    await import(targetSpecifier);
   } catch (e) {
     // The adapter module's top-level code threw during evaluation (a SyntaxError, or a deliberate
     // `throw` that could echo adapter-file contents) — tag it so runVerifyRunner redacts the message
@@ -125,6 +177,12 @@ export async function loadAdapterByName(adapterPath: string, name: string): Prom
     throw Object.assign(e instanceof Error ? e : new Error(String(e)), { adapterEvaluation: true });
   }
   return getRegistry().get(name);
+}
+
+export interface VerifyRunnerDependencies {
+  capture?: (adapterPath: string) => AdapterSourceSnapshot | Promise<AdapterSourceSnapshot>;
+  load?: (snapshot: AdapterSourceSnapshot, name: string) => Promise<CliCommand | undefined>;
+  browserRunner?: BrowserAdapterRunner;
 }
 
 /**
@@ -245,30 +303,50 @@ export async function executeAdapterForVerify(
 export async function runVerifyRunner(
   input: RunnerInput,
   emit: (event: RunnerEvent) => void,
-  load: (adapterPath: string, name: string) => Promise<CliCommand | undefined> = loadAdapterByName,
-  browserRunner?: BrowserAdapterRunner,
+  dependencies: VerifyRunnerDependencies = {},
 ): Promise<void> {
   emit({ type: 'started', requestId: input.requestId, pid: process.pid, stage: 'load' });
+  let sourceSha256: string | undefined;
   try {
-    const command = await load(input.adapterPath, input.name);
+    const capture = dependencies.capture ?? captureAdapterSource;
+    const load = dependencies.load ?? loadAdapterSnapshot;
+    const snapshot = await capture(input.adapterPath);
+    sourceSha256 = snapshot.sourceSha256;
+    if (input.expectedSourceSha256 !== undefined && input.expectedSourceSha256 !== sourceSha256) {
+      emit({
+        type: 'result', requestId: input.requestId, ok: false,
+        data: { stage: 'load', sourceSha256 },
+        error: { code: 'source_hash_mismatch', message: 'adapter source hash does not match expected source' },
+      });
+      return;
+    }
+    const command = await load(snapshot, input.name);
     const r = await executeAdapterForVerify(command, {
       name: input.name,
       fixture: input.fixture,
       trace: input.trace,
       seedArgs: input.executionSeedArgs ?? {},
       contextId: input.contextId,
-      browserRunner,
+      browserRunner: dependencies.browserRunner,
     });
-    emit({ type: 'result', requestId: input.requestId, ok: r.ok, data: r.data, error: r.ok ? null : r.error });
+    emit({
+      type: 'result', requestId: input.requestId, ok: r.ok,
+      data: { ...r.data, sourceSha256 },
+      error: r.ok ? null : r.error,
+    });
   } catch (e) {
-    // Load failure → single terminal result. An adapter-evaluation error (tagged by loadAdapterByName)
+    // Load failure → single terminal result. An adapter-evaluation error (tagged by loadAdapterSnapshot)
     // is adapter-controlled and may echo adapter-file contents, so its message is redacted; a
     // runner-side failure (bad path / resolve) is runner-generated and surfaces verbatim (Codex M7c).
     const adapterEval = (e as { adapterEvaluation?: unknown })?.adapterEvaluation === true;
     const message = adapterEval ? REDACTED_ADAPTER_LOAD_MESSAGE : (e instanceof Error ? e.message : String(e));
     emit({
       type: 'result', requestId: input.requestId, ok: false,
-      data: { stage: 'load', trace: { policy: input.trace ?? 'retain-on-failure', retained: false, path: null } },
+      data: {
+        stage: 'load',
+        ...(sourceSha256 === undefined ? {} : { sourceSha256 }),
+        trace: { policy: input.trace ?? 'retain-on-failure', retained: false, path: null },
+      },
       error: { code: 'adapter_runtime_error', message, hint: 'adapter failed to load' },
     });
   }

@@ -44,6 +44,7 @@ interface StartInput {
   trace: string;
   /** N3:显式 adapter 路径 override(verify 录制器临时草稿用);缺省按 name 派生 ~/.bycli/clis/<site>/<cmd>.js。 */
   adapterPath?: string;
+  expectedSourceSha256?: string;
 }
 
 interface VerifyRun {
@@ -301,6 +302,7 @@ export function createRunnerPort(opts: RunnerPortOptions = {}): RunnerPortWithLi
         requestId,
         name: input.name,
         adapterPath: input.adapterPath ?? resolveAdapterPath(input.name),
+        expectedSourceSha256: input.expectedSourceSha256,
         executionSeedArgs: input.rawSeedArgs, // raw → input.json only
         fixture: input.fixture,
         trace: input.trace,

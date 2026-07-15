@@ -67,6 +67,8 @@ export interface RunnerResultEvent {
     // field COUNT only, never the key names — a key could be a seed value if the adapter keys its
     // output rows on one (Codex M7c audit). The names never leave the child.
     fieldCount?: number;
+    /** SHA-256 of the exact main-module byte snapshot executed by the runner. */
+    sourceSha256?: string;
     fixture?: { status: 'matched' | 'updated' | 'ignored' };
     trace?: { policy?: string; retained: boolean; path?: string | null };
   };
@@ -114,6 +116,8 @@ export interface VerifySummary {
   rows?: number;
   /** Field count of the produced rows — NOT the key names (a key could be a seed value; Codex M7c). */
   fieldCount?: number;
+  /** SHA-256 of the exact main-module byte snapshot executed by the runner. */
+  sourceSha256?: string;
   fixture?: { status: string };
   trace?: { retained: boolean };
   error?: { code: string; message: string; hint?: string };
@@ -146,6 +150,9 @@ export function normalizeRunnerResult(ev: RunnerResultEvent): VerifySummary {
     if (d.stage) s.stage = d.stage;
     if (typeof d.rows === 'number') s.rows = d.rows;
     if (typeof d.fieldCount === 'number') s.fieldCount = d.fieldCount;
+    if (typeof d.sourceSha256 === 'string' && /^[0-9a-f]{64}$/.test(d.sourceSha256)) {
+      s.sourceSha256 = d.sourceSha256;
+    }
     if (d.fixture) s.fixture = { status: d.fixture.status };
     // trace: only the retained flag, never the path/bytes.
     if (d.trace) s.trace = { retained: d.trace.retained };

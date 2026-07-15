@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import {
-  executeAdapterForVerify, runVerifyRunner, loadAdapterByName,
+  captureAdapterSource, executeAdapterForVerify, runVerifyRunner,
   setActiveLeaseCleanup, releaseActiveLease, type BrowserAdapterRunner, type RunnerInput,
 } from './verify-runner-main.js';
 import { cli, type CliCommand } from '../../registry.js';
@@ -10,6 +11,13 @@ import type { RunnerEvent } from '@sovovs/bycli-recorder-core';
 
 const baseInput = (over: Partial<RunnerInput> = {}): RunnerInput => ({
   requestId: 'req_test', name: 'demo/search', adapterPath: '/unused', ...over,
+});
+const HASH = 'a'.repeat(64);
+const fakeCapture = async () => ({ canonicalUrl: 'file:///unused.js', source: new ArrayBuffer(0), sourceSha256: HASH });
+const dependencies = (command: CliCommand, browserRunner?: BrowserAdapterRunner) => ({
+  capture: fakeCapture,
+  load: async () => command,
+  browserRunner,
 });
 
 describe('executeAdapterForVerify (validate + run, M6a non-browser + M6b browser)', () => {
@@ -247,17 +255,20 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
     const events: RunnerEvent[] = [];
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
       args: [], func: async () => [{ title: 'a' }] } as unknown as CliCommand;
-    await runVerifyRunner(baseInput(), (e) => events.push(e), async () => command);
+    await runVerifyRunner(baseInput(), (e) => events.push(e), dependencies(command));
 
     expect(events[0].type).toBe('started');
     const results = events.filter((e) => e.type === 'result');
     expect(results).toHaveLength(1); // one and only one terminal result
-    expect(results[0]).toMatchObject({ type: 'result', ok: true, requestId: 'req_test' });
+    expect(results[0]).toMatchObject({ type: 'result', ok: true, requestId: 'req_test', data: { sourceSha256: HASH } });
   });
 
   it('a load failure becomes a single terminal result (never throws)', async () => {
     const events: RunnerEvent[] = [];
-    await runVerifyRunner(baseInput(), (e) => events.push(e), async () => { throw new Error('cannot import'); });
+    await runVerifyRunner(baseInput(), (e) => events.push(e), {
+      capture: fakeCapture,
+      load: async () => { throw new Error('cannot import'); },
+    });
 
     const results = events.filter((e) => e.type === 'result');
     expect(results).toHaveLength(1);
@@ -268,8 +279,10 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
   it('Codex M7c #4: redacts an adapter-evaluation load error, keeps a runner-side one verbatim', async () => {
     // tagged by loadAdapterByName: the adapter module threw on import → message may echo adapter-file contents
     const ev1: RunnerEvent[] = [];
-    await runVerifyRunner(baseInput(), (e) => ev1.push(e),
-      async () => { throw Object.assign(new Error('boom token=sk-LIVE-9 from adapter source'), { adapterEvaluation: true }); });
+    await runVerifyRunner(baseInput(), (e) => ev1.push(e), {
+      capture: fakeCapture,
+      load: async () => { throw Object.assign(new Error('boom token=sk-LIVE-9 from adapter source'), { adapterEvaluation: true }); },
+    });
     const r1 = ev1.find((e) => e.type === 'result');
     if (r1?.type === 'result') {
       expect(r1.error?.message).not.toContain('sk-LIVE-9'); // adapter-controlled → redacted
@@ -279,7 +292,10 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
 
     // untagged = runner-side resolve failure → verbatim for debuggability
     const ev2: RunnerEvent[] = [];
-    await runVerifyRunner(baseInput(), (e) => ev2.push(e), async () => { throw new Error('ENOENT: no such adapter path'); });
+    await runVerifyRunner(baseInput(), (e) => ev2.push(e), {
+      capture: fakeCapture,
+      load: async () => { throw new Error('ENOENT: no such adapter path'); },
+    });
     const r2 = ev2.find((e) => e.type === 'result');
     if (r2?.type === 'result') expect(r2.error?.message).toContain('ENOENT');
   });
@@ -289,7 +305,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
     const command = { site: 'demo', name: 'search', access: 'read', browser: false,
       args: [], func: async () => [{ title: 'a' }] } as unknown as CliCommand;
     await runVerifyRunner(baseInput({ executionSeedArgs: { secret: 'TOPSECRET-TOKEN' } }),
-      (e) => events.push(e), async () => command);
+      (e) => events.push(e), dependencies(command));
     expect(JSON.stringify(events)).not.toContain('TOPSECRET-TOKEN');
   });
 
@@ -298,7 +314,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
     const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     let called = false;
     const browserRunner = async () => { called = true; return [{ title: 'a' }]; };
-    await runVerifyRunner(baseInput({ name: 'demo/x' }), (e) => events.push(e), async () => command, browserRunner);
+    await runVerifyRunner(baseInput({ name: 'demo/x' }), (e) => events.push(e), dependencies(command, browserRunner));
     expect(called).toBe(true);
     const results = events.filter((e) => e.type === 'result');
     expect(results).toHaveLength(1);
@@ -309,33 +325,52 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
     const command = { site: 'demo', name: 'x', access: 'read', browser: true, args: [], func: async () => [] } as unknown as CliCommand;
     let ctx: string | undefined = 'unset';
     const browserRunner = async (_c: unknown, o: { contextId?: string }) => { ctx = o.contextId; return []; };
-    await runVerifyRunner(baseInput({ name: 'demo/x', contextId: 'profileA' }), () => {}, async () => command, browserRunner);
+    await runVerifyRunner(baseInput({ name: 'demo/x', contextId: 'profileA' }), () => {}, dependencies(command, browserRunner));
     expect(ctx).toBe('profileA');
+  });
+
+  it('does not load or execute a snapshot whose hash differs from expectedSourceSha256', async () => {
+    const events: RunnerEvent[] = [];
+    const load = vi.fn();
+    await runVerifyRunner(
+      baseInput({ expectedSourceSha256: 'b'.repeat(64) }),
+      (event) => events.push(event),
+      { capture: fakeCapture, load },
+    );
+    expect(load).not.toHaveBeenCalled();
+    expect(events.at(-1)).toMatchObject({
+      type: 'result', ok: false,
+      data: { stage: 'load', sourceSha256: HASH },
+      error: { code: 'source_hash_mismatch' },
+    });
   });
 });
 
-describe('loadAdapterByName (real dynamic import + registry lookup)', () => {
+describe('adapter source snapshot (exact bytes + real ESM import)', () => {
   const fixturePath = fileURLToPath(new URL('./__fixtures__/nonbrowser-adapter.mjs', import.meta.url));
   const browserFixturePath = fileURLToPath(new URL('./__fixtures__/browser-adapter.mjs', import.meta.url));
 
-  it('imports a real adapter file (cli() side-effect) and finds it by name', async () => {
-    const cmd = await loadAdapterByName(fixturePath, 'smokefix/echo');
-    expect(cmd).toBeDefined();
-    expect(cmd!.browser).toBe(false);
+  it('captures a real adapter as one canonical byte snapshot', () => {
+    const snapshot = captureAdapterSource(fixturePath);
+    expect(snapshot.canonicalUrl).toMatch(/^file:/);
+    expect(snapshot.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(snapshot.source.byteLength).toBeGreaterThan(0);
   });
 
-  it('imports the real browser fixture → browser:true (M6b smoke adapter)', async () => {
-    const cmd = await loadAdapterByName(browserFixturePath, 'm6bsmoke/probe');
-    expect(cmd).toBeDefined();
-    expect(cmd!.browser).toBe(true); // routes through the browser branch / connect-back
+  it('hashes different adapter bytes differently', () => {
+    expect(captureAdapterSource(browserFixturePath).sourceSha256)
+      .not.toBe(captureAdapterSource(fixturePath).sourceSha256);
   });
 
-  it('end-to-end: load → execute the real fixture adapter', async () => {
-    const cmd = await loadAdapterByName(fixturePath, 'smokefix/echo');
-    const r = await executeAdapterForVerify(cmd, { name: 'smokefix/echo', seedArgs: { q: 'hi' } });
-    expect(r.ok).toBe(true);
-    expect(r.data.rows).toBe(1);
-    expect(r.data.fieldCount).toBe(1); // count only, never key names (Codex M7c)
+  it('executes captured bytes after replacement and preserves relative imports in native Node ESM', () => {
+    const fixture = fileURLToPath(new URL('./__fixtures__/snapshot-loader-smoke.mjs', import.meta.url));
+    const output = execFileSync(process.execPath, ['--import', 'tsx', fixture], {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      encoding: 'utf8',
+    });
+    const actual = JSON.parse(output) as { hash: string; result: { ok: boolean; data?: { rows?: number } } };
+    expect(actual.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(actual.result).toMatchObject({ ok: true, data: { rows: 1 } });
   });
 });
 

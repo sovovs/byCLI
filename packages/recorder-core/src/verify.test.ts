@@ -58,13 +58,22 @@ describe('verify · normalizeRunnerResult (summary-only, strips raw)', () => {
   it('keeps only the retained flag from trace, never path', () => {
     const ev: RunnerResultEvent = {
       type: 'result', requestId: 'r', ok: true,
-      data: { stage: 'execute', rows: 3, fieldCount: 1, fixture: { status: 'matched' }, trace: { policy: 'retain-on-failure', retained: true, path: '/secret/trace.log' } },
+      data: { stage: 'execute', rows: 3, fieldCount: 1, sourceSha256: 'a'.repeat(64), fixture: { status: 'matched' }, trace: { policy: 'retain-on-failure', retained: true, path: '/secret/trace.log' } },
     };
     const s = normalizeRunnerResult(ev);
     expect(s.rows).toBe(3);
     expect(s.fieldCount).toBe(1); // count only, never key names
+    expect(s.sourceSha256).toBe('a'.repeat(64));
     expect(s.trace).toEqual({ retained: true });
     expect(JSON.stringify(s)).not.toContain('/secret/trace.log');
+  });
+
+  it('drops malformed source hashes from the summary', () => {
+    const s = normalizeRunnerResult({
+      type: 'result', requestId: 'r', ok: true,
+      data: { stage: 'execute', sourceSha256: 'ABC-not-a-sha256' },
+    });
+    expect(s.sourceSha256).toBeUndefined();
   });
   it('passes through error code/message/hint for non-execute (runner-generated) errors', () => {
     const s = normalizeRunnerResult({ type: 'result', requestId: 'r', ok: false, error: { code: 'auth_required', message: 'login', hint: 'sign in' } });

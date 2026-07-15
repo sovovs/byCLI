@@ -37,6 +37,8 @@ export interface VerifyInput {
   trace?: 'off' | 'retain-on-failure' | 'always';
   /** N3:显式 adapter 路径 override —— verify 录制器 LLM 生成的临时草稿(不在 clis/),缺省按 name 派生。 */
   adapterPath?: string;
+  /** Optional lowercase SHA-256 expected for the exact adapter bytes the runner will execute. */
+  expectedSourceSha256?: string;
 }
 
 /** The runner boundary (08). M6 provides the real child-process implementation. */
@@ -51,6 +53,7 @@ export interface RunnerPort {
     trace: string;
     /** N3: explicit adapter path override (recorder draft verify); default = name→clis path. */
     adapterPath?: string;
+    expectedSourceSha256?: string;
   }): Promise<{ requestId: string }>;
   getVerifyStatus(requestId: string): Promise<VerifySummary | null>;
   cancelVerify(requestId: string): Promise<{ cancelled: boolean }>;
@@ -98,6 +101,9 @@ export async function verifyAdapter(
     }
     adapterPath = abs;
   }
+  if (input.expectedSourceSha256 !== undefined && !/^[0-9a-f]{64}$/.test(input.expectedSourceSha256)) {
+    return { ok: false, errorCode: 'validation_failed', reason: 'expectedSourceSha256 must be 64 lowercase hex characters' };
+  }
 
   const port = runner ?? defaultRunnerPort();
   const rawSeedArgs = input.executionSeedArgs ?? {};
@@ -112,6 +118,7 @@ export async function verifyAdapter(
       fixture: input.fixture ?? 'ignore',
       trace: input.trace ?? 'retain-on-failure',
       adapterPath, // N3: validated draft path override (undefined → name→clis)
+      expectedSourceSha256: input.expectedSourceSha256,
     });
     return { ok: true, requestId };
   } catch (e) {

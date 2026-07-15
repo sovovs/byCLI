@@ -25,7 +25,7 @@ BYCLI_CDP_TARGET=detail.1688.com bycli 1688 item 841141931191 -f json
 
 ### Node API errors
 
-- Make sure you are using **Node.js >= 20**. Run `node --version` to verify.
+- Make sure you are using **Node.js >= 20.6**. The verify runner uses Node's ESM `module.register()` hook to execute an immutable adapter source snapshot. Run `node --version` to verify.
 
 ### Daemon issues
 
