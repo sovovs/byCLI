@@ -28,7 +28,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function makeRealPage({ triggerRequest = true, trustedContainer = true, includeUnrelatedButton = false } = {}) {
+function makeRealPage({
+  triggerRequest = true,
+  trustedContainer = true,
+  includeUnrelatedButton = false,
+  requestOrigin = 'https://mp.weixin.qq.com',
+} = {}) {
   const originalFetch = vi.fn(async () => ({ ok: true }));
   const originalOpen = vi.fn();
   class FakeXHR {}
@@ -46,7 +51,7 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
     focus: vi.fn(),
     dispatchEvent: vi.fn(event => {
       if (triggerRequest && event.type === 'keydown' && event.key === 'Enter') {
-        window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
+        window.fetch(`${requestOrigin}/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
       }
     }),
     closest: vi.fn(() => trustedContainer ? scope : null),
@@ -56,7 +61,7 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
     textContent: '搜索',
     getBoundingClientRect: () => ({ width: 40, height: 24 }),
     click: vi.fn(() => {
-      if (triggerRequest) window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
+      if (triggerRequest) window.fetch(`${requestOrigin}/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
     }),
   };
   vi.stubGlobal('window', {
@@ -87,8 +92,16 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
 
 function makeAccountCardPage({
   triggerRequest = true,
+  requestTrigger = 'enter',
   entryVisible = true,
+  directEntryInToolbar = false,
   entryInOverflow = false,
+  genericDialog = false,
+  nestedDialogMatches = false,
+  ambiguousGenericSearchTargets = false,
+  networkOnlyCapture = false,
+  requestOrigin = 'https://mp.weixin.qq.com',
+  requiresNativeInput = false,
   revealEntryAfterWait = false,
   manualDialogAfterFocus = false,
   inputCount = 1,
@@ -101,19 +114,29 @@ function makeAccountCardPage({
   let entryIsVisible = entryVisible;
   let entryClicks = 0;
   let insertClicks = 0;
+  let searchClicks = 0;
   let insertOverflowClicks = 0;
   let formatOverflowClicks = 0;
   let overflowMenuVisible = false;
   let requestTriggered = false;
+  let componentQuery = '';
+  const networkEntries = [];
   const operations = [];
+  const issueSearchRequest = () => {
+    const effectiveQuery = requiresNativeInput ? componentQuery : input.value;
+    const url = `${requestOrigin}/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(effectiveQuery)}-fp`;
+    if (networkOnlyCapture) networkEntries.push({ method: 'GET', url });
+    else window.fetch(url);
+  };
   const input = {
     value: '',
     focus: vi.fn(),
     getBoundingClientRect: () => ({ width: dialogVisible ? 300 : 0, height: dialogVisible ? 32 : 0 }),
     dispatchEvent: vi.fn(event => {
-      if (triggerRequest && !requestTriggered && event.type === 'keydown' && event.key === 'Enter') {
+      if (triggerRequest && ['enter', 'enter-after-click'].includes(requestTrigger)
+          && !requestTriggered && event.type === 'keydown' && event.key === 'Enter') {
         requestTriggered = true;
-        window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp`);
+        issueSearchRequest();
       }
     }),
     closest: vi.fn(() => dialog),
@@ -123,14 +146,47 @@ function makeAccountCardPage({
     getBoundingClientRect: () => ({ width: dialogVisible ? 60 : 0, height: dialogVisible ? 30 : 0 }),
     click: vi.fn(() => { insertClicks += 1; }),
   };
+  const searchButton = {
+    textContent: '',
+    className: 'weui-desktop-search__btn weui-desktop-icon-button weui-desktop-icon-button_stated',
+    getAttribute: name => name === 'aria-label' ? '搜索' : null,
+    getBoundingClientRect: () => ({ width: dialogVisible ? 32 : 0, height: dialogVisible ? 32 : 0 }),
+    click: vi.fn(() => {
+      searchClicks += 1;
+      if (triggerRequest && requestTrigger === 'click' && !requestTriggered) {
+        requestTriggered = true;
+        issueSearchRequest();
+      }
+    }),
+  };
   const dialog = {
     textContent: '插入账号名片',
     getBoundingClientRect: () => ({ width: dialogVisible ? 800 : 0, height: dialogVisible ? 600 : 0 }),
+    querySelector: selector => selector === '.weui-desktop-search__btn' && dialogVisible
+      ? searchButton
+      : null,
     querySelectorAll: selector => {
       if (selector.includes('input')) return dialogVisible ? Array.from({ length: inputCount }, () => input) : [];
+      if (selector.includes('search') || selector.includes('aria-label') || selector.includes('title')) {
+        if (dialogVisible && ambiguousGenericSearchTargets) return [searchButton, insertButton];
+        return dialogVisible && ['click', 'enter-after-click'].includes(requestTrigger) ? [searchButton] : [];
+      }
       if (selector.includes('button')) return dialogVisible ? [insertButton] : [];
       return [];
     },
+  };
+  const dialogTitle = {
+    textContent: '插入账号名片',
+    parentElement: dialog,
+    getBoundingClientRect: () => ({ width: dialogVisible ? 160 : 0, height: dialogVisible ? 32 : 0 }),
+  };
+  const dialogHeader = {
+    textContent: '插入账号名片',
+    getBoundingClientRect: () => ({ width: dialogVisible ? 800 : 0, height: dialogVisible ? 64 : 0 }),
+  };
+  const dialogInner = {
+    textContent: '插入账号名片',
+    getBoundingClientRect: () => ({ width: dialogVisible ? 800 : 0, height: dialogVisible ? 600 : 0 }),
   };
   const entry = {
     textContent: '账号名片',
@@ -158,12 +214,13 @@ function makeAccountCardPage({
     closest: vi.fn(() => formatOverflow),
   };
   const insertToolbar = {
-    textContent: '图片 视频 音频 超链接 小程序 …',
+    textContent: `图片 视频 音频 超链接 小程序 ${directEntryInToolbar ? '账号名片' : '…'}`,
     className: 'insert-toolbar',
     getBoundingClientRect: () => ({ width: 900, height: 48, top: 0 }),
     querySelectorAll: () => [insertOverflow],
     contains: element => element === insertOverflow,
   };
+  if (directEntryInToolbar) entry.parentElement = insertToolbar;
   const formatToolbar = {
     textContent: '17px B I U …',
     className: 'format-toolbar',
@@ -198,13 +255,23 @@ function makeAccountCardPage({
     constructor(type, options = {}) { this.type = type; this.key = options.key; this.code = options.code; }
   });
   vi.stubGlobal('document', {
+    getElementsByClassName: className => className === 'weui-desktop-search__btn weui-desktop-icon-button weui-desktop-icon-button_stated'
+      && dialogVisible ? [searchButton] : [],
     querySelectorAll: selector => {
-      if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) return [dialog];
+      if (selector === '.weui-desktop-dialog__wrp.profile_dialog') return dialogVisible ? [dialog] : [];
+      if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) {
+        if (nestedDialogMatches) return dialogVisible ? [dialog, dialogInner, dialogHeader, dialogTitle] : [];
+        return genericDialog ? [] : [dialog];
+      }
+      if (genericDialog && selector.includes('[class*="title"]')) return [dialogTitle];
       if (entryInOverflow && selector.includes('[class*="toolbar"]')) return [insertToolbar, formatToolbar];
+      if (directEntryInToolbar && selector.includes('span') && selector.includes('div')) return [entry];
       if (entryInOverflow && (selector.includes('[role="menu"]') || selector.includes('dropdown') || selector.includes('popover'))) {
         return [overflowMenu];
       }
-      if (selector.includes('header') || selector.includes('[role="banner"]')) return entryInOverflow ? [] : [entry];
+      if (selector.includes('header') || selector.includes('[role="banner"]')) {
+        return entryInOverflow || directEntryInToolbar ? [] : [entry];
+      }
       if (selector.startsWith('input')) return dialogVisible ? [input] : [];
       return [];
     },
@@ -216,11 +283,35 @@ function makeAccountCardPage({
     }),
     wait: vi.fn(async () => { if (revealEntryAfterWait) entryIsVisible = true; }),
     focusWindow: vi.fn(async () => { if (manualDialogAfterFocus) dialogVisible = true; }),
+    fillText: vi.fn(async (_selector, text) => {
+      if (inputCount !== 1) throw new Error(`selector matched ${inputCount} inputs`);
+      input.value = text;
+      componentQuery = text;
+      return { filled: true, verified: true, actual: text };
+    }),
+    click: vi.fn(async () => {
+      searchButton.click();
+      return { matches_n: 1, match_level: 'exact' };
+    }),
+    focus: vi.fn(async () => {
+      input.focus();
+      return { focused: true, matches_n: 1, match_level: 'exact' };
+    }),
+    pressKey: vi.fn(async key => {
+      if (triggerRequest && ['enter', 'enter-after-click'].includes(requestTrigger)
+          && !requestTriggered && key === 'Enter') {
+        requestTriggered = true;
+        issueSearchRequest();
+      }
+    }),
+    startNetworkCapture: vi.fn(async () => true),
+    readNetworkCapture: vi.fn(async () => networkEntries.splice(0)),
   };
   return {
     page, operations,
     entryClicks: () => entryClicks,
     insertClicks: () => insertClicks,
+    searchClicks: () => searchClicks,
     insertOverflowClicks: () => insertOverflowClicks,
     formatOverflowClicks: () => formatOverflowClicks,
     submittedQuery: () => input.value,
@@ -239,6 +330,41 @@ describe('captureSearchBizFingerprint', () => {
     expect(fixture.insertClicks()).toBe(0);
   });
 
+  it('opens a generic account-card element inside the trusted insert toolbar', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ directEntryInToolbar: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.entryClicks()).toBe(1);
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('recognizes the account-card dialog from its title when the container has no dialog semantics', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ genericDialog: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.submittedQuery()).toBe('前端之神');
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('uses the unique profile wrapper when nested dialog elements also contain the title', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ nestedDialogMatches: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.submittedQuery()).toBe('前端之神');
+  });
+
   it('opens account card from the insert-toolbar overflow without clicking the formatting overflow', async () => {
     let now = 0;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -251,6 +377,104 @@ describe('captureSearchBizFingerprint', () => {
     expect(fixture.formatOverflowClicks()).toBe(0);
     expect(fixture.entryClicks()).toBe(1);
     expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('clicks the dialog search icon when Enter does not submit the account search', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ requestTrigger: 'click' });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.searchClicks()).toBe(1);
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('falls back to Enter when clicking the search icon does not issue searchbiz', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ requestTrigger: 'enter-after-click' });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.searchClicks()).toBe(1);
+    expect(fixture.submittedQuery()).toBe('前端之神');
+  });
+
+  it('clicks the exact account-card search button when generic search selectors are ambiguous', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({
+      requestTrigger: 'click',
+      ambiguousGenericSearchTargets: true,
+    });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.page.click).not.toHaveBeenCalled();
+    expect(fixture.searchClicks()).toBe(1);
+  });
+
+  it('captures fingerprint from the browser network layer when page fetch hooks cannot observe it', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ requestTrigger: 'click', networkOnlyCapture: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.page.startNetworkCapture).toHaveBeenCalledWith('/cgi-bin/searchbiz');
+    expect(fixture.page.readNetworkCapture).toHaveBeenCalled();
+  });
+
+  it('ignores matching searchbiz paths captured from a different origin', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({
+      requestTrigger: 'click',
+      networkOnlyCapture: true,
+      requestOrigin: 'https://evil.test',
+    });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 200))
+      .rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('uses native text input before DOM click when the component ignores synthetic value events', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({
+      requestTrigger: 'click',
+      networkOnlyCapture: true,
+      requiresNativeInput: true,
+    });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.page.fillText).toHaveBeenCalledWith(
+      '.profile_dialog input.weui-desktop-form__input[placeholder="请输入账号名称或账号ID"]',
+      '前端之神',
+    );
+    expect(fixture.searchClicks()).toBe(1);
+  });
+
+  it('reports non-sensitive click and capture diagnostics on fingerprint timeout', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ triggerRequest: false, requestTrigger: 'click' });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    const error = await captureSearchBizFingerprint(fixture.page, '前端之神', 200).catch(value => value);
+    expect(error).toBeInstanceOf(TimeoutError);
+    expect(error.hint).toContain('networkCapture=browser');
+    expect(error.hint).toContain('buttonFound=true');
+    expect(error.hint).toContain('clickInvoked=true');
+    expect(error.hint).not.toContain('前端之神');
   });
 
   it('focuses the window and continues after the user manually opens the dialog', async () => {
@@ -330,6 +554,16 @@ describe('captureSearchBizFingerprint', () => {
     expect(window.fetch).toBe(originalFetch);
     expect(XMLHttpRequest.prototype.open).toBe(originalOpen);
     expect(Object.getOwnPropertyNames(window).some(key => key.startsWith('__bycliWechat'))).toBe(false);
+  });
+
+  it('ignores matching searchbiz paths from another origin in the page hook', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const { page } = makeRealPage({ requestOrigin: 'https://evil.test' });
+    page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(page, '微信派', 200))
+      .rejects.toBeInstanceOf(TimeoutError);
   });
 
   it('restores real wrappers and deletes temporary state after timeout', async () => {

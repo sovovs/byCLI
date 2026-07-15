@@ -80,6 +80,8 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 
 `save-articles` columns are `title`, `status`, `stage`, `path`, `error`, and `url`. Successful rows have `status: "saved"`, an absolute Markdown `path`, and null `stage`/`error`. A per-article download or conversion failure produces `status: "failed"`, a `stage`, and a safe error message. This 部分失败 behavior preserves already-written files and continues with the remaining articles. Output-directory creation, permission, or write failures remain command-level errors.
 
+In browser authentication mode, `save-articles` tries a direct Node download first and automatically falls back to loading the article through the current Browser Bridge page when WeChat redirects direct traffic to a verification page. Environment authentication remains Node-only so CI and browserless use do not launch Chrome implicitly.
+
 ## Existing article and draft commands
 
 ```bash

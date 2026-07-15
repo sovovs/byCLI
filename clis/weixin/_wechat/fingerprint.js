@@ -5,6 +5,29 @@ const POLL_INTERVAL_MS = 100;
 const AUTO_OPEN_POLLS = 50;
 const captureQueues = new WeakMap();
 
+function isTrustedSearchBizUrl(url) {
+  return url.protocol === 'https:'
+    && url.hostname === 'mp.weixin.qq.com'
+    && url.port === ''
+    && url.username === ''
+    && url.password === ''
+    && url.pathname === '/cgi-bin/searchbiz';
+}
+
+function fingerprintFromNetworkEntries(entries) {
+  if (!Array.isArray(entries)) return null;
+  for (const entry of entries) {
+    if (!entry || typeof entry.url !== 'string') continue;
+    try {
+      const url = new URL(entry.url);
+      if (!isTrustedSearchBizUrl(url)) continue;
+      const fingerprint = url.searchParams.get('fingerprint');
+      if (fingerprint) return fingerprint;
+    } catch { /* Ignore malformed or unrelated capture entries. */ }
+  }
+  return null;
+}
+
 /** @param {any} page @param {string} query @param {number} [timeoutMs] */
 export function captureSearchBizFingerprint(page, query, timeoutMs = 30_000) {
   const previous = captureQueues.get(page) ?? Promise.resolve();
@@ -20,7 +43,19 @@ export function captureSearchBizFingerprint(page, query, timeoutMs = 30_000) {
 /** @param {any} page @param {string} query @param {number} timeoutMs */
 async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
   const startedAt = Date.now();
+  let browserNetworkCapture = false;
+  let lastSubmitDiagnostics = {
+    dialogVisible: false,
+    inputCount: 0,
+    buttonFound: false,
+    clickInvoked: false,
+  };
   try {
+    if (typeof page.startNetworkCapture === 'function' && typeof page.readNetworkCapture === 'function') {
+      try {
+        browserNetworkCapture = await page.startNetworkCapture('/cgi-bin/searchbiz') !== false;
+      } catch { /* In-page request hooks remain the compatibility fallback. */ }
+    }
     await page.evaluate(({ operation, stateKey }) => {
       if (operation !== 'install') return { installed: false };
       const root = /** @type {any} */ (window);
@@ -32,7 +67,13 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
       const capture = input => {
         try {
           const url = new URL(typeof input === 'string' ? input : input?.url, window.location.href);
-          if (url.pathname === '/cgi-bin/searchbiz') state.fingerprint = url.searchParams.get('fingerprint');
+          const trusted = url.protocol === 'https:'
+            && url.hostname === 'mp.weixin.qq.com'
+            && url.port === ''
+            && url.username === ''
+            && url.password === ''
+            && url.pathname === '/cgi-bin/searchbiz';
+          if (trusted) state.fingerprint = url.searchParams.get('fingerprint');
         } catch { /* Ignore unrelated or relative malformed requests. */ }
       };
       if (typeof originalFetch === 'function') {
@@ -77,9 +118,34 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
           };
           const exactText = element => (element.textContent ?? '').replace(/\s+/g, '').trim();
           const clickable = element => element.closest?.('button, a, [role="button"], [role="menuitem"]') ?? element;
-          const dialogs = Array.from(document.querySelectorAll(
-            '[role="dialog"], .weui-desktop-dialog, [class*="dialog"]',
-          )).filter(visible).filter(element => /插入账号名片/.test(element.textContent ?? ''));
+          let dialogs = Array.from(document.querySelectorAll(
+            '.weui-desktop-dialog__wrp.profile_dialog',
+          )).filter(visible);
+          if (dialogs.length === 0) {
+            dialogs = Array.from(document.querySelectorAll(
+              '[role="dialog"], .weui-desktop-dialog, [class*="dialog"]',
+            )).filter(visible).filter(element => /插入账号名片/.test(element.textContent ?? ''));
+          }
+          if (dialogs.length === 0) {
+            const inferred = new Set();
+            const titles = Array.from(document.querySelectorAll(
+              'h1, h2, h3, h4, [class*="title"], [class*="header"], span, div',
+            )).filter(visible).filter(element => exactText(element) === '插入账号名片');
+            for (const title of titles) {
+              let ancestor = title.parentElement;
+              for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+                if (!visible(ancestor) || typeof ancestor.querySelectorAll !== 'function') continue;
+                const inputs = Array.from(ancestor.querySelectorAll(
+                  'input[type="text"], input[type="search"], input:not([type]), .weui-desktop-search__input',
+                )).filter(visible);
+                if (inputs.length > 0) {
+                  inferred.add(ancestor);
+                  break;
+                }
+              }
+            }
+            dialogs = Array.from(inferred);
+          }
           if (dialogs.length === 1) {
             return { dialogVisible: true, entryClicked: false, overflowClicked: false };
           }
@@ -122,6 +188,26 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
             if (Number(rect.top ?? 0) > maxHeaderTop) continue;
             targets.add(clickable(element));
           }
+          const genericEntries = Array.from(document.querySelectorAll(
+            'button, a, [role="button"], span, div, li',
+          )).filter(element => {
+            if (!visible(element) || exactText(element) !== '账号名片') return false;
+            const rect = element.getBoundingClientRect();
+            if (Number(rect.top ?? 0) > maxHeaderTop) return false;
+            let ancestor = element.parentElement;
+            for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+              if (!visible(ancestor)) continue;
+              const ancestorRect = ancestor.getBoundingClientRect();
+              if (Number(ancestorRect.top ?? 0) > maxHeaderTop) continue;
+              const ancestorText = exactText(ancestor);
+              const score = INSERT_TOOL_LABELS.filter(label => ancestorText.includes(label)).length;
+              if (score >= 3) return true;
+            }
+            return false;
+          });
+          const innermostEntries = genericEntries.filter(element => !genericEntries.some(other =>
+            other !== element && element.contains?.(other)));
+          for (const element of innermostEntries) targets.add(clickable(element));
           if (allowClick && targets.size === 1) {
             const [target] = targets;
             target.click();
@@ -170,8 +256,17 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
 
         entryClicked ||= picker?.entryClicked === true;
         overflowClicked ||= picker?.overflowClicked === true;
+        lastSubmitDiagnostics.dialogVisible = picker?.dialogVisible === true;
         if (picker?.dialogVisible) {
-          const result = await page.evaluate(({ operation, query: searchQuery }) => {
+          if (typeof page.fillText === 'function') {
+            try {
+              await page.fillText(
+                '.profile_dialog input.weui-desktop-form__input[placeholder="请输入账号名称或账号ID"]',
+                query,
+              );
+            } catch { /* DOM setter below remains the compatibility fallback. */ }
+          }
+          const result = await page.evaluate(({ operation, query: searchQuery, stateKey }) => {
             if (operation !== 'submit-search') return { submitted: false, reason: 'operation' };
             const visible = element => {
               const style = window.getComputedStyle(element);
@@ -179,15 +274,43 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
               return style.display !== 'none' && style.visibility !== 'hidden'
                 && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
             };
-            const dialogs = Array.from(document.querySelectorAll(
-              '[role="dialog"], .weui-desktop-dialog, [class*="dialog"]',
-            )).filter(visible).filter(element => /插入账号名片/.test(element.textContent ?? ''));
-            if (dialogs.length !== 1) return { submitted: false, reason: 'dialog' };
+            const exactText = element => (element.textContent ?? '').replace(/\s+/g, '').trim();
+            let dialogs = Array.from(document.querySelectorAll(
+              '.weui-desktop-dialog__wrp.profile_dialog',
+            )).filter(visible);
+            if (dialogs.length === 0) {
+              dialogs = Array.from(document.querySelectorAll(
+                '[role="dialog"], .weui-desktop-dialog, [class*="dialog"]',
+              )).filter(visible).filter(element => /插入账号名片/.test(element.textContent ?? ''));
+            }
+            if (dialogs.length === 0) {
+              const inferred = new Set();
+              const titles = Array.from(document.querySelectorAll(
+                'h1, h2, h3, h4, [class*="title"], [class*="header"], span, div',
+              )).filter(visible).filter(element => exactText(element) === '插入账号名片');
+              for (const title of titles) {
+                let ancestor = title.parentElement;
+                for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+                  if (!visible(ancestor) || typeof ancestor.querySelectorAll !== 'function') continue;
+                  const candidates = Array.from(ancestor.querySelectorAll(
+                    'input[type="text"], input[type="search"], input:not([type]), .weui-desktop-search__input',
+                  )).filter(visible);
+                  if (candidates.length > 0) {
+                    inferred.add(ancestor);
+                    break;
+                  }
+                }
+              }
+              dialogs = Array.from(inferred);
+            }
+            if (dialogs.length !== 1) {
+              return { submitted: false, reason: 'dialog', dialogVisible: false, inputCount: 0, buttonFound: false, clickInvoked: false };
+            }
             const inputs = Array.from(dialogs[0].querySelectorAll(
               'input[type="text"], input[type="search"], input:not([type]), .weui-desktop-search__input',
             )).filter(visible);
             if (inputs.length !== 1) {
-              return { submitted: false, reason: 'input', inputCount: inputs.length };
+              return { submitted: false, reason: 'input', dialogVisible: true, inputCount: inputs.length, buttonFound: false, clickInvoked: false };
             }
             const input = inputs[0];
             input.focus();
@@ -195,13 +318,57 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
             if (setter) setter.call(input, searchQuery); else input.value = searchQuery;
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
+            const exactClassName = 'weui-desktop-search__btn weui-desktop-icon-button weui-desktop-icon-button_stated';
+            const exactSearchTarget = document.getElementsByClassName?.(exactClassName)?.[0]
+              ?? dialogs[0].querySelector?.('.weui-desktop-search__btn');
+            let buttonFound = false;
+            let clickInvoked = false;
+            if (exactSearchTarget && visible(exactSearchTarget)) {
+              buttonFound = true;
+              exactSearchTarget.click();
+              clickInvoked = true;
+              const fingerprint = /** @type {any} */ (window)[stateKey]?.fingerprint;
+              if (typeof fingerprint === 'string' && fingerprint.length > 0) {
+                return { submitted: true, dialogVisible: true, inputCount: 1, buttonFound, clickInvoked };
+              }
+            } else {
+              const searchTargets = new Set();
+              for (const element of Array.from(dialogs[0].querySelectorAll([
+                'button[type="submit"]',
+                'button[aria-label*="搜索"]',
+                '[role="button"][aria-label*="搜索"]',
+                '[title*="搜索"]',
+                '.weui-desktop-search__icon',
+                '[class*="search"] button',
+                '[class*="search"] [role="button"]',
+              ].join(', ')))) {
+                if (!visible(element)) continue;
+                searchTargets.add(element.closest?.('button, a, [role="button"]') ?? element);
+              }
+              buttonFound = searchTargets.size > 0;
+              if (searchTargets.size === 1) {
+                const [searchTarget] = searchTargets;
+                searchTarget.click();
+                clickInvoked = true;
+                const fingerprint = /** @type {any} */ (window)[stateKey]?.fingerprint;
+                if (typeof fingerprint === 'string' && fingerprint.length > 0) {
+                  return { submitted: true, dialogVisible: true, inputCount: 1, buttonFound, clickInvoked };
+                }
+              }
+            }
             for (const type of ['keydown', 'keypress', 'keyup']) {
               input.dispatchEvent(new KeyboardEvent(type, {
                 key: 'Enter', code: 'Enter', bubbles: true,
               }));
             }
-            return { submitted: true };
-          }, { operation: 'submit-search', query });
+            return { submitted: true, dialogVisible: true, inputCount: 1, buttonFound, clickInvoked };
+          }, { operation: 'submit-search', query, stateKey: STATE_KEY });
+          lastSubmitDiagnostics = {
+            dialogVisible: result?.dialogVisible === true,
+            inputCount: Number(result?.inputCount ?? 0),
+            buttonFound: result?.buttonFound === true,
+            clickInvoked: result?.clickInvoked === true,
+          };
           if (!result?.submitted && result?.reason === 'input') {
             throw new CommandExecutionError(
               'WeChat account-card search input was not found',
@@ -219,6 +386,14 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
       }
 
       if (submitted) {
+        if (browserNetworkCapture) {
+          try {
+            const fingerprint = fingerprintFromNetworkEntries(await page.readNetworkCapture());
+            if (fingerprint) return fingerprint;
+          } catch {
+            browserNetworkCapture = false;
+          }
+        }
         const fingerprint = await page.evaluate(({ operation, stateKey }) => {
           if (operation !== 'read') return null;
           return /** @type {any} */ (window)[stateKey]?.fingerprint ?? null;
@@ -230,7 +405,18 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
       if (remainingMs <= 0) break;
       await page.wait(Math.min(POLL_INTERVAL_MS, remainingMs) / 1000);
     }
-    throw new TimeoutError('WeChat account-card search fingerprint capture', timeoutMs / 1000);
+    const diagnostics = [
+      `networkCapture=${browserNetworkCapture ? 'browser' : 'page-hook'}`,
+      `dialogVisible=${lastSubmitDiagnostics.dialogVisible}`,
+      `inputCount=${lastSubmitDiagnostics.inputCount}`,
+      `buttonFound=${lastSubmitDiagnostics.buttonFound}`,
+      `clickInvoked=${lastSubmitDiagnostics.clickInvoked}`,
+    ].join(', ');
+    throw new TimeoutError(
+      'WeChat account-card search fingerprint capture',
+      timeoutMs / 1000,
+      `Diagnostics: ${diagnostics}. Retry the command; increase --timeout only if the request is visibly still loading.`,
+    );
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CommandExecutionError(

@@ -78,6 +78,72 @@ export async function fetchArticleHtml(article, { fetchImpl = fetch, timeoutMs =
   }
 }
 
+export async function fetchArticleHtmlInBrowser(article, page) {
+  try {
+    if (!isTrustedWechatArticleUrl(article?.url)) {
+      throw new CommandExecutionError('Article browser request rejected an untrusted URL');
+    }
+    if (!page || typeof page.goto !== 'function' || typeof page.evaluate !== 'function') {
+      throw new CommandExecutionError('Article browser fallback is unavailable');
+    }
+    await page.goto(article.url);
+    await page.wait(5);
+    const result = await page.evaluate(({ maxBytes }) => {
+      const html = document.documentElement?.outerHTML ?? '';
+      const pageText = document.body?.innerText?.replace(/\s+/g, ' ').trim() ?? '';
+      const finalUrl = window.location.href;
+      const pathname = window.location.pathname;
+      const accessIssue = pathname.includes('/mp/wappoc_appmsgcaptcha')
+        || (/环境异常/.test(pageText) && /(完成验证后即可继续访问|去验证)/.test(pageText))
+        || /secitptpage\/verify\.html/.test(html)
+        || /id=["']js_verify["']/.test(html)
+        ? 'environment verification required' : '';
+      const byteLength = new TextEncoder().encode(html).byteLength;
+      return {
+        finalUrl,
+        accessIssue,
+        byteLength,
+        tooLarge: byteLength > maxBytes,
+        html: byteLength > maxBytes ? '' : html,
+      };
+    }, { maxBytes: MAX_WECHAT_HTML_BYTES });
+    if (result?.accessIssue) throw new CommandExecutionError('Article browser page requires environment verification');
+    if (!isTrustedWechatArticleUrl(result?.finalUrl)) {
+      throw new CommandExecutionError('Article browser navigation left the trusted article path');
+    }
+    if (result?.tooLarge || !Number.isSafeInteger(result?.byteLength)
+        || result.byteLength < 0 || result.byteLength > MAX_WECHAT_HTML_BYTES) {
+      throw new CommandExecutionError('Article response exceeds the allowed size');
+    }
+    if (typeof result?.html !== 'string' || result.html.length === 0) {
+      throw new CommandExecutionError('Article browser page returned no HTML');
+    }
+    if (new TextEncoder().encode(result.html).byteLength > MAX_WECHAT_HTML_BYTES) {
+      throw new CommandExecutionError('Article response exceeds the allowed size');
+    }
+    return result.html;
+  } catch (error) {
+    if (error instanceof CommandExecutionError) throw error;
+    throw new CommandExecutionError('Article browser request failed');
+  }
+}
+
+export function createArticleHtmlDownloader({
+  authSource,
+  page,
+  nodeFetcher = fetchArticleHtml,
+  browserFetcher = fetchArticleHtmlInBrowser,
+}) {
+  return async article => {
+    try {
+      return await nodeFetcher(article);
+    } catch (error) {
+      if (authSource !== 'browser') throw error;
+      return browserFetcher(article, page);
+    }
+  };
+}
+
 export const saveArticlesCommand = cli({
   site: 'weixin', name: 'save-articles', access: 'write', domain: DOMAIN,
   description: 'Download WeChat official-account articles as Markdown files',
@@ -96,9 +162,10 @@ export const saveArticlesCommand = cli({
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
     const { fetchPage } = createWechatApi(credentials);
     const { articles } = await collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
+    const articleHtmlDownloader = createArticleHtmlDownloader({ authSource, page });
     const rows = await saveArticles({
       articles, accountName: String(args.name ?? '').trim(),
-      outputDir: args.output ?? './weixin-articles', fetchArticleHtml,
+      outputDir: args.output ?? './weixin-articles', fetchArticleHtml: articleHtmlDownloader,
     });
     return rows.map(row => ({
       title: row.title, status: row.status, stage: row.stage || null, path: row.saved || null,

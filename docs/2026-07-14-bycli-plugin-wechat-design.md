@@ -299,7 +299,7 @@ fakeid + token + Cookie
 
 第一页业务响应是认证权威信号：已知凭证失效抛 `AuthRequiredError`，未知接口错误抛 `CommandExecutionError`。分页停止条件由返回数量、总数、下一页能力、`max-pages` 与 `limit` 共同决定，禁止无限翻页。
 
-`save-articles` 对每篇文章获取正文，复用或抽取现有 `weixin download` 的文章解析和通用 `downloadArticle` 能力，避免维护两套微信正文 DOM 解析。若 crawler 的 HTML-to-Markdown 行为包含现有下载器缺失的必要语义，应以共享 helper 补齐并让 `download` 与 `save-articles` 同时复用。
+`save-articles` 对每篇文章先使用 Node `fetch` 获取正文；浏览器认证模式下，若 Node 请求因 HTTP、重定向或微信验证页而失败，则自动通过当前 Browser Bridge 页面导航至受信任的文章 URL，取得有大小上限的页面 HTML，再进入既有 Markdown 转换和安全写盘流程。环境变量模式保持 Node-only，不隐式连接浏览器。浏览器回退复用现有 `weixin download` 已验证的页面加载模式，但 adapter 之间不互相调用。
 
 文件名必须清除路径分隔符、控制字符和平台非法字符；所有目标路径必须位于解析后的输出目录内。重复标题使用稳定后缀避免同次批量保存互相覆盖。输出返回绝对路径。
 
@@ -357,6 +357,7 @@ fakeid + token + Cookie
 - `accounts` 不自动选择相似名称。
 - `articles` 缺失字段为 `null`，不输出 `alias`。
 - `save-articles` 同时返回 saved/failed 行，失败 message 映射到 `error`。
+- `save-articles --auth-source browser` 的 Node 下载失败时自动使用浏览器页面回退；验证页、非文章最终 URL 与超大 HTML 均被拒绝。
 - `--auth-source env` 不创建浏览器会话。
 - 现有四个 `weixin` 命令的注册、参数和行为回归。
 
