@@ -6,7 +6,15 @@ import { buildSecretSet, redactText } from './redact.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const ENDPOINT = `https://${DOMAIN}/cgi-bin/searchbiz`;
-const REFERER = `https://${DOMAIN}/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=10`;
+
+/** @param {string} token */
+function buildReferer(token) {
+  const params = new URLSearchParams({
+    t: 'media/appmsg_edit_v2', action: 'edit', isNew: '1', type: '10',
+    token, lang: 'zh_CN',
+  });
+  return `https://${DOMAIN}/cgi-bin/appmsg?${params}`;
+}
 
 /** @param {unknown} payload */
 export function mapSearchBizPayload(payload) {
@@ -68,7 +76,10 @@ export async function executeSearchBiz({ page, source, credentials, query, limit
     lang: 'zh_CN', f: 'json', ajax: '1',
   });
   const url = `${ENDPOINT}?${params}`;
-  const headers = { Referer: REFERER, 'X-Requested-With': 'XMLHttpRequest' };
+  const headers = {
+    Referer: buildReferer(credentials.token),
+    'X-Requested-With': 'XMLHttpRequest',
+  };
 
   try {
     let payload;

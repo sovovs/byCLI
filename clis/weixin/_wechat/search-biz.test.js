@@ -41,7 +41,12 @@ function assertRequest(url, init, includeCookie) {
     action: 'search_biz', scene: '1', begin: '0', count: '2', query: '微信 派',
     fingerprint: 'fp-secret', token: 'token-secret', lang: 'zh_CN', f: 'json', ajax: '1',
   });
-  expect(init.headers.Referer).toContain('https://mp.weixin.qq.com/cgi-bin/appmsg');
+  const referer = new URL(init.headers.Referer);
+  expect(referer.origin + referer.pathname).toBe('https://mp.weixin.qq.com/cgi-bin/appmsg');
+  expect(Object.fromEntries(referer.searchParams)).toEqual({
+    t: 'media/appmsg_edit_v2', action: 'edit', isNew: '1', type: '10',
+    token: 'token-secret', lang: 'zh_CN',
+  });
   expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
   expect(init.headers.Cookie).toBe(includeCookie ? 'sid=cookie-secret' : undefined);
 }
