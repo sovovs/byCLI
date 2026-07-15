@@ -149,4 +149,33 @@ describe('saveArticles', () => {
       fs.rmSync(parent, { recursive: true, force: true });
     }
   });
+
+  it('never redirects an opened target fd into a replacement root', async () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-weixin-open-fd-'));
+    const root = path.join(parent, 'out');
+    const moved = path.join(parent, 'moved');
+    fs.mkdirSync(root);
+    let replaced = false;
+    const fsImpl = {
+      ...fs,
+      writeSync(fd, buffer, offset, length) {
+        const written = fs.writeSync(fd, buffer, offset, length);
+        if (!replaced) {
+          replaced = true;
+          fs.renameSync(root, moved);
+          fs.mkdirSync(root);
+        }
+        return written;
+      },
+    };
+    try {
+      await expect(saveArticles({ articles: [article('opened')], accountName: 'a', outputDir: root,
+        fetchArticleHtml: async () => html('opened'), fsImpl })).rejects.toBeInstanceOf(CommandExecutionError);
+      expect(fs.readdirSync(root)).toEqual([]);
+      expect(fs.readdirSync(moved)).toEqual(['opened.md']);
+      expect(fs.readFileSync(path.join(moved, 'opened.md'), 'utf8')).toContain('# opened');
+    } finally {
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
+  });
 });

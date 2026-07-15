@@ -54,6 +54,9 @@ function writeExclusive(root, rootFd, rootIdentity, target, markdown, fsImpl) {
   if (typeof noFollow !== 'number') {
     throw new CommandExecutionError('Secure article saving is unavailable: O_NOFOLLOW is unsupported');
   }
+  // The opened root fd plus its dev/ino is the authorization capability.
+  // Path checks detect namespace replacement, but cannot and need not prevent
+  // a same-privilege process from renaming that already-authorized inode.
   assertRootIdentity(root, rootFd, rootIdentity, fsImpl);
   let fd;
   let openedStat;
@@ -61,6 +64,8 @@ function writeExclusive(root, rootFd, rootIdentity, target, markdown, fsImpl) {
     fd = fsImpl.openSync(target,
       defaultFs.constants.O_CREAT | defaultFs.constants.O_EXCL | defaultFs.constants.O_WRONLY | noFollow,
       0o600);
+    // Once open succeeds, this fd remains bound to that inode; later renames
+    // or symlink swaps cannot redirect its writes into a replacement root.
     openedStat = fsImpl.fstatSync(fd);
     if (!openedStat.isFile?.() || openedStat.isSymbolicLink?.()) {
       throw new CommandExecutionError('Refusing to write a non-regular article target');

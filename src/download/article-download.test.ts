@@ -84,6 +84,15 @@ describe('downloadArticle', () => {
     expect(md).toContain(String.raw`https://safe\.example/a\_\(1\)`);
   });
 
+  it('neutralizes hostile iframe titles and destinations in secure Markdown mode', () => {
+    const md = convertArticleHtmlToMarkdown(
+      '<iframe title="](javascript:alert(1)) <svg onload=alert(2)>" src="javascript:alert(3)"></iframe>',
+      { safeFencedCodeBlocks: true },
+    );
+    expect(md).not.toMatch(/<(?:svg)\b|\]\(\s*javascript:/i);
+    expect(md).not.toContain('javascript:alert(3)');
+  });
+
   describe('markdown pipeline', () => {
     it('converts GFM tables', async () => {
       const md = await runAndRead(

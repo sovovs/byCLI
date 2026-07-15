@@ -88,6 +88,16 @@ function escapeMarkdownText(value: string): string {
     .replace(/([\\`*_[\]{}()#+.!|>~-])/g, '\\$1');
 }
 
+function safeHttpUrl(value: string): string {
+  const normalized = value.trim().startsWith('//') ? `https:${value.trim()}` : value.trim();
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 // ============================================================
 // Markdown Conversion
 // ============================================================
@@ -214,10 +224,13 @@ function createTurndown(
     filter: (node) => node.nodeName === 'IFRAME',
     replacement: (_content, node) => {
       const el = node as Element;
-      const src = el.getAttribute('src') || '';
+      const rawSrc = el.getAttribute('src') || '';
+      const src = secureMarkdown ? safeHttpUrl(rawSrc) : rawSrc;
       if (!src) return '';
-      const title = el.getAttribute('title') || 'Embedded content';
-      return `\n[${title}](${src})\n`;
+      const rawTitle = el.getAttribute('title') || 'Embedded content';
+      const title = secureMarkdown ? escapeMarkdownText(rawTitle) : rawTitle;
+      const destination = secureMarkdown ? src.replace(/([\\()])/g, '\\$1') : src;
+      return `\n[${title}](${destination})\n`;
     },
   });
   // Per-adapter dirty-node removal. Adapters know their site's specific noise
