@@ -1,12 +1,14 @@
 # bycli-plugin-wechat Implementation Plan
 
+> **Superseded:** This historical independent-plugin plan is retained for context only. The current design implements `accounts`, `articles`, and `save-articles` as built-in `clis/weixin` commands（当前为内置 `weixin` 方案）; follow [the built-in weixin design](../../2026-07-14-bycli-plugin-wechat-design.md) instead. Do not execute the plugin installation, separate npm package, crawler subprocess, or exit-code mapping steps below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build an independently published byCLI plugin that searches WeChat public accounts, lists their articles, and saves Markdown through the `wechat-crawler` CLI boundary.
 
 **Architecture:** Three flat root command entries satisfy byCLI plugin discovery and delegate to focused modules under `src/`. Authentication is either an ephemeral browser session or an explicit all-or-nothing environment source; search calls `search_biz` directly, while list/save run the pinned crawler binary in a hardened child process and map its JSON envelope into static byCLI rows.
 
-**Tech Stack:** Node.js 20 ESM, TypeScript 6, Vitest 4, `@sovovs/bycli >=2.1.0 <3`, `wechat-article-crawler@1.0.0`.
+**Tech Stack:** Node.js 20 ESM, TypeScript 6, Vitest 4, `@sovovs/bycli >=2.1.0 <3.0.0`, `wechat-article-crawler@1.0.0`.
 
 **Working directory:** `/Users/lijiahui/Desktop/bycli-plugin-wechat` (a separate Git repository, not a package inside OpenCLI).
 
@@ -63,7 +65,7 @@ Create `bycli-plugin.json`:
   "name": "wechat",
   "version": "0.1.0",
   "description": "Search and crawl WeChat public account articles through byCLI",
-  "bycli": ">=2.1.0 <3"
+  "bycli": ">=2.1.0 <3.0.0"
 }
 ```
 
@@ -94,7 +96,7 @@ Create `package.json`:
     "wechat-article-crawler": "1.0.0"
   },
   "peerDependencies": {
-    "@sovovs/bycli": ">=2.1.0 <3"
+    "@sovovs/bycli": ">=2.1.0 <3.0.0"
   },
   "devDependencies": {
     "@sovovs/bycli": "^2.1.0",
@@ -1020,7 +1022,7 @@ Expected: PASS with no real browser, account, or network dependency.
 
 Create `README.md` with:
 
-- Installation requiring `@sovovs/bycli >=2.1.0 <3`.
+- Installation requiring `@sovovs/bycli >=2.1.0 <3.0.0`.
 - Two-step `search` then explicit `list/save` examples.
 - Default browser behavior: reuse login; when missing, focus the WeChat window and wait up to 180 seconds.
 - CI examples with `WECHAT_TOKEN`, `WECHAT_COOKIE`, and search-only `WECHAT_FINGERPRINT` provided through the CI secret store.

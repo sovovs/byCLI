@@ -113,14 +113,14 @@ export async function discoverClis(...dirs: string[]): Promise<void> {
  * Fast-path: register commands from pre-compiled manifest.
  * TS modules are deferred — loaded lazily on first execution.
  */
-async function loadFromManifest(manifestPath: string, clisDir: string): Promise<boolean> {
+export async function loadFromManifest(manifestPath: string, clisDir: string): Promise<boolean> {
   try {
     const raw = await fs.promises.readFile(manifestPath, 'utf-8');
     const manifest = JSON.parse(raw) as ManifestEntry[];
     for (const entry of manifest) {
       if (!entry.modulePath) continue;
       const modulePath = path.resolve(clisDir, entry.modulePath);
-      const cmd: InternalCliCommand = {
+      const common = {
         site: entry.site,
         name: entry.name,
         aliases: entry.aliases,
@@ -129,7 +129,6 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         example: entry.example,
         domain: entry.domain,
         strategy: parseStrategy(entry.strategy),
-        browser: entry.browser,
         args: entry.args ?? [],
         columns: entry.columns,
         defaultFormat: entry.defaultFormat,
@@ -140,7 +139,18 @@ async function loadFromManifest(manifestPath: string, clisDir: string): Promise<
         _lazy: true,
         _modulePath: modulePath,
       };
-      // normalizeCommand inside registerCommand handles strategy → browser/navigateBefore
+      const cmd: InternalCliCommand = entry.browser === 'conditional'
+        ? {
+            ...common,
+            browser: 'conditional',
+            requiresBrowser: () => {
+              throw new Error(
+                `Conditional manifest placeholder ${entry.site}/${entry.name} was not hydrated`,
+              );
+            },
+            _hydrateBeforeBrowserRouting: true,
+          }
+        : { ...common, browser: entry.browser };
       registerCommand(cmd);
     }
     return true;

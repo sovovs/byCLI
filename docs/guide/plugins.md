@@ -190,6 +190,66 @@ cli({
 });
 ```
 
+### Conditional Browser Commands
+
+A plugin command can choose whether it needs a browser from its final command
+arguments:
+
+```typescript
+cli({
+  site: 'example',
+  name: 'conditional',
+  access: 'read',
+  strategy: Strategy.COOKIE,
+  browser: args => args['auth-source'] !== 'env',
+  args: [
+    { name: 'auth-source', choices: ['browser', 'env'], default: 'browser' },
+  ],
+  columns: ['status'],
+  func: async (page, args) => [{ status: page ? 'browser' : 'environment' }],
+});
+```
+
+The predicate runs after defaults, coercion, validation, and any
+`onBeforeExecute` changes, so it receives the final arguments used for routing
+and execution. The command function receives `IPage | null`: `page` is an
+`IPage` when the predicate returns `true`, otherwise it is `null`.
+
+The generic `>=1.0.0` package example above is sufficient for the basic static
+command, but not for this API. A conditional-browser plugin must declare both
+of these compatibility constraints because byCLI 2.0 does not provide the
+conditional contract:
+
+`package.json`:
+
+```json
+{
+  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3.0.0" }
+}
+```
+
+`bycli-plugin.json`:
+
+```json
+{
+  "bycli": ">=2.1.0 <3.0.0"
+}
+```
+
+Browser flags such as `--window`, `--site-session`, and `--keep-tab` remain
+visible for conditional commands. Structured help, command listings, and the
+CLI manifest expose the literal metadata `browser: "conditional"` without
+serializing the predicate. Manifest-backed commands hydrate their adapter
+module before browser routing, ensuring the real in-memory predicate—not a
+serialized placeholder—is evaluated.
+
+For interactive login, adapters may call optional `IPage.focusWindow()`.
+The daemon/Browser Bridge path negotiates `focus-window-v1` and requires Browser
+Bridge extension 2.1.0 or newer; update and reload the extension if that
+capability is missing. Direct CDP mode uses `Page.bringToFront`. Plugins such as
+the WeChat adapter that depend on foreground login should document this
+extension requirement for their users.
+
 ### TS Plugin Install Lifecycle
 
 When you run `bycli plugin install`, TS plugins are automatically set up:

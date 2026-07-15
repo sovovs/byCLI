@@ -268,10 +268,10 @@ cli({
     args: [
         { name: 'query', type: 'string', required: true, positional: true, help: 'Search query. Raw X operators (e.g. "exact phrase", #tag, OR, lang:en, since:YYYY-MM-DD, from:, since:) are passed through unchanged.' },
         { name: 'filter', type: 'string', default: 'top', choices: ['top', 'live'], help: 'Legacy alias for --product. Kept for backwards compatibility; if --product is set it wins.' },
-        { name: 'product', type: 'string', choices: PRODUCT_CHOICES, help: 'Which X search tab to read: top (default), live (Latest), photos, videos. Maps to the f= URL param.' },
+        { name: 'product', type: 'string', choices: [...PRODUCT_CHOICES], help: 'Which X search tab to read: top (default), live (Latest), photos, videos. Maps to the f= URL param.' },
         { name: 'from', type: 'string', help: 'Restrict to tweets authored by <user>. Leading @ is stripped. Equivalent to appending `from:<user>` to the query.' },
-        { name: 'has', type: 'string', choices: HAS_CHOICES, help: 'Restrict to tweets that have media|images|videos|links|replies. Maps to X\'s `filter:<has>` operator.' },
-        { name: 'exclude', type: 'string', choices: EXCLUDE_CHOICES, help: 'Exclude tweets matching <type>: replies|retweets|media|links. Maps to X\'s `-filter:<x>` operator (retweets → -filter:nativeretweets).' },
+        { name: 'has', type: 'string', choices: [...HAS_CHOICES], help: 'Restrict to tweets that have media|images|videos|links|replies. Maps to X\'s `filter:<has>` operator.' },
+        { name: 'exclude', type: 'string', choices: [...EXCLUDE_CHOICES], help: 'Exclude tweets matching <type>: replies|retweets|media|links. Maps to X\'s `-filter:<x>` operator (retweets → -filter:nativeretweets).' },
         { name: 'limit', type: 'int', default: 15, help: 'Maximum number of tweets to return (default 15). Result count after server-side filtering.' },
         { name: 'top-by-engagement', type: 'int', default: 0, help: 'When set to N>0, re-rank the results by weighted engagement (likes×1 + retweets×3 + replies×2 + bookmarks×5 + log10(views+1)×0.5) and return the top N. Default 0 keeps X\'s native ordering.' },
     ],

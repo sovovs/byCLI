@@ -4,7 +4,7 @@
 // 不 mask URL 原始 token 值 —— 真机发现 WS 握手把 JWT 放 query(beyond-token=eyJ...)。
 // 精度优先:按「分隔符切段后整段命中」判,避免 author 因含 auth 被误杀;再叠加 JWT 值兜底。
 const AUTH_PARAM_SEGMENTS = new Set([
-  'token', 'tokens', 'jwt', 'secret', 'signature', 'sig', 'sign', 'csrf', 'xsrf',
+  'token', 'tokens', 'jwt', 'secret', 'fingerprint', 'signature', 'sig', 'sign', 'csrf', 'xsrf',
   'session', 'sessionid', 'sid', 'password', 'passwd', 'pwd', 'auth', 'authorization',
   'accesstoken', 'refreshtoken', 'idtoken', 'apikey', 'appkey', 'bearer', 'credential', 'credentials',
 ]);

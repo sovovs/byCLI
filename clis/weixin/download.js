@@ -8,6 +8,8 @@
  */
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { downloadArticle } from '@sovovs/bycli/download/article-download';
+import { buildExtractWechatArticleContentJs } from './_wechat/article-content.js';
+export { extractWechatArticleContent } from './_wechat/article-content.js';
 // ============================================================
 // URL Normalization
 // ============================================================
@@ -241,53 +243,8 @@ cli({
         );
         if (result.errorHint) return result;
 
-        // Content processing
-        const contentEl = document.querySelector('#js_content');
-        if (!contentEl) return result;
-
-        // Fix lazy-loaded images: data-src -> src
-        contentEl.querySelectorAll('img').forEach(img => {
-          const dataSrc = img.getAttribute('data-src');
-          if (dataSrc) img.setAttribute('src', dataSrc);
-        });
-
-        // Extract code blocks with placeholder replacement
-        const codeBlocks = [];
-        contentEl.querySelectorAll('.code-snippet__fix').forEach(el => {
-          el.querySelectorAll('.code-snippet__line-index').forEach(li => li.remove());
-          const pre = el.querySelector('pre[data-lang]');
-          const lang = pre ? (pre.getAttribute('data-lang') || '') : '';
-          const lines = [];
-          el.querySelectorAll('code').forEach(codeTag => {
-            const text = codeTag.textContent;
-            if (/^[ce]?ounter\\(line/.test(text)) return;
-            lines.push(text);
-          });
-          if (lines.length === 0) lines.push(el.textContent);
-          const placeholder = 'CODEBLOCK-PLACEHOLDER-' + codeBlocks.length;
-          codeBlocks.push({ lang, code: lines.join('\\n') });
-          const p = document.createElement('p');
-          p.textContent = placeholder;
-          el.replaceWith(p);
-        });
-        result.codeBlocks = codeBlocks;
-
-        // Remove noise elements
-        ['script', 'style', '.qr_code_pc', '.reward_area'].forEach(sel => {
-          contentEl.querySelectorAll(sel).forEach(tag => tag.remove());
-        });
-
-        // Collect image URLs (deduplicated)
-        const seen = new Set();
-        contentEl.querySelectorAll('img[src]').forEach(img => {
-          const src = img.getAttribute('src');
-          if (src && !seen.has(src)) {
-            seen.add(src);
-            result.imageUrls.push(src);
-          }
-        });
-
-        result.contentHtml = contentEl.innerHTML;
+        const extractWechatArticleContent = ${buildExtractWechatArticleContentJs()};
+        Object.assign(result, extractWechatArticleContent(document));
         return result;
       })()
     `);
@@ -318,6 +275,7 @@ cli({
                 const m = url.match(/wx_fmt=(\w+)/) || url.match(/\.(\w{3,4})(?:\?|$)/);
                 return m ? m[1] : 'png';
             },
+            secureMarkdown: true,
         });
     },
 });

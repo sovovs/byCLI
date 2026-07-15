@@ -165,6 +165,63 @@ cli({
 });
 ```
 
+## 按参数决定是否启用浏览器
+
+插件命令可以根据最终的命令参数决定本次执行是否需要浏览器：
+
+```ts
+cli({
+  site: 'example',
+  name: 'conditional',
+  access: 'read',
+  strategy: Strategy.COOKIE,
+  browser: args => args['auth-source'] !== 'env',
+  args: [
+    { name: 'auth-source', choices: ['browser', 'env'], default: 'browser' },
+  ],
+  columns: ['status'],
+  func: async (page, args) => [{ status: page ? 'browser' : 'environment' }],
+});
+```
+
+byCLI 会先应用默认值、完成类型转换与参数校验，再执行
+`onBeforeExecute`；之后才调用 `browser` 条件函数。因此，条件函数看到的
+是浏览器路由和命令执行共同使用的最终参数。命令的 `func` 会收到
+`IPage | null`：条件函数返回 `true` 时传入 `IPage`，返回 `false` 时传入
+`null`。
+
+前文通用示例里的 `>=1.0.0` 只适用于使用静态 `browser` 声明的基础命令，
+不能用于这个 API。byCLI 2.0 尚未提供条件浏览器契约，因此使用该能力的插件
+必须同时声明下面两处兼容范围：
+
+`package.json`：
+
+```json
+{
+  "peerDependencies": { "@sovovs/bycli": ">=2.1.0 <3.0.0" }
+}
+```
+
+`bycli-plugin.json`：
+
+```json
+{
+  "bycli": ">=2.1.0 <3.0.0"
+}
+```
+
+条件浏览器命令仍会显示 `--window`、`--site-session` 和 `--keep-tab`
+等浏览器选项。结构化帮助、命令列表和 CLI 清单只会输出字面量
+`browser: "conditional"`，不会序列化条件函数。对于通过预编译清单发现
+的命令，byCLI 会在浏览器路由前先加载对应的适配器模块，确保执行的是
+内存中的实际条件函数，而不是清单占位逻辑。
+
+需要交互式登录时，适配器可以调用可选的 `IPage.focusWindow()`。在守护进程/
+Browser Bridge 路径中，byCLI 会协商 `focus-window-v1` 能力，并要求 Browser
+Bridge 扩展版本不低于 2.1.0；缺少该能力时，请更新并重新加载扩展后再重试。
+直接使用 CDP 时，该操作由 `Page.bringToFront` 实现。WeChat 等依赖前台登录
+流程的插件应向用户明确这项扩展版本要求。
+
 运行 `bycli plugin install` 时，TS plugins 会自动完成基础设置：
 
 1. 安装 plugin 自身依赖

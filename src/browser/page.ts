@@ -10,7 +10,8 @@
  */
 
 import type { BrowserCookie, BrowserDownloadWaitResult, BrowserEvaluateFunction, ScreenshotOptions } from '../types.js';
-import { sendCommand, sendCommandFull } from './daemon-client.js';
+import { fetchDaemonStatus, sendCommand, sendCommandFull } from './daemon-client.js';
+import { extensionCapabilityHint, FOCUS_WINDOW_CAPABILITY } from './extension-capabilities.js';
 import { buildEvaluateExpression } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
 import { generateStealthJs } from './stealth.js';
@@ -183,6 +184,27 @@ export class Page extends BasePage {
   async getCookies(opts: { domain?: string; url?: string } = {}): Promise<BrowserCookie[]> {
     const result = await sendCommand('cookies', { ...this._sessionOpts(), ...opts });
     return Array.isArray(result) ? result : [];
+  }
+
+  async focusWindow(): Promise<void> {
+    const status = await fetchDaemonStatus(this.contextId ? { contextId: this.contextId } : undefined);
+    const selectedExtensionIsConnected = status?.extensionConnected === true
+      && status.profileRequired !== true
+      && status.profileDisconnected !== true;
+    const capabilities = status?.extensionCapabilities;
+    const capabilityListIsDefinitive = Array.isArray(capabilities);
+    if (selectedExtensionIsConnected
+      && capabilityListIsDefinitive
+      && !capabilities.includes(FOCUS_WINDOW_CAPABILITY)) {
+      throw new Error(
+        `Connected Browser Bridge does not advertise ${FOCUS_WINDOW_CAPABILITY}. ${extensionCapabilityHint(FOCUS_WINDOW_CAPABILITY)}`,
+      );
+    }
+    await sendCommandFull('tabs', {
+      op: 'focus',
+      ...this._cmdOpts(),
+      ...this._sessionOpts(),
+    });
   }
 
   /** Release the current browser session lease in the extension */

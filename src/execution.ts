@@ -27,7 +27,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
-import { adapterLoadError, ArgumentError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
+import { adapterLoadError, ArgumentError, CliError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT, type BrowserWindowMode } from './runtime.js';
 import { resolveProfileContextId } from './browser/profile.js';
@@ -37,14 +37,62 @@ import { isElectronApp } from './electron-apps.js';
 import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 import { ObservationSession, exportObservationSession, type ObservationExportResult, type ObservationExportStatus } from './observation/index.js';
 import { resolveAdapterSourcePath } from './adapter-source.js';
+import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
+import {
+  capturedRegistryValues,
+  closeRegistryTransaction,
+  createRegistryTransaction,
+  finalizeRegistryTransaction,
+  resetRegistryTransactionStateForTests,
+  rollbackRegistryTransaction,
+  runRegistryTransaction,
+  transactionGroupsForKey,
+  type RegistryTransaction,
+} from './registry-transaction.js';
 
-const _loadedModules = new Map<string, Promise<void>>();
-/** Track mtime of loaded user adapter files for hot-reload in daemon mode. */
-const _moduleMtimes = new Map<string, number>();
-/** User adapter dir with a trailing separator, so `startsWith` can't match a sibling
- * like `clis-foo`. Resolved per-call (config-paths.ts rationale) — no import-time freeze. */
-function userClisPrefix(): string {
-  return getUserClisDir() + path.sep;
+interface ModuleLoadEntry {
+  promise: Promise<void>;
+  fingerprint: string | undefined;
+  generation: number;
+  /** Commands registered by this exact import generation. */
+  registeredCommands: Map<string, CliCommand>;
+  transaction: RegistryTransaction;
+  hotReloadable: boolean;
+}
+
+const _loadedModules = new Map<string, ModuleLoadEntry>();
+/** Independent cache-busting generation; retained when an import promise is discarded. */
+const _moduleImportGenerations = new Map<string, number>();
+let _registrationImportTail: Promise<void> = Promise.resolve();
+let _registrationImportsPoisoned = false;
+let _fingerprintReadCount = 0;
+
+const DEFAULT_ADAPTER_IMPORT_TIMEOUT_MS = 30_000;
+
+function adapterImportTimeoutMs(): number {
+  const configured = Number(process.env.BYCLI_ADAPTER_IMPORT_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ADAPTER_IMPORT_TIMEOUT_MS;
+}
+
+function poisonedImportError(): CliError {
+  return adapterLoadError(
+    'Adapter registration imports are unavailable because a previous import timed out.',
+    'Restart byCLI before retrying; the timed-out module may still complete and register stale commands in this process.',
+  );
+}
+
+/** Internal test-only reset. Never use this to recover a production process. */
+export function _resetLazyModuleStateForTests(): void {
+  _loadedModules.clear();
+  _moduleImportGenerations.clear();
+  _registrationImportTail = Promise.resolve();
+  _registrationImportsPoisoned = false;
+  _fingerprintReadCount = 0;
+  resetRegistryTransactionStateForTests();
+}
+
+export function _getLazyModuleFingerprintReadCountForTests(): number {
+  return _fingerprintReadCount;
 }
 
 type TraceMode = 'off' | 'on' | 'retain-on-failure';
@@ -107,43 +155,20 @@ async function runCommand(
 ): Promise<unknown> {
   const internal = cmd as InternalCliCommand;
   if (internal._lazy && internal._modulePath) {
-    const modulePath = internal._modulePath;
-    // Hot-reload: if a user adapter's file has changed on disk, invalidate cache
-    const isUserAdapter = modulePath.startsWith(userClisPrefix());
-    if (isUserAdapter && _loadedModules.has(modulePath)) {
-      try {
-        const stat = fs.statSync(modulePath);
-        const prevMtime = _moduleMtimes.get(modulePath);
-        if (prevMtime !== undefined && stat.mtimeMs !== prevMtime) {
-          _loadedModules.delete(modulePath);
-          _moduleMtimes.delete(modulePath);
-        }
-      } catch { /* file may have been deleted; let import below handle it */ }
-    }
-    if (!_loadedModules.has(modulePath)) {
-      const url = pathToFileURL(modulePath).href;
-      const importUrl = _moduleMtimes.has(modulePath) ? `${url}?t=${Date.now()}` : url;
-      const loadPromise = import(importUrl).then(
-        () => {
-          try { _moduleMtimes.set(modulePath, fs.statSync(modulePath).mtimeMs); } catch {}
-        },
-        (err) => {
-          _loadedModules.delete(modulePath);
-          throw adapterLoadError(
-            `Failed to load adapter module ${modulePath}: ${getErrorMessage(err)}`,
-            'Check that the adapter file exists and has no syntax errors.',
-          );
-        },
-      );
-      _loadedModules.set(modulePath, loadPromise);
-    }
-    await _loadedModules.get(modulePath);
+    const loadedEntry = await loadLazyModule(internal);
 
-    const updated = getRegistry().get(fullName(cmd));
-    if (updated?.func) {
+    // Use the command registered by this import generation. A newer file
+    // generation may already be queued/current, but an execution that began
+    // on the older generation is allowed to finish with its own command.
+    const updated = loadedEntry?.registeredCommands.get(fullName(cmd));
+    if (loadedEntry && updated?.func) {
+      finalizeCommandRegistration(loadedEntry, fullName(cmd));
       return runCommandFunc(updated, page, kwargs, debug);
     }
-    if (updated?.pipeline) return executePipeline(page, updated.pipeline, { args: kwargs, debug });
+    if (loadedEntry && updated?.pipeline) {
+      finalizeCommandRegistration(loadedEntry, fullName(cmd));
+      return executePipeline(page, updated.pipeline, { args: kwargs, debug });
+    }
   }
 
   if (cmd.func) return runCommandFunc(cmd, page, kwargs, debug);
@@ -154,12 +179,249 @@ async function runCommand(
   );
 }
 
+function moduleFingerprint(modulePath: string): string | undefined {
+  try {
+    _fingerprintReadCount += 1;
+    return crypto.createHash('sha256').update(fs.readFileSync(modulePath)).digest('hex');
+  } catch {
+    return undefined;
+  }
+}
+
+function isHotReloadableModule(modulePath: string): boolean {
+  const prefix = getUserClisDir() + path.sep;
+  return modulePath.startsWith(prefix);
+}
+
+function refreshCapturedCommands(entry: ModuleLoadEntry): void {
+  entry.registeredCommands = capturedRegistryValues(entry.transaction);
+}
+
+function rollbackImport(entry: ModuleLoadEntry): void {
+  rollbackRegistryTransaction(entry.transaction, getRegistry());
+}
+
+function rollbackCommandRegistration(entry: ModuleLoadEntry, key: string): void {
+  const groups = transactionGroupsForKey(entry.transaction, key);
+  rollbackRegistryTransaction(entry.transaction, getRegistry(), groups);
+}
+
+function finalizeCommandRegistration(entry: ModuleLoadEntry, key: string): void {
+  const groups = transactionGroupsForKey(entry.transaction, key);
+  finalizeRegistryTransaction(entry.transaction, getRegistry(), groups);
+}
+
+async function performRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
+  if (_registrationImportsPoisoned) throw poisonedImportError();
+  const settlement = runRegistryTransaction(entry.transaction, () => import(importUrl)).then(
+    () => ({ ok: true as const }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ timeout: true }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ timeout: true }), adapterImportTimeoutMs());
+  });
+  const outcome = await Promise.race([settlement, timeout]);
+  if ('timeout' in outcome) {
+    _registrationImportsPoisoned = true;
+    closeRegistryTransaction(entry.transaction);
+    rollbackImport(entry);
+    void settlement.then(() => {
+      refreshCapturedCommands(entry);
+      rollbackImport(entry);
+    });
+    throw adapterLoadError(
+      `Adapter module ${modulePath} registration timed out after ${adapterImportTimeoutMs()}ms.`,
+      'Restart byCLI before retrying; ESM evaluation cannot be cancelled safely.',
+    );
+  }
+  if (timeoutId) clearTimeout(timeoutId);
+  refreshCapturedCommands(entry);
+  if (!outcome.ok) {
+    rollbackImport(entry);
+    throw adapterLoadError(
+      `Failed to load adapter module ${modulePath}: ${getErrorMessage(outcome.error)}`,
+      'Check that the adapter file exists and has no syntax errors.',
+    );
+  }
+}
+
+function scheduleRegistrationImport(entry: ModuleLoadEntry, importUrl: string, modulePath: string): Promise<void> {
+  const scheduled = _registrationImportTail.then(
+    () => performRegistrationImport(entry, importUrl, modulePath),
+    () => performRegistrationImport(entry, importUrl, modulePath),
+  );
+  _registrationImportTail = scheduled.then(() => undefined, () => undefined);
+  return scheduled;
+}
+
+async function loadLazyModule(internal: InternalCliCommand): Promise<ModuleLoadEntry | undefined> {
+  const modulePath = internal._modulePath;
+  if (!internal._lazy || !modulePath) return;
+  let entry = _loadedModules.get(modulePath);
+  if (entry) {
+    if (!entry.hotReloadable) {
+      await entry.promise;
+      return entry;
+    }
+    const currentFingerprint = moduleFingerprint(modulePath);
+    if (entry.fingerprint === currentFingerprint) {
+      await entry.promise;
+      return entry;
+    }
+    if (_registrationImportsPoisoned) throw poisonedImportError();
+    invalidateLazyModule(modulePath, entry);
+    entry = undefined;
+  }
+  if (_registrationImportsPoisoned) throw poisonedImportError();
+
+  if (!entry) {
+    const hotReloadable = isHotReloadableModule(modulePath);
+    const fingerprint = hotReloadable ? moduleFingerprint(modulePath) : undefined;
+    const url = pathToFileURL(modulePath).href;
+    const generation = _moduleImportGenerations.get(modulePath) ?? 0;
+    const importUrl = generation === 0 ? url : `${url}?v=${generation}`;
+    const createdEntry: ModuleLoadEntry = {
+      promise: Promise.resolve(),
+      fingerprint,
+      generation,
+      registeredCommands: new Map(),
+      transaction: createRegistryTransaction(),
+      hotReloadable,
+    };
+    createdEntry.promise = scheduleRegistrationImport(createdEntry, importUrl, modulePath).catch((error) => {
+      invalidateLazyModule(modulePath, createdEntry);
+      throw error;
+    });
+    _loadedModules.set(modulePath, createdEntry);
+    entry = createdEntry;
+  }
+  await entry.promise;
+  return entry;
+}
+
+function invalidateLazyModule(
+  modulePath: string | undefined,
+  expectedEntry?: ModuleLoadEntry,
+): void {
+  if (!modulePath) return;
+  const currentEntry = _loadedModules.get(modulePath);
+  if (!currentEntry || (expectedEntry && currentEntry !== expectedEntry)) return;
+  if (currentEntry.transaction.active) {
+    void currentEntry.promise.then(
+      () => finalizeRegistryTransaction(currentEntry.transaction, getRegistry()),
+      () => finalizeRegistryTransaction(currentEntry.transaction, getRegistry()),
+    );
+  } else {
+    finalizeRegistryTransaction(currentEntry.transaction, getRegistry());
+  }
+  _loadedModules.delete(modulePath);
+  _moduleImportGenerations.set(
+    modulePath,
+    Math.max(_moduleImportGenerations.get(modulePath) ?? 0, currentEntry.generation) + 1,
+  );
+}
+
+function assertMatchingArgSchema(
+  placeholder: CliCommand,
+  hydrated: CliCommand,
+  loadedEntry: ModuleLoadEntry | undefined,
+): void {
+  const key = fullName(placeholder);
+  try {
+    const manifestSchema = canonicalizeManifestArgSchema(placeholder.args, `Manifest command ${key}`);
+    const moduleSchema = canonicalizeManifestArgSchema(hydrated.args, `Hydrated command ${key}`);
+    if (manifestSchema === moduleSchema) return;
+  } catch (error) {
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
+    invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
+    if (!(error instanceof ManifestSchemaError)) throw error;
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} has an unsafe argument schema: ${error.message}`,
+      'Use only JSON-safe defaults and string choices, then rebuild the CLI manifest.',
+    );
+  }
+  if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
+  invalidateLazyModule((placeholder as InternalCliCommand)._modulePath, loadedEntry);
+  throw new CommandExecutionError(
+    `Conditional adapter ${key} argument schema does not match its manifest`,
+    'Rebuild the CLI manifest so defaults, coercion, and validation use the adapter module schema.',
+  );
+}
+
+async function hydrateConditionalCommand(cmd: CliCommand): Promise<CliCommand> {
+  const internal = cmd as InternalCliCommand;
+  const key = fullName(cmd);
+  if (cmd.browser !== 'conditional') {
+    throw new CommandExecutionError(
+      `Conditional adapter placeholder ${key} has invalid browser metadata`,
+      'Rebuild the CLI manifest with the current byCLI version.',
+    );
+  }
+  const placeholderResolver = cmd.requiresBrowser;
+  let loadedEntry: ModuleLoadEntry | undefined;
+  try {
+    loadedEntry = await loadLazyModule(internal);
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CommandExecutionError(
+      `Failed to hydrate conditional adapter ${key}: ${getErrorMessage(error)}`,
+      'Rebuild or reinstall the adapter so its manifest and module are both available.',
+    );
+  }
+
+  const hydrated = loadedEntry?.registeredCommands.get(key);
+  const invalidReplacement = !hydrated
+    || hydrated === cmd
+    || fullName(hydrated) !== key
+    || hydrated.browser !== 'conditional';
+  if (invalidReplacement) {
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
+    invalidateLazyModule(internal._modulePath, loadedEntry);
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} did not register a valid hydrated conditional command`,
+      'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
+    );
+  }
+  const hydratedInternal = hydrated as InternalCliCommand;
+  if (
+    typeof hydrated.requiresBrowser !== 'function'
+    || hydrated.requiresBrowser === placeholderResolver
+    || hydratedInternal._hydrateBeforeBrowserRouting === true
+    || hydratedInternal._lazy === true
+    || hydratedInternal._modulePath !== undefined
+  ) {
+    if (loadedEntry) rollbackCommandRegistration(loadedEntry, key);
+    invalidateLazyModule(internal._modulePath, loadedEntry);
+    throw new CommandExecutionError(
+      `Conditional adapter ${key} did not register a valid hydrated conditional command`,
+      'Ensure the module registers the same site/name with a browser predicate and is rebuilt with the current byCLI version.',
+    );
+  }
+  assertMatchingArgSchema(cmd, hydrated, loadedEntry);
+  if (loadedEntry) finalizeCommandRegistration(loadedEntry, key);
+  return hydrated;
+}
+
 function runCommandFunc(cmd: CliCommand, page: IPage | null, kwargs: CommandArgs, debug: boolean): Promise<unknown> {
   if (cmd.browser === false) return cmd.func!(kwargs, debug);
+  if (cmd.browser === 'conditional') return cmd.func!(page, kwargs, debug);
   if (!page) {
     throw new CommandExecutionError(`Command ${fullName(cmd)} requires a browser session but none was provided`);
   }
   return (cmd as BrowserCliCommand).func!(page, kwargs, debug);
+}
+
+function resolveBrowserRequirement(cmd: CliCommand, kwargs: CommandArgs): boolean {
+  if (cmd.browser !== 'conditional') return cmd.browser;
+  try {
+    return Boolean(cmd.requiresBrowser(kwargs));
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CommandExecutionError(
+      `Browser requirement evaluation failed for ${fullName(cmd)}: ${getErrorMessage(error)}`,
+    );
+  }
 }
 
 function resolvePreNav(cmd: CliCommand): string | null {
@@ -212,15 +474,24 @@ export async function executeCommand(
     onTraceExport?: (trace: ObservationExportResult) => void;
   } = {},
 ): Promise<unknown> {
-  let kwargs: CommandArgs;
-  try {
-    kwargs = opts.prepared ? rawKwargs : prepareCommandArgs(cmd, rawKwargs);
-  } catch (err) {
-    if (err instanceof ArgumentError) throw err;
-    throw new ArgumentError(getErrorMessage(err));
+  const initialTraceCommand = cmd as InternalCliCommand;
+  let kwargs = opts.prepared
+    ? rawKwargs
+    : prepareCommandArgsOrThrowArgumentError(cmd, rawKwargs);
+
+  if ((cmd as InternalCliCommand)._hydrateBeforeBrowserRouting) {
+    cmd = await hydrateConditionalCommand(cmd);
+    // Manifest placeholders cannot serialize adapter validators. The matching
+    // schema above guarantees coercion/defaults stay valid; run only the real
+    // module validator here so custom validation has exactly one side effect.
+    try {
+      cmd.validateArgs?.(kwargs);
+    } catch (error) {
+      if (error instanceof ArgumentError) throw error;
+      throw new ArgumentError(getErrorMessage(error));
+    }
   }
 
-  const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
   const traceMode = normalizeTraceMode(opts.trace);
 
   const hookCtx: HookContext = {
@@ -229,10 +500,13 @@ export async function executeCommand(
     startedAt: Date.now(),
   };
   await emitHook('onBeforeExecute', hookCtx);
+  kwargs = hookCtx.args;
 
   let result: unknown;
   try {
-    if (shouldUseBrowserSession(cmd)) {
+    const resolvedBrowser = resolveBrowserRequirement(cmd, kwargs);
+    const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
+    if (shouldUseBrowserSession(cmd, resolvedBrowser)) {
       const electron = isElectronApp(cmd.site);
       let cdpEndpoint: string | undefined;
 
@@ -270,7 +544,8 @@ export async function executeCommand(
               target: page.getActivePage?.(),
               site: cmd.site,
               command: fullName(cmd),
-              adapterSourcePath: resolveAdapterSourcePath(internal),
+              adapterSourcePath: resolveAdapterSourcePath(internal)
+                ?? resolveAdapterSourcePath(initialTraceCommand),
             },
           });
         if (observation) {
@@ -482,6 +757,19 @@ export function prepareCommandArgs(
   const kwargs = coerceAndValidateArgs(cmd.args, rawKwargs);
   cmd.validateArgs?.(kwargs);
   return kwargs;
+}
+
+/** Prepare adapter arguments using the execution boundary's public error contract. */
+export function prepareCommandArgsOrThrowArgumentError(
+  cmd: CliCommand,
+  rawKwargs: CommandArgs,
+): CommandArgs {
+  try {
+    return prepareCommandArgs(cmd, rawKwargs);
+  } catch (err) {
+    if (err instanceof ArgumentError) throw err;
+    throw new ArgumentError(getErrorMessage(err));
+  }
 }
 
 /**

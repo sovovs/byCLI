@@ -11,14 +11,23 @@
  * adapters report not-yet (their Page must come from the daemon — M6b). The spawn /
  * input.json security / timeout / byte-cap mechanism lives in `runner-port.ts`.
  *
- * SECURITY (07:123-124): raw executionSeedArgs arrive via input.json (0600) and are used
- * as the adapter's call args; they are never echoed into the emitted result/started events.
+ * SECURITY (07:123-124): raw executionSeedArgs arrive via input.json (0600), then are
+ * defaulted, coerced, and validated before execution. Neither raw nor prepared arguments
+ * are echoed into the emitted result/started events.
  */
 
 import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { getRegistry, fullName, type BrowserCliCommand, type CliCommand, type InternalCliCommand } from '../../registry.js';
+import {
+  getRegistry,
+  fullName,
+  type BrowserCliCommand,
+  type CliCommand,
+  type ConditionalBrowserCliCommand,
+  type InternalCliCommand,
+} from '../../registry.js';
+import { prepareCommandArgsOrThrowArgumentError } from '../../execution.js';
 import type { RunnerEvent, RunnerResultEvent } from '@sovovs/bycli-recorder-core';
 
 /** Parsed input.json (written by RunnerPort; raw seed args are execution-only). */
@@ -29,7 +38,7 @@ export interface RunnerInput {
   adapterPath: string;
   /** Browser profile contextId for browser adapters (M6b). Omitted → daemon default profile. */
   contextId?: string;
-  /** Raw seed args — used as the adapter call args, never echoed into events. */
+  /** Raw seed args — prepared before resolver/adapter calls and never echoed into events. */
   executionSeedArgs?: Record<string, unknown>;
   fixture?: 'ignore' | 'match' | 'update';
   trace?: 'off' | 'retain-on-failure' | 'always';
@@ -124,7 +133,7 @@ export async function loadAdapterByName(adapterPath: string, name: string): Prom
  * tests can exercise executeAdapterForVerify without a real daemon/browser.
  */
 export type BrowserAdapterRunner = (
-  command: BrowserCliCommand,
+  command: BrowserCliCommand | ConditionalBrowserCliCommand,
   opts: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null },
 ) => Promise<unknown>;
 
@@ -136,7 +145,7 @@ export type BrowserAdapterRunner = (
  * and always releases the tab lease in `finally`.
  */
 async function defaultBrowserAdapterRunner(
-  command: BrowserCliCommand,
+  command: BrowserCliCommand | ConditionalBrowserCliCommand,
   opts: { seedArgs: Record<string, unknown>; contextId?: string; preNavUrl: string | null },
 ): Promise<unknown> {
   const { Page } = await import('../../browser/page.js');
@@ -180,16 +189,29 @@ export async function executeAdapterForVerify(
   }
 
   try {
+    const preparedArgs = prepareCommandArgsOrThrowArgumentError(command, opts.seedArgs);
     let rows: unknown;
     if (command.browser === false) {
-      rows = await command.func(opts.seedArgs, false);
+      rows = await command.func(preparedArgs, false);
+    } else if (command.browser === 'conditional') {
+      const browserRequired = Boolean(command.requiresBrowser(preparedArgs));
+      if (!browserRequired) {
+        rows = await command.func(null, preparedArgs, false);
+      } else {
+        const runner = opts.browserRunner ?? defaultBrowserAdapterRunner;
+        rows = await runner(command, {
+          seedArgs: preparedArgs,
+          contextId: opts.contextId,
+          preNavUrl: typeof command.navigateBefore === 'string' ? command.navigateBefore : null,
+        });
+      }
     } else {
       // M6b: browser adapter connects back to the daemon for a Page. navigateBefore is a
       // string only when a concrete pre-nav URL was derived (e.g. COOKIE strategy + domain);
       // `true`/`undefined` mean "adapter handles its own navigation".
       const runner = opts.browserRunner ?? defaultBrowserAdapterRunner;
       rows = await runner(command, {
-        seedArgs: opts.seedArgs,
+        seedArgs: preparedArgs,
         contextId: opts.contextId,
         preNavUrl: typeof command.navigateBefore === 'string' ? command.navigateBefore : null,
       });

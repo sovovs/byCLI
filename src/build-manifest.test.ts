@@ -100,6 +100,128 @@ describe('manifest helper rules', () => {
     getRegistry().delete(key);
   });
 
+  it('serializes conditional browser metadata without executable predicates', async () => {
+    const site = `manifest-conditional-${Date.now()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    const entries = await loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site,
+        name: 'list',
+        access: 'read',
+        browser: args => args['auth-source'] !== 'env',
+        args: [
+          { name: 'auth-source', default: 'browser' },
+          { name: 'config', default: [{ value: 1 }, { value: 1 }] },
+        ],
+        func: async () => [],
+      }),
+    }));
+
+    expect(entries).toContainEqual(expect.objectContaining({
+      site,
+      name: 'list',
+      browser: 'conditional',
+    }));
+    const serialized = JSON.stringify(entries);
+    expect(serialized).not.toContain('requiresBrowser');
+    expect(serialized).not.toContain('auth-source]');
+
+    getRegistry().delete(key);
+  });
+
+  it('fails manifest generation with adapter and arg context for unsafe defaults', async () => {
+    const site = `manifest-unsafe-${Date.now()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    await expect(loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site,
+        name: 'list',
+        access: 'read',
+        browser: false,
+        args: [{ name: 'unsafe', default: () => true }],
+        func: async () => [],
+      }),
+    }))).rejects.toThrow(new RegExp(`${site}/list.*unsafe`));
+
+    getRegistry().delete(key);
+  });
+
+  it.each([
+    ['extra property', () => Object.assign([], { meta: true })],
+    ['symbol property', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, Symbol('meta'), { value: true, enumerable: true });
+      return value;
+    }],
+    ['accessor', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, '0', { get: () => true, enumerable: true, configurable: true });
+      return value;
+    }],
+    ['non-enumerable property', () => {
+      const value: unknown[] = [];
+      Object.defineProperty(value, 'meta', { value: true, enumerable: false });
+      return value;
+    }],
+  ])('rejects array defaults with unsafe %s during manifest generation', async (_label, makeDefault) => {
+    const site = `manifest-unsafe-array-${Date.now()}-${Math.random()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    await expect(loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site, name: 'list', access: 'read', browser: false,
+        args: [{ name: 'unsafe-array', default: makeDefault() }],
+        func: async () => [],
+      }),
+    }))).rejects.toThrow(/unsafe-array/);
+    getRegistry().delete(key);
+  });
+
+  it.each([
+    ['shared default reference', () => {
+      const shared = { value: 1 };
+      return [{ name: 'shared', default: [shared, shared] }];
+    }],
+    ['sparse args container', () => {
+      const args = new Array(2);
+      args[1] = { name: 'present' };
+      return args;
+    }],
+    ['unsafe choices container', () => [{
+      name: 'choice',
+      choices: Object.assign(['one'], { meta: true }),
+    }]],
+  ])('rejects %s during manifest generation', async (_label, makeArgs) => {
+    const site = `manifest-unsafe-schema-${Date.now()}-${Math.random()}`;
+    const key = `${site}/list`;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-manifest-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, `${site}.ts`);
+    fs.writeFileSync(file, `export const command = cli({ site: '${site}', name: 'list', access: 'read' });`);
+
+    await expect(loadManifestEntries(file, site, async () => ({
+      command: cli({
+        site, name: 'list', access: 'read', browser: false,
+        args: makeArgs(), func: async () => [],
+      }),
+    }))).rejects.toThrow(/Command .*list/);
+    getRegistry().delete(key);
+  });
+
   it('falls back to registry delta for side-effect-only cli modules', async () => {
     const site = `manifest-side-effect-${Date.now()}`;
     const key = `${site}/legacy`;

@@ -96,4 +96,19 @@ describe('CDPBridge cookies', () => {
       ['Page.getLayoutMetrics', {}],
     ]);
   });
+
+  it('brings the direct CDP page to the foreground', async () => {
+    vi.stubEnv('BYCLI_CDP_ENDPOINT', 'ws://127.0.0.1:9222/devtools/page/1');
+
+    const bridge = new CDPBridge();
+    const send = vi.spyOn(bridge, 'send').mockResolvedValue({});
+
+    const page = await bridge.connect();
+    send.mockClear();
+
+    await page.focusWindow?.();
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith('Page.bringToFront');
+  });
 });

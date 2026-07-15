@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 import type { CliCommand } from './registry.js';
+import { cli, Strategy } from './registry.js';
 import { attachTraceReceipt, EmptyResultError, selectorError } from './errors.js';
 
 const { mockExecuteCommand, mockRenderOutput } = vi.hoisted(() => ({
@@ -21,6 +22,79 @@ vi.mock('./output.js', () => ({
 }));
 
 import { registerCommandToProgram } from './commanderAdapter.js';
+
+describe('commanderAdapter conditional browser options', () => {
+  beforeEach(() => {
+    mockExecuteCommand.mockReset();
+    mockExecuteCommand.mockResolvedValue([]);
+    mockRenderOutput.mockReset();
+    process.exitCode = undefined;
+  });
+
+  it('exposes all browser common flags and forwards their string values', async () => {
+    const cmd = cli({
+      site: 'wechat',
+      name: 'search',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      browser: args => args['auth-source'] !== 'env',
+      args: [{ name: 'auth-source', choices: ['browser', 'env'], default: 'browser' }],
+      func: async () => [],
+    });
+    const program = new Command();
+    const siteCmd = program.command('wechat');
+    registerCommandToProgram(siteCmd, cmd);
+
+    const subCmd = siteCmd.commands.find(command => command.name() === 'search')!;
+    expect(subCmd.options.map(option => option.long)).toEqual(expect.arrayContaining([
+      '--window',
+      '--site-session',
+      '--keep-tab',
+    ]));
+
+    await program.parseAsync([
+      'node', 'bycli', 'wechat', 'search',
+      '--auth-source', 'env',
+      '--window', 'foreground',
+      '--site-session', 'persistent',
+      '--keep-tab', 'true',
+    ]);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(
+      cmd,
+      expect.objectContaining({ 'auth-source': 'env' }),
+      false,
+      {
+        prepared: true,
+        windowMode: 'foreground',
+        siteSession: 'persistent',
+        keepTab: 'true',
+      },
+    );
+  });
+
+  it('does not forward non-string browser common option values', async () => {
+    const cmd = cli({
+      site: 'wechat',
+      name: 'list',
+      access: 'read',
+      browser: () => true,
+      args: [],
+      func: async () => [],
+    });
+    const program = new Command();
+    const siteCmd = program.command('wechat');
+    registerCommandToProgram(siteCmd, cmd);
+    const subCmd = siteCmd.commands.find(command => command.name() === 'list')!;
+    subCmd.setOptionValue('window', true);
+    subCmd.setOptionValue('siteSession', { mode: 'persistent' });
+    subCmd.setOptionValue('keepTab', false);
+
+    await subCmd.parseAsync([], { from: 'user' });
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false, { prepared: true });
+  });
+});
 
 describe('commanderAdapter arg passing', () => {
   const cmd: CliCommand = {

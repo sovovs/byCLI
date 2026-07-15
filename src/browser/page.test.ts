@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { sendCommandMock, sendCommandFullMock } = vi.hoisted(() => ({
+const { fetchDaemonStatusMock, sendCommandMock, sendCommandFullMock } = vi.hoisted(() => ({
+  fetchDaemonStatusMock: vi.fn(),
   sendCommandMock: vi.fn(),
   sendCommandFullMock: vi.fn(),
 }));
@@ -9,6 +10,7 @@ const { warnMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('./daemon-client.js', () => ({
+  fetchDaemonStatus: fetchDaemonStatusMock,
   sendCommand: sendCommandMock,
   sendCommandFull: sendCommandFullMock,
 }));
@@ -19,6 +21,94 @@ vi.mock('../logger.js', () => ({
 }));
 
 import { Page } from './page.js';
+
+describe('Page.focusWindow', () => {
+  beforeEach(() => {
+    fetchDaemonStatusMock.mockReset();
+    sendCommandMock.mockReset();
+    sendCommandFullMock.mockReset();
+    warnMock.mockReset();
+  });
+
+  it('asks the bridge to focus the active page in its automation session', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: true,
+      extensionCapabilities: ['focus-window-v1'],
+    });
+    sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
+
+    const page = new Page('wechat', 45, 'profile-1', 'background', 'adapter', 'persistent');
+    page.setActivePage('target-7');
+
+    await page.focusWindow();
+
+    expect(fetchDaemonStatusMock).toHaveBeenCalledWith({ contextId: 'profile-1' });
+    expect(sendCommandFullMock).toHaveBeenCalledWith('tabs', {
+      op: 'focus',
+      session: 'wechat',
+      surface: 'adapter',
+      contextId: 'profile-1',
+      page: 'target-7',
+      idleTimeout: 45,
+      windowMode: 'background',
+      siteSession: 'persistent',
+    });
+  });
+
+  it('rejects an old extension before sending an unsupported focus command', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: true,
+      extensionVersion: '2.0.0',
+      extensionCapabilities: [],
+    });
+
+    const page = new Page('wechat', undefined, 'profile-1', undefined, 'adapter');
+
+    await expect(page.focusWindow()).rejects.toThrow(/update.*reload.*extension/i);
+    expect(sendCommandFullMock).not.toHaveBeenCalled();
+  });
+
+  it('falls through to authoritative dispatch when daemon status is unavailable', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce(null);
+    sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
+
+    const page = new Page('wechat', undefined, 'profile-1', undefined, 'adapter');
+
+    await expect(page.focusWindow()).resolves.toBeUndefined();
+    expect(sendCommandFullMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls through when an older daemon omits capability metadata', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: true,
+      extensionVersion: '2.0.0',
+    });
+    sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
+
+    const page = new Page('wechat', undefined, 'profile-1', undefined, 'adapter');
+
+    await expect(page.focusWindow()).resolves.toBeUndefined();
+    expect(sendCommandFullMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls through when status is ambiguous across multiple profiles', async () => {
+    fetchDaemonStatusMock.mockResolvedValueOnce({
+      extensionConnected: false,
+      profileRequired: true,
+      profiles: [
+        { contextId: 'work', extensionConnected: true, extensionCapabilities: ['focus-window-v1'] },
+        { contextId: 'personal', extensionConnected: true },
+      ],
+    });
+    sendCommandFullMock.mockResolvedValueOnce({ data: { focused: true } });
+
+    const page = new Page('wechat', undefined, undefined, undefined, 'adapter');
+
+    await expect(page.focusWindow()).resolves.toBeUndefined();
+    expect(fetchDaemonStatusMock).toHaveBeenCalledWith(undefined);
+    expect(sendCommandFullMock).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('Page.getCurrentUrl', () => {
   beforeEach(() => {

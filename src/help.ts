@@ -1,7 +1,7 @@
 import { Command, type Argument as CommanderArgument, type Option as CommanderOption } from 'commander';
 import yaml from 'js-yaml';
 import type { Arg, CliCommand } from './registry.js';
-import { fullName } from './registry.js';
+import { browserRequirementLabel, fullName, hasBrowserCapability } from './registry.js';
 import { formatCommandExample } from './serialization.js';
 
 export type StructuredHelpFormat = 'yaml' | 'json';
@@ -459,12 +459,12 @@ function compactCommand(cmd: CliCommand): Record<string, unknown> {
     usage: formatUsage(cmd),
     access: cmd.access,
     description: cmd.description,
-    browser: !!cmd.browser,
+    browser: cmd.browser,
     ...(cmd.domain ? { domain: cmd.domain } : {}),
     ...(cmd.aliases?.length ? { aliases: cmd.aliases } : {}),
     positionals: positionals(cmd).map(compactArg),
     command_options: commandOptions(cmd).map(compactArg),
-    ...(cmd.browser ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(hasBrowserCapability(cmd) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
     example: formatCommandExample(cmd),
     ...(cmd.siteSession ? { siteSession: cmd.siteSession } : {}),
     ...(cmd.defaultFormat ? { defaultFormat: cmd.defaultFormat } : {}),
@@ -515,7 +515,7 @@ export function siteHelpData(site: string, commands: readonly CliCommand[]): Rec
     command_count: unique.length,
     commands: unique.map(cmd => compactCommand(cmd)),
     common_options: COMMON_OPTIONS.map(compactCommonOption),
-    ...(unique.some(cmd => cmd.browser) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(unique.some(hasBrowserCapability) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
     next: [
       `bycli ${site} <command> --help -f yaml`,
       `bycli ${site} <command> -f yaml`,
@@ -528,7 +528,7 @@ export function commandHelpData(cmd: CliCommand): Record<string, unknown> {
     site: cmd.site,
     ...compactCommand(cmd),
     common_options: COMMON_OPTIONS.map(compactCommonOption),
-    ...(cmd.browser ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(hasBrowserCapability(cmd) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
     output_formats: ['table', 'plain', 'yaml', 'json', 'md', 'csv'],
   };
 }
@@ -578,7 +578,7 @@ export function formatSiteHelpText(site: string, commands: readonly CliCommand[]
     ...formatRows(unique.map(cmd => [formatCommandListTerm(cmd), formatSiteCommandDescription(cmd)])),
     '',
     formatCommonOptionsHelpText(),
-    ...(unique.some(cmd => cmd.browser) ? ['', formatBrowserCommonOptionsHelpText()] : []),
+    ...(unique.some(hasBrowserCapability) ? ['', formatBrowserCommonOptionsHelpText()] : []),
     '',
     `Agent tip: use 'bycli ${site} --help -f yaml' to get all command args/options in one structured response.`,
     '',
@@ -611,11 +611,11 @@ export function formatCommandHelpText(cmd: CliCommand): string {
   }
 
   lines.push(formatCommonOptionsHelpText(), '');
-  if (cmd.browser) lines.push(formatBrowserCommonOptionsHelpText(), '');
+  if (hasBrowserCapability(cmd)) lines.push(formatBrowserCommonOptionsHelpText(), '');
 
   const meta: string[] = [];
   meta.push(`Access: ${cmd.access}`);
-  meta.push(`Browser: ${cmd.browser ? 'yes' : 'no'}`);
+  meta.push(`Browser: ${browserRequirementLabel(cmd)}`);
   if (cmd.domain) meta.push(`Domain: ${cmd.domain}`);
   if (cmd.defaultFormat) meta.push(`Default format: ${cmd.defaultFormat}`);
   if (cmd.aliases?.length) meta.push(`Aliases: ${cmd.aliases.join(', ')}`);

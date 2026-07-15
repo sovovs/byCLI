@@ -1,6 +1,6 @@
 {
   "name": "@sovovs/bycli",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -32,6 +32,7 @@
     "./download/article-download": "./dist/src/download/article-download.js",
     "./download/media-download": "./dist/src/download/media-download.js",
     "./download/progress": "./dist/src/download/progress.js",
+    "./download/wechat-article": "./dist/src/download/wechat-article.js",
     "./pipeline": "./dist/src/pipeline/index.js"
   },
   "files": [
@@ -90,14 +91,15 @@
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
+    "parse5": "^7.3.0",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
     "undici": "^6.25.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/jsdom": "^27.0.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^25.5.2",
     "@types/turndown": "^5.0.6",
     "@types/ws": "^8.5.13",

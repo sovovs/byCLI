@@ -12,6 +12,7 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { httpDownload, sanitizeFilename } from './index.js';
 import { formatBytes } from './progress.js';
+export { extractWechatArticleHtml } from './wechat-article.js';
 
 const IMAGE_CONCURRENCY = 5;
 
@@ -61,6 +62,8 @@ export interface ArticleDownloadOptions {
    * as-is so the output is self-contained when piped.
    */
   stdout?: boolean;
+  /** Opt-in hardened Markdown rules used by HTML-focused adapters. */
+  secureMarkdown?: boolean;
 }
 
 export interface ArticleDownloadResult {
@@ -77,6 +80,23 @@ const DEFAULT_LABELS: Required<FrontmatterLabels> = {
   publishTime: '发布时间',
   sourceUrl: '原文链接',
 };
+
+function escapeMarkdownText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    .replace(/([\\`*_[\]{}()#+.!|>~-])/g, '\\$1');
+}
+
+function safeHttpUrl(value: string): string {
+  const normalized = value.trim().startsWith('//') ? `https:${value.trim()}` : value.trim();
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
 
 // ============================================================
 // Markdown Conversion
@@ -102,6 +122,7 @@ const STRIPPED_TAGS: Array<keyof HTMLElementTagNameMap> = [
 function createTurndown(
   configure?: (td: TurndownService) => void,
   cleanSelectors?: string[],
+  secureMarkdown = false,
 ): TurndownService {
   const td = new TurndownService({
     headingStyle: 'atx',
@@ -109,6 +130,41 @@ function createTurndown(
     bulletListMarker: '-',
   });
   td.use(gfm);
+  if (secureMarkdown) {
+    const escapeDestination = (value: string) => value.replace(/([\\()])/g, '\\$1');
+    td.addRule('safeFencedCodeBlock', {
+      filter: 'pre',
+      replacement: (_content, node) => {
+        const element = node as Element;
+        const code = element.textContent || '';
+        const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map(match => match[0].length));
+        const fence = '`'.repeat(Math.max(3, longest + 1));
+        const className = element.querySelector('code')?.getAttribute('class') || '';
+        const language = element.getAttribute('data-lang')
+          || /(?:^|\s)language-([^\s]+)/.exec(className)?.[1]
+          || '';
+        return `\n${fence}${language}\n${code.replace(/\n$/, '')}\n${fence}\n`;
+      },
+    });
+    td.addRule('safeImage', {
+      filter: 'img',
+      replacement: (_content, node) => {
+        const element = node as Element;
+        const alt = escapeMarkdownText(element.getAttribute('alt') || '');
+        const src = element.getAttribute('src') || '';
+        return src ? `![${alt}](${escapeDestination(src)})` : alt;
+      },
+    });
+    td.addRule('safeLink', {
+      filter: 'a',
+      replacement: (_content, node) => {
+        const element = node as Element;
+        const label = escapeMarkdownText(element.textContent || '');
+        const href = element.getAttribute('href') || '';
+        return href ? `[${label}](${escapeDestination(href)})` : label;
+      },
+    });
+  }
   td.remove(STRIPPED_TAGS);
   // turndown-plugin-gfm@1.0.2 emits single-tilde strikethrough (`~x~`), which
   // is not the canonical GFM form. Override it so exported markdown is
@@ -168,10 +224,13 @@ function createTurndown(
     filter: (node) => node.nodeName === 'IFRAME',
     replacement: (_content, node) => {
       const el = node as Element;
-      const src = el.getAttribute('src') || '';
+      const rawSrc = el.getAttribute('src') || '';
+      const src = secureMarkdown ? safeHttpUrl(rawSrc) : rawSrc;
       if (!src) return '';
-      const title = el.getAttribute('title') || 'Embedded content';
-      return `\n[${title}](${src})\n`;
+      const rawTitle = el.getAttribute('title') || 'Embedded content';
+      const title = secureMarkdown ? escapeMarkdownText(rawTitle) : rawTitle;
+      const destination = secureMarkdown ? src.replace(/([\\()])/g, '\\$1') : src;
+      return `\n[${title}](${destination})\n`;
     },
   });
   // Per-adapter dirty-node removal. Adapters know their site's specific noise
@@ -205,15 +264,18 @@ function convertToMarkdown(
   codeBlocks: Array<{ lang: string; code: string }>,
   configure?: (td: TurndownService) => void,
   cleanSelectors?: string[],
+  secureMarkdown = false,
 ): string {
-  const td = createTurndown(configure, cleanSelectors);
+  const td = createTurndown(configure, cleanSelectors, secureMarkdown);
   let md = td.turndown(contentHtml);
 
-  // Restore code block placeholders
-  codeBlocks.forEach((block, i) => {
-    const placeholder = `CODEBLOCK-PLACEHOLDER-${i}`;
-    const fenced = `\n\`\`\`${block.lang}\n${block.code}\n\`\`\`\n`;
-    md = md.replace(placeholder, fenced);
+  // Legacy callers may still supply extracted blocks. New callers preserve
+  // real <pre>/<code> nodes so Turndown owns fencing without collision-prone
+  // magic text; legacy blocks are appended with safe dynamic fences.
+  codeBlocks.forEach((block) => {
+    const longest = Math.max(0, ...[...block.code.matchAll(/`+/g)].map(match => match[0].length));
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    md += `\n\n${fence}${block.lang}\n${block.code}\n${fence}`;
   });
 
   // Clean up
@@ -226,6 +288,13 @@ function convertToMarkdown(
   md = md.replace(/\n{3,}/g, '\n\n');
 
   return md;
+}
+
+export function convertArticleHtmlToMarkdown(
+  contentHtml: string,
+  options: { safeFencedCodeBlocks?: boolean } = {},
+): string {
+  return convertToMarkdown(contentHtml, [], undefined, undefined, options.safeFencedCodeBlocks === true);
 }
 
 function replaceImageUrls(md: string, urlMap: Record<string, string>): string {
@@ -326,6 +395,7 @@ export async function downloadArticle(
     frontmatterLabels,
     cleanSelectors,
     stdout = false,
+    secureMarkdown = false,
   } = options;
 
   const labels = { ...DEFAULT_LABELS, ...frontmatterLabels };
@@ -358,6 +428,7 @@ export async function downloadArticle(
     data.codeBlocks || [],
     configureTurndown,
     cleanSelectors,
+    secureMarkdown,
   );
 
   const safeTitle = sanitizeFilename(data.title, maxTitleLength);
@@ -377,10 +448,11 @@ export async function downloadArticle(
   // Build frontmatter with customizable labels.
   // Shape: `# Title\n[> meta\n...]\n---\n\n<markdown>` — exactly one blank
   // line separates every section, so we never produce ≥3 consecutive newlines.
-  const headerLines = [`# ${data.title}`];
-  if (data.author) headerLines.push(`> ${labels.author}: ${data.author}`);
-  if (data.publishTime) headerLines.push(`> ${labels.publishTime}: ${data.publishTime}`);
-  if (data.sourceUrl) headerLines.push(`> ${labels.sourceUrl}: ${data.sourceUrl}`);
+  const headerValue = (value: string) => secureMarkdown ? escapeMarkdownText(value) : value;
+  const headerLines = [`# ${headerValue(data.title)}`];
+  if (data.author) headerLines.push(`> ${labels.author}: ${headerValue(data.author)}`);
+  if (data.publishTime) headerLines.push(`> ${labels.publishTime}: ${headerValue(data.publishTime)}`);
+  if (data.sourceUrl) headerLines.push(`> ${labels.sourceUrl}: ${headerValue(data.sourceUrl)}`);
   const frontmatter = headerLines.join('\n') + '\n\n---\n\n';
   const fullContent = frontmatter + markdown;
   const size = Buffer.byteLength(fullContent, 'utf-8');

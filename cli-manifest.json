@@ -27806,6 +27806,109 @@
   },
   {
     "site": "weixin",
+    "name": "accounts",
+    "description": "Search WeChat official accounts and return their fakeids",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "intercept",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Official-account name to search for"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Maximum number of matching accounts to return"
+      },
+      {
+        "name": "auth-source",
+        "type": "str",
+        "default": "browser",
+        "required": false,
+        "help": "Credential source: browser session or environment variables",
+        "choices": [
+          "browser",
+          "env"
+        ]
+      }
+    ],
+    "columns": [
+      "nickname",
+      "fakeid",
+      "alias"
+    ],
+    "type": "js",
+    "modulePath": "weixin/accounts.js",
+    "sourceFile": "weixin/accounts.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "weixin",
+    "name": "articles",
+    "description": "List published articles from a WeChat official account",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "fakeid",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Official-account fakeid returned by weixin accounts"
+      },
+      {
+        "name": "name",
+        "type": "str",
+        "required": false,
+        "help": "Optional official-account name for display context"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "required": false,
+        "help": "Maximum number of articles to return"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "required": false,
+        "help": "Maximum number of history pages to scan"
+      },
+      {
+        "name": "auth-source",
+        "type": "str",
+        "default": "browser",
+        "required": false,
+        "help": "Credential source: browser session or environment variables",
+        "choices": [
+          "browser",
+          "env"
+        ]
+      }
+    ],
+    "columns": [
+      "title",
+      "author",
+      "digest",
+      "publishedAt",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "weixin/articles.js",
+    "sourceFile": "weixin/articles.js",
+    "navigateBefore": "https://mp.weixin.qq.com"
+  },
+  {
+    "site": "weixin",
     "name": "create-draft",
     "description": "创建微信公众号图文草稿",
     "access": "write",
@@ -27937,6 +28040,72 @@
     "modulePath": "weixin/drafts.js",
     "sourceFile": "weixin/drafts.js",
     "navigateBefore": false
+  },
+  {
+    "site": "weixin",
+    "name": "save-articles",
+    "description": "Download WeChat official-account articles as Markdown files",
+    "access": "write",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "fakeid",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Official-account fakeid returned by weixin accounts"
+      },
+      {
+        "name": "name",
+        "type": "str",
+        "required": false,
+        "help": "Official-account name used in Markdown metadata"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-articles",
+        "required": false,
+        "help": "Directory for saved Markdown files"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "required": false,
+        "help": "Maximum number of articles to save"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "required": false,
+        "help": "Maximum number of history pages to scan"
+      },
+      {
+        "name": "auth-source",
+        "type": "str",
+        "default": "browser",
+        "required": false,
+        "help": "Credential source: browser session or environment variables",
+        "choices": [
+          "browser",
+          "env"
+        ]
+      }
+    ],
+    "columns": [
+      "title",
+      "status",
+      "stage",
+      "path",
+      "error",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "weixin/save-articles.js",
+    "sourceFile": "weixin/save-articles.js",
+    "navigateBefore": "https://mp.weixin.qq.com"
   },
   {
     "site": "weixin",

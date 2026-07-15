@@ -178,13 +178,14 @@ function createChromeMock() {
     windows: {
       get: vi.fn(async (windowId: number) => ({ id: windowId, focused: windowId === lastFocusedWindowId })),
       create: vi.fn(async ({ url, focused, width, height, type }: any) => ({ id: 1, url, focused, width, height, type })),
+      update: vi.fn(async (windowId: number, updates: { focused?: boolean }) => ({ id: windowId, ...updates })),
       remove: vi.fn(async (_windowId: number) => {}),
       onRemoved: { addListener: vi.fn() } as Listener<(windowId: number) => void>,
     },
     alarms: {
       create: vi.fn(),
       clear: vi.fn(),
-      onAlarm: { addListener: vi.fn() } as Listener<(alarm: { name: string }) => void>,
+      onAlarm: { addListener: vi.fn() } as Listener<(alarm: { name: string; scheduledTime?: number }) => void>,
     },
     storage: {
       local: {
@@ -542,6 +543,611 @@ describe('background tab isolation', () => {
     expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'https://new.example', active: false });
   });
 
+  it('focuses only the current owned session tab and its window', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const result = await mod.__test__.handleTabs(
+      { id: 'focus-current', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+
+    expect(result).toEqual({ id: 'focus-current', ok: true, data: { focused: true } });
+    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
+    expect(chrome.tabs.update.mock.invocationCallOrder[0]).toBeLessThan(chrome.windows.update.mock.invocationCallOrder[0]);
+  });
+
+  it('rejects a focus request for a page outside the current owned session', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const result = await mod.__test__.handleTabs(
+      { id: 'focus-other', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-2' },
+      adapterKey('wechat'),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('current automation session');
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects focusing a user-owned bound session', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: false, preferredTabId: 2 });
+
+    const result = await mod.__test__.handleTabs(
+      { id: 'focus-bound', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-2' },
+      adapterKey('wechat'),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('owned byCLI session');
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an owned lease whose tab has drifted outside its session window', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 99, owned: true, preferredTabId: 1 });
+
+    const result = await mod.__test__.handleTabs(
+      { id: 'focus-drifted', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('outside its owned window');
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('reports window focus failure after activating only the authorized leased tab', async () => {
+    const { chrome } = createChromeMock();
+    chrome.windows.update.mockRejectedValueOnce(new Error('window focus failed'));
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const result = await mod.__test__.handleCommand(
+      { id: 'focus-window-failure', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+    );
+
+    expect(result).toMatchObject({ id: 'focus-window-failure', ok: false, error: 'window focus failed' });
+    expect(chrome.tabs.update).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
+  });
+
+  it('does not foreground the window when activation fails and releases the lease lock', async () => {
+    const { chrome } = createChromeMock();
+    const activation = deferred<MockTab>();
+    chrome.tabs.update.mockImplementationOnce(async () => activation.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleCommand(
+      { id: 'focus-tab-failure', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true }));
+    const binding = mod.__test__.handleBind(
+      { id: 'bind-after-focus-error', action: 'bind', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await Promise.resolve();
+    expect(chrome.tabs.query).not.toHaveBeenCalled();
+
+    activation.reject(new Error('tab activation failed'));
+    const result = await focusing;
+
+    expect(result).toMatchObject({ id: 'focus-tab-failure', ok: false, error: 'tab activation failed' });
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
+    await expect(binding).resolves.toMatchObject({ ok: true });
+  });
+
+  it('aborts focus when the lease is replaced while resolving the tab', async () => {
+    const { chrome } = createChromeMock();
+    const getTab = deferred<MockTab>();
+    chrome.tabs.get = vi.fn(async (tabId: number) => {
+      if (tabId === 1) return getTab.promise;
+      return { id: tabId, windowId: 2, url: 'https://replacement.example' };
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-race-get', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.get).toHaveBeenCalledWith(1));
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
+    getTab.resolve({ id: 1, windowId: 1, url: 'https://automation.example' });
+
+    await expect(focusing).resolves.toMatchObject({ ok: false, error: expect.stringContaining('changed during focus') });
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+
+  it('does not focus the window when the lease changes during tab activation', async () => {
+    const { chrome } = createChromeMock();
+    const activateTab = deferred<MockTab>();
+    chrome.tabs.update = vi.fn(async () => activateTab.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-race-update', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true }));
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
+    activateTab.resolve({ id: 1, windowId: 1, url: 'https://automation.example', active: true });
+
+    await expect(focusing).resolves.toMatchObject({ ok: false, error: expect.stringContaining('changed during focus') });
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+
+  it('serializes bind behind a focus paused during tab activation', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const activateTab = deferred<MockTab>();
+    const originalUpdate = chrome.tabs.update.getMockImplementation()!;
+    chrome.tabs.update = vi.fn(async (tabId: number, updates: { active?: boolean; url?: string }) => {
+      if (updates.active === true && updates.url === undefined) return activateTab.promise;
+      return originalUpdate(tabId, updates);
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-locked', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true }));
+
+    const binding = mod.__test__.handleBind(
+      { id: 'bind-waits', action: 'bind', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await Promise.resolve();
+    expect(chrome.tabs.query).not.toHaveBeenCalled();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+
+    activateTab.resolve({ ...tabs[0], active: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await expect(binding).resolves.toMatchObject({ ok: true });
+    expect(chrome.tabs.query).toHaveBeenCalled();
+  });
+
+  it('serializes tab selection behind focus until the leased window is foregrounded', async () => {
+    const { chrome, tabs } = createChromeMock();
+    tabs.push({
+      id: 4,
+      windowId: 1,
+      url: 'https://other.example',
+      title: 'other',
+      active: false,
+      status: 'complete',
+      groupId: -1,
+    });
+    const foregroundWindow = deferred<{ id: number; focused: boolean }>();
+    const originalUpdate = chrome.tabs.update.getMockImplementation()!;
+    chrome.tabs.update = vi.fn(async (tabId: number, updates: { active?: boolean; url?: string }) => {
+      const updated = await originalUpdate(tabId, updates);
+      if (updates.active === true) {
+        for (const tab of tabs) {
+          if (tab.windowId === updated.windowId) tab.active = tab.id === tabId;
+        }
+      }
+      return updated;
+    });
+    chrome.windows.update = vi.fn(async () => foregroundWindow.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-before-select', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true }));
+
+    const selecting = mod.__test__.handleTabs(
+      { id: 'select-after-focus', action: 'tabs', op: 'select', session: 'wechat', surface: 'adapter', page: 'target-4' },
+      adapterKey('wechat'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const selectedBeforeFocusCompleted = chrome.tabs.update.mock.calls.some(
+      ([tabId, updates]) => tabId === 4 && updates.active === true,
+    );
+    const leasedTabActiveBeforeFocusCompleted = tabs.find((tab) => tab.id === 1)?.active;
+
+    foregroundWindow.resolve({ id: 1, focused: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await expect(selecting).resolves.toMatchObject({ ok: true, page: 'target-4' });
+    expect(selectedBeforeFocusCompleted).toBe(false);
+    expect(leasedTabActiveBeforeFocusCompleted).toBe(true);
+    expect(chrome.tabs.update).toHaveBeenCalledWith(4, { active: true });
+  });
+
+  it('makes focus wait for an earlier bind and rejects the resulting borrowed lease', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const selectBoundTab = deferred<MockTab[]>();
+    const originalQuery = chrome.tabs.query.getMockImplementation()!;
+    chrome.tabs.query = vi.fn()
+      .mockImplementationOnce(async () => selectBoundTab.promise)
+      .mockImplementation(originalQuery);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const binding = mod.__test__.handleBind(
+      { id: 'bind-first', action: 'bind', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.query).toHaveBeenCalledTimes(1));
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'focus-waits', action: 'tabs', op: 'focus', session: 'wechat', surface: 'adapter', page: 'target-1' },
+      adapterKey('wechat'),
+    );
+    await Promise.resolve();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+
+    selectBoundTab.resolve([tabs[1]]);
+    await expect(binding).resolves.toMatchObject({ ok: true });
+    await expect(focusing).resolves.toMatchObject({ ok: false });
+    expect(chrome.tabs.update).not.toHaveBeenCalledWith(1, { active: true });
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+
+  it('serializes replacement bind behind a release paused during cleanup', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const releaseCleanup = deferred<MockTab>();
+    const originalUpdate = chrome.tabs.update.getMockImplementation()!;
+    chrome.tabs.update = vi.fn(async (tabId: number, updates: { active?: boolean; url?: string }) => {
+      if (updates.url === 'about:blank') return releaseCleanup.promise;
+      return originalUpdate(tabId, updates);
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const releasing = mod.__test__.handleCommand(
+      { id: 'release-paused', action: 'close-window', session: 'wechat', surface: 'adapter' },
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: true }));
+
+    const binding = mod.__test__.handleBind(
+      { id: 'replacement-bind', action: 'bind', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await Promise.resolve();
+    expect(chrome.tabs.query).not.toHaveBeenCalled();
+
+    releaseCleanup.resolve({ ...tabs[0], url: 'about:blank', active: true });
+    await expect(releasing).resolves.toMatchObject({ ok: true });
+    await expect(binding).resolves.toMatchObject({ ok: true });
+    expect(mod.__test__.getSession(adapterKey('wechat'))).toMatchObject({
+      owned: false,
+      preferredTabId: expect.any(Number),
+    });
+  });
+
+  it('does not create an orphan owned tab while bind is choosing a borrowed tab', async () => {
+    const { chrome, tabs } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    await mod.__test__.resolveTabId(undefined, adapterKey('other'));
+    const target = await mod.__test__.handleTabs(
+      { id: 'target-new', action: 'tabs', op: 'new', session: 'target', surface: 'adapter', url: 'https://target.example' },
+      adapterKey('target'),
+    );
+    expect(target).toMatchObject({ ok: true, page: 'target-10' });
+
+    chrome.tabs.remove = vi.fn(async (tabId: number) => {
+      const index = tabs.findIndex((tab) => tab.id === tabId);
+      if (index >= 0) tabs.splice(index, 1);
+    });
+    const chooseBorrowedTab = deferred<MockTab[]>();
+    const originalQuery = chrome.tabs.query.getMockImplementation()!;
+    chrome.tabs.query = vi.fn()
+      .mockImplementationOnce(async () => chooseBorrowedTab.promise)
+      .mockImplementation(originalQuery);
+    chrome.tabs.create.mockClear();
+
+    const binding = mod.__test__.handleBind(
+      { id: 'bind-paused', action: 'bind', session: 'target', surface: 'adapter' },
+      adapterKey('target'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.query).toHaveBeenCalledTimes(1));
+
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('target'));
+    chooseBorrowedTab.resolve([tabs.find((tab) => tab.id === 2)!]);
+
+    await expect(binding).resolves.toMatchObject({ ok: true, page: 'target-2' });
+    await expect(resolving).resolves.toBe(2);
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+    expect(tabs.filter((tab) => tab.id >= 11)).toEqual([]);
+    expect(mod.__test__.getSession(adapterKey('target'))).toMatchObject({
+      owned: false,
+      preferredTabId: 2,
+    });
+  });
+
+  it('does not create a replacement lease until release cleanup completes', async () => {
+    const { chrome, tabs } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    await mod.__test__.resolveTabId(undefined, adapterKey('other'));
+    await mod.__test__.handleTabs(
+      { id: 'release-target-new', action: 'tabs', op: 'new', session: 'release-target', surface: 'adapter', url: 'https://target.example' },
+      adapterKey('release-target'),
+    );
+
+    const cleanup = deferred<void>();
+    const order: string[] = [];
+    chrome.tabs.remove = vi.fn(async (tabId: number) => {
+      order.push('remove-start');
+      const index = tabs.findIndex((tab) => tab.id === tabId);
+      if (index >= 0) tabs.splice(index, 1);
+      await cleanup.promise;
+      order.push('remove-finish');
+    });
+    const originalCreate = chrome.tabs.create.getMockImplementation()!;
+    chrome.tabs.create = vi.fn(async (options: { windowId?: number; url?: string; active?: boolean }) => {
+      order.push('create');
+      return originalCreate(options);
+    });
+
+    const releasing = mod.__test__.handleCommand(
+      { id: 'release-paused-for-resolve', action: 'close-window', session: 'release-target', surface: 'adapter' },
+    );
+    await vi.waitFor(() => expect(order).toEqual(['remove-start']));
+
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('release-target'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    cleanup.resolve();
+
+    await expect(releasing).resolves.toMatchObject({ ok: true });
+    const replacementTabId = await resolving;
+    expect(order).toEqual(['remove-start', 'remove-finish', 'create']);
+    expect(mod.__test__.getSession(adapterKey('release-target'))).toMatchObject({
+      owned: true,
+      preferredTabId: replacementTabId,
+    });
+    expect(tabs.filter((tab) => tab.id === replacementTabId)).toHaveLength(1);
+  });
+
+  it('serializes stale list cleanup before binding a replacement lease', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const readListedTab = deferred<MockTab>();
+    chrome.tabs.get = vi.fn(async (tabId: number) => {
+      if (tabId === 1) return readListedTab.promise;
+      const tab = tabs.find((entry) => entry.id === tabId);
+      if (!tab) throw new Error(`Unknown tab ${tabId}`);
+      return tab;
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const listing = mod.__test__.handleTabs(
+      { id: 'list-stale', action: 'tabs', op: 'list', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.get).toHaveBeenCalledWith(1));
+
+    const binding = mod.__test__.handleBind(
+      { id: 'bind-after-list', action: 'bind', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const bindQueriedBeforeListCleanup = chrome.tabs.query.mock.calls.length > 0;
+
+    readListedTab.reject(new Error('listed tab disappeared'));
+    await expect(listing).resolves.toMatchObject({ ok: true, data: [] });
+    await expect(binding).resolves.toMatchObject({ ok: true, page: 'target-2' });
+    expect(bindQueriedBeforeListCleanup).toBe(false);
+    expect(mod.__test__.getSession(adapterKey('wechat'))).toMatchObject({
+      owned: false,
+      preferredTabId: 2,
+    });
+  });
+
+  it('does not clear replacement lease state when stale list cleanup loses its CAS', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const readListedTab = deferred<MockTab>();
+    chrome.tabs.get = vi.fn(async (tabId: number) => {
+      if (tabId === 1) return readListedTab.promise;
+      const tab = tabs.find((entry) => entry.id === tabId);
+      if (!tab) throw new Error(`Unknown tab ${tabId}`);
+      return tab;
+    });
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const listing = mod.__test__.handleTabs(
+      { id: 'list-cas', action: 'tabs', op: 'list', session: 'wechat', surface: 'adapter' },
+      adapterKey('wechat'),
+    );
+    await vi.waitFor(() => expect(chrome.tabs.get).toHaveBeenCalledWith(1));
+
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: false, preferredTabId: 2 });
+    chrome.alarms.clear.mockClear();
+    readListedTab.reject(new Error('stale listed tab disappeared'));
+
+    await expect(listing).resolves.toMatchObject({ ok: true, data: [] });
+    expect(mod.__test__.getSession(adapterKey('wechat'))).toMatchObject({
+      owned: false,
+      preferredTabId: 2,
+    });
+    expect(chrome.alarms.clear).not.toHaveBeenCalled();
+  });
+
+  it('does not let stale release cleanup delete a replacement lease', async () => {
+    const { chrome, tabs } = createChromeMock();
+    const releaseCleanup = deferred<MockTab>();
+    chrome.tabs.update = vi.fn(async () => releaseCleanup.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    const releasing = mod.__test__.handleCommand(
+      { id: 'stale-release', action: 'close-window', session: 'wechat', surface: 'adapter' },
+    );
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: true }));
+
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
+    releaseCleanup.resolve({ ...tabs[0], url: 'about:blank', active: true });
+
+    await expect(releasing).resolves.toMatchObject({ ok: true });
+    expect(mod.__test__.getSession(adapterKey('wechat'))).toMatchObject({
+      windowId: 2,
+      owned: true,
+      preferredTabId: 2,
+    });
+  });
+
+  it('rebinds an existing owned lease without nested-lock deadlock', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('wechat'), { windowId: 1, owned: true, preferredTabId: 1 });
+
+    await expect(Promise.race([
+      mod.__test__.handleBind(
+        { id: 'rebind-owned', action: 'bind', session: 'wechat', surface: 'adapter' },
+        adapterKey('wechat'),
+      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('rebind deadlocked')), 250)),
+    ])).resolves.toMatchObject({ ok: true });
+  });
+
+  it('ignores an old idle alarm queued behind the lease lock after a command renews the deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { chrome, tabs } = createChromeMock();
+    const foregroundWindow = deferred<{ id: number; focused: boolean }>();
+    chrome.windows.update = vi.fn(async () => foregroundWindow.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const key = adapterKey('alarm-renewed');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const oldDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'hold-alarm-lock', action: 'tabs', op: 'focus', session: 'alarm-renewed', surface: 'adapter', page: 'target-1' },
+      key,
+    );
+    for (let i = 0; i < 10 && chrome.windows.update.mock.calls.length === 0; i++) await Promise.resolve();
+    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+
+    vi.setSystemTime(oldDeadline);
+    const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
+    const oldExpiry = onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(key)}`,
+      scheduledTime: oldDeadline,
+    });
+    const renewing = mod.__test__.handleCommand({
+      id: 'renew-after-alarm',
+      action: 'tabs',
+      op: 'list',
+      session: 'alarm-renewed',
+      surface: 'adapter',
+    });
+    const renewedDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+    expect(renewedDeadline).toBeGreaterThan(oldDeadline);
+
+    foregroundWindow.resolve({ id: 1, focused: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await oldExpiry;
+    await expect(renewing).resolves.toMatchObject({ ok: true });
+
+    expect(mod.__test__.getSession(key)).toMatchObject({
+      preferredTabId: tabs[0].id,
+      idleDeadlineAt: renewedDeadline,
+    });
+  });
+
+  it('ignores an old in-memory idle timer queued behind the lease lock after a command renews the deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { chrome, tabs } = createChromeMock();
+    const foregroundWindow = deferred<{ id: number; focused: boolean }>();
+    chrome.windows.update = vi.fn(async () => foregroundWindow.promise);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const key = adapterKey('timer-renewed');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const oldDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+
+    const focusing = mod.__test__.handleTabs(
+      { id: 'hold-timer-lock', action: 'tabs', op: 'focus', session: 'timer-renewed', surface: 'adapter', page: 'target-1' },
+      key,
+    );
+    for (let i = 0; i < 10 && chrome.windows.update.mock.calls.length === 0; i++) await Promise.resolve();
+    expect(chrome.windows.update).toHaveBeenCalledWith(1, { focused: true });
+
+    vi.advanceTimersByTime(1_000);
+    await Promise.resolve();
+    const renewing = mod.__test__.handleCommand({
+      id: 'renew-after-timer',
+      action: 'tabs',
+      op: 'list',
+      session: 'timer-renewed',
+      surface: 'adapter',
+    });
+    const renewedDeadline = mod.__test__.getSession(key)!.idleDeadlineAt;
+    expect(renewedDeadline).toBeGreaterThan(oldDeadline);
+
+    foregroundWindow.resolve({ id: 1, focused: true });
+    await expect(focusing).resolves.toMatchObject({ ok: true });
+    await expect(renewing).resolves.toMatchObject({ ok: true });
+
+    expect(mod.__test__.getSession(key)).toMatchObject({
+      preferredTabId: tabs[0].id,
+      idleDeadlineAt: renewedDeadline,
+    });
+  });
+
   it('reuses the initial container tab for first tab-new lease instead of leaving a blank tab', async () => {
     const { chrome, create, update } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
@@ -712,6 +1318,25 @@ describe('background tab isolation', () => {
     await vi.waitFor(() => {
       expect(secondWs.sent.some((entry) => entry.includes('sessions-after-stale-close'))).toBe(true);
     });
+  });
+
+  it('advertises the focus-window capability in the daemon hello', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    vi.stubGlobal('__BYCLI_COMPAT_RANGE__', '>=2');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+
+    await import('./background');
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const socket = MockWebSocket.instances[0];
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    expect(socket.sent.map((message) => JSON.parse(message))).toContainEqual(expect.objectContaining({
+      type: 'hello',
+      version: 'test-version',
+      capabilities: expect.arrayContaining(['focus-window-v1']),
+    }));
   });
 
   it('coalesces concurrent daemon connection attempts while the probe is in flight', async () => {
@@ -998,34 +1623,78 @@ describe('background tab isolation', () => {
 
   it('releases owned leases from the idle alarm path', async () => {
     const { chrome } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
-    await mod.__test__.resolveTabId(undefined, adapterKey('alarm'));
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('alarm'));
+    await vi.advanceTimersByTimeAsync(301);
+    await resolving;
+    const deadline = mod.__test__.getSession(adapterKey('alarm'))!.idleDeadlineAt;
+    vi.setSystemTime(deadline);
 
     const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
-    await onAlarmListener({ name: `bycli:lease-idle:${encodeURIComponent(adapterKey('alarm'))}` });
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(adapterKey('alarm'))}`,
+      scheduledTime: deadline,
+    });
 
     expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank' });
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     expect(mod.__test__.getSession(adapterKey('alarm'))).toBeNull();
   });
 
-  it('reuses the placeholder tab left by an idle release', async () => {
-    const { chrome, tabs } = createChromeMock();
+  it('does not release the current lease before its scheduled idle deadline', async () => {
+    const { chrome } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
     vi.stubGlobal('chrome', chrome);
 
     const mod = await import('./background');
-    await mod.__test__.resolveTabId(undefined, adapterKey('first'));
+    const key = adapterKey('alarm-early');
+    mod.__test__.setSession(key, { windowId: 1, owned: true, preferredTabId: 1 });
+    mod.__test__.sessionTimeoutOverrides.set(key, 1_000);
+    mod.__test__.resetWindowIdleTimer(key);
+    const deadline = mod.__test__.getSession(key)!.idleDeadlineAt;
 
     const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
-    await onAlarmListener({ name: `bycli:lease-idle:${encodeURIComponent(adapterKey('first'))}` });
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(key)}`,
+      scheduledTime: deadline,
+    });
+
+    expect(Date.now()).toBeLessThan(deadline);
+    expect(mod.__test__.getSession(key)).toMatchObject({ idleDeadlineAt: deadline });
+    expect(chrome.tabs.update).not.toHaveBeenCalledWith(1, { url: 'about:blank', active: true });
+  });
+
+  it('reuses the placeholder tab left by an idle release', async () => {
+    const { chrome, tabs } = createChromeMock();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const resolving = mod.__test__.resolveTabId(undefined, adapterKey('first'));
+    await vi.advanceTimersByTimeAsync(301);
+    await resolving;
+    const deadline = mod.__test__.getSession(adapterKey('first'))!.idleDeadlineAt;
+    vi.setSystemTime(deadline);
+
+    const onAlarmListener = chrome.alarms.onAlarm.addListener.mock.calls[0][0];
+    await onAlarmListener({
+      name: `bycli:lease-idle:${encodeURIComponent(adapterKey('first'))}`,
+      scheduledTime: deadline,
+    });
 
     expect(tabs[0].url).toBe('about:blank');
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     chrome.windows.create.mockClear();
 
-    const reused = await mod.__test__.resolveTabId(undefined, adapterKey('next'), 'https://next.example');
+    const reusePromise = mod.__test__.resolveTabId(undefined, adapterKey('next'), 'https://next.example');
+    await vi.advanceTimersByTimeAsync(301);
+    const reused = await reusePromise;
 
     expect(reused).toBe(1);
     expect(chrome.windows.create).not.toHaveBeenCalled();
@@ -1918,7 +2587,7 @@ describe('background tab isolation', () => {
     mod.__test__.setSession(browserKey('default'), { windowId: 2, owned: false, preferredTabId: 2 });
 
     const onRemovedListener = chrome.tabs.onRemoved.addListener.mock.calls[0][0];
-    onRemovedListener(2);
+    await onRemovedListener(2);
 
     expect(mod.__test__.getSession(browserKey('default'))).toBeNull();
     expect(chrome.windows.remove).not.toHaveBeenCalled();

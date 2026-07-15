@@ -10,6 +10,7 @@ const AUTH_PARAM_SEGMENTS = /* @__PURE__ */ new Set([
   "tokens",
   "jwt",
   "secret",
+  "fingerprint",
   "signature",
   "sig",
   "sign",
@@ -1310,6 +1311,7 @@ function checkUrlSyntax(input, opts = {}) {
   return { ok: true, url: parsed.toString(), hostname, isIpLiteral: false };
 }
 
+const EXTENSION_CAPABILITIES = ["focus-window-v1"];
 let ws = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
@@ -1432,7 +1434,8 @@ async function connectAttempt() {
       type: "hello",
       contextId: currentContextId,
       version: chrome.runtime.getManifest().version,
-      compatRange: ">=1.7.0"
+      compatRange: ">=1.7.0",
+      capabilities: EXTENSION_CAPABILITIES
     });
   };
   thisWs.onmessage = async (event) => {
@@ -1468,6 +1471,9 @@ function scheduleReconnect() {
   }, delay);
 }
 const automationSessions = /* @__PURE__ */ new Map();
+const leaseRevisions = /* @__PURE__ */ new Map();
+const leaseIdleGenerations = /* @__PURE__ */ new Map();
+const leaseOperationTails = /* @__PURE__ */ new Map();
 const IDLE_TIMEOUT_DEFAULT = 3e4;
 const IDLE_TIMEOUT_INTERACTIVE = 6e5;
 const IDLE_TIMEOUT_NONE = -1;
@@ -1563,6 +1569,31 @@ function withLeaseMutation(fn) {
   leaseMutationQueue = run.then(() => void 0, () => void 0);
   return run;
 }
+function invalidateLease(leaseKey) {
+  leaseRevisions.set(leaseKey, (leaseRevisions.get(leaseKey) ?? 0) + 1);
+}
+function withLeaseLock(leaseKey, fn) {
+  const previous = leaseOperationTails.get(leaseKey) ?? Promise.resolve();
+  const run = previous.then(fn);
+  const tail = run.then(() => void 0, () => void 0);
+  leaseOperationTails.set(leaseKey, tail);
+  void tail.then(() => {
+    if (leaseOperationTails.get(leaseKey) === tail) leaseOperationTails.delete(leaseKey);
+  });
+  return run;
+}
+function deleteAutomationSession(leaseKey) {
+  invalidateLease(leaseKey);
+  automationSessions.delete(leaseKey);
+}
+function storeAutomationSession(leaseKey, session) {
+  invalidateLease(leaseKey);
+  automationSessions.set(leaseKey, session);
+}
+function clearAutomationSessions() {
+  for (const leaseKey of automationSessions.keys()) invalidateLease(leaseKey);
+  automationSessions.clear();
+}
 function makeSession(key, session) {
   const ownership = session.owned ? "owned" : "borrowed";
   return {
@@ -1657,16 +1688,25 @@ async function persistRuntimeState() {
     leases
   });
 }
-function scheduleIdleAlarm(leaseKey, timeout) {
+function nextIdleGeneration(leaseKey) {
+  const generation = (leaseIdleGenerations.get(leaseKey) ?? 0) + 1;
+  leaseIdleGenerations.set(leaseKey, generation);
+  return generation;
+}
+function scheduleIdleAlarmAt(leaseKey, deadline) {
   const alarmName = makeAlarmName(leaseKey);
   try {
-    if (timeout > 0) {
-      chrome.alarms?.create?.(alarmName, { when: Date.now() + timeout });
+    if (deadline > 0) {
+      chrome.alarms?.create?.(alarmName, { when: deadline });
     } else {
       chrome.alarms?.clear?.(alarmName);
     }
   } catch {
   }
+}
+function cancelIdleExpiry(leaseKey) {
+  nextIdleGeneration(leaseKey);
+  scheduleIdleAlarmAt(leaseKey, 0);
 }
 async function safeDetach(tabId) {
   try {
@@ -1675,32 +1715,46 @@ async function safeDetach(tabId) {
   } catch {
   }
 }
-async function removeLeaseSession(leaseKey) {
-  const existing = automationSessions.get(leaseKey);
+async function removeLeaseSession(leaseKey, expected = automationSessions.get(leaseKey)) {
+  const existing = expected;
+  if (automationSessions.get(leaseKey) !== existing) return;
   if (existing?.idleTimer) clearTimeout(existing.idleTimer);
-  automationSessions.delete(leaseKey);
+  deleteAutomationSession(leaseKey);
   sessionTimeoutOverrides.delete(leaseKey);
   sessionWindowModeOverrides.delete(leaseKey);
   sessionLifecycleOverrides.delete(leaseKey);
-  scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+  cancelIdleExpiry(leaseKey);
   await persistRuntimeState();
+}
+async function releaseLeaseIfIdleExpired(leaseKey, expectedSession, expectedGeneration, expectedDeadline, reason) {
+  await withLeaseLock(leaseKey, async () => {
+    const current = automationSessions.get(leaseKey);
+    if (current !== expectedSession) return;
+    if (leaseIdleGenerations.get(leaseKey) !== expectedGeneration) return;
+    if (current.idleDeadlineAt !== expectedDeadline) return;
+    if (expectedDeadline <= 0 || Date.now() < expectedDeadline) return;
+    await releaseLeaseUnlocked(leaseKey, reason);
+  });
 }
 function resetWindowIdleTimer(leaseKey) {
   const session = automationSessions.get(leaseKey);
   if (!session) return;
   if (session.idleTimer) clearTimeout(session.idleTimer);
   const timeout = getIdleTimeout(leaseKey);
-  scheduleIdleAlarm(leaseKey, timeout);
+  const generation = nextIdleGeneration(leaseKey);
   if (timeout <= 0) {
     session.idleTimer = null;
     session.idleDeadlineAt = 0;
+    scheduleIdleAlarmAt(leaseKey, 0);
     void persistRuntimeState();
     return;
   }
-  session.idleDeadlineAt = Date.now() + timeout;
+  const deadline = Date.now() + timeout;
+  session.idleDeadlineAt = deadline;
+  scheduleIdleAlarmAt(leaseKey, deadline);
   void persistRuntimeState();
   session.idleTimer = setTimeout(async () => {
-    await releaseLease(leaseKey, "idle timeout");
+    await releaseLeaseIfIdleExpired(leaseKey, session, generation, deadline, "idle timeout");
   }, timeout);
 }
 async function getOwnedContainerGroupId(role, windowId) {
@@ -1902,10 +1956,10 @@ function initialTabIsAvailable(tabId) {
   }
   return true;
 }
-async function createOwnedTabLease(leaseKey, initialUrl, blankFirst = false) {
-  return withLeaseMutation(() => createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst));
-}
 async function createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst = false) {
+  return withLeaseMutation(() => createOwnedTabLeaseMutationUnlocked(leaseKey, initialUrl, blankFirst));
+}
+async function createOwnedTabLeaseMutationUnlocked(leaseKey, initialUrl, blankFirst = false) {
   const createUrl = blankFirst ? BLANK_PAGE : initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
   const role = getOwnedWindowRole(leaseKey);
   const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? void 0 : initialUrl, getWindowMode(leaseKey));
@@ -1966,31 +2020,35 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
       container.groupId = null;
     }
   }
-  for (const [leaseKey, session] of automationSessions.entries()) {
-    if (session.windowId === windowId) {
+  for (const [leaseKey, expected] of [...automationSessions.entries()]) {
+    if (expected.windowId === windowId) await withLeaseLock(leaseKey, async () => {
+      const session = automationSessions.get(leaseKey);
+      if (!session || session !== expected || session.windowId !== windowId) return;
       console.log(`[bycli] ${session.surface} container closed (session=${session.session})`);
       if (session.idleTimer) clearTimeout(session.idleTimer);
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
-      scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
-    }
+      cancelIdleExpiry(leaseKey);
+    });
   }
   await persistRuntimeState();
 });
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   evictTab(tabId);
-  for (const [leaseKey, session] of automationSessions.entries()) {
-    if (session.preferredTabId === tabId) {
+  for (const [leaseKey, expected] of [...automationSessions.entries()]) {
+    if (expected.preferredTabId === tabId) await withLeaseLock(leaseKey, async () => {
+      const session = automationSessions.get(leaseKey);
+      if (!session || session !== expected || session.preferredTabId !== tabId) return;
       if (session.idleTimer) clearTimeout(session.idleTimer);
-      automationSessions.delete(leaseKey);
+      deleteAutomationSession(leaseKey);
       sessionTimeoutOverrides.delete(leaseKey);
       sessionWindowModeOverrides.delete(leaseKey);
       sessionLifecycleOverrides.delete(leaseKey);
-      scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+      cancelIdleExpiry(leaseKey);
       console.log(`[bycli] Session ${session.session} detached from tab ${tabId} (tab closed)`);
-    }
+    });
   }
   await persistRuntimeState();
 });
@@ -2022,7 +2080,13 @@ initialize();
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "keepalive") void connect();
   const leaseKey = leaseKeyFromAlarmName(alarm.name);
-  if (leaseKey) await releaseLease(leaseKey, "idle alarm");
+  if (leaseKey) {
+    const session = automationSessions.get(leaseKey);
+    if (!session) return;
+    const generation = leaseIdleGenerations.get(leaseKey) ?? 0;
+    const deadline = Number.isFinite(alarm.scheduledTime) && alarm.scheduledTime > 0 ? alarm.scheduledTime : session.idleDeadlineAt;
+    await releaseLeaseIfIdleExpired(leaseKey, session, generation, deadline, "idle alarm");
+  }
 });
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getStatus") {
@@ -2178,7 +2242,7 @@ function setLeaseSession(leaseKey, session) {
   const existing = automationSessions.get(leaseKey);
   if (existing?.idleTimer) clearTimeout(existing.idleTimer);
   const timeout = getIdleTimeout(leaseKey);
-  automationSessions.set(leaseKey, {
+  storeAutomationSession(leaseKey, {
     ...makeSession(leaseKey, session),
     idleTimer: null,
     idleDeadlineAt: timeout <= 0 ? 0 : Date.now() + timeout
@@ -2190,6 +2254,9 @@ async function resolveCommandTabId(cmd) {
   return void 0;
 }
 async function resolveTab(tabId, leaseKey, initialUrl, blankFirst = false) {
+  return withLeaseLock(leaseKey, () => resolveTabUnlocked(tabId, leaseKey, initialUrl, blankFirst));
+}
+async function resolveTabUnlocked(tabId, leaseKey, initialUrl, blankFirst = false) {
   const existingSession = automationSessions.get(leaseKey);
   if (tabId !== void 0) {
     try {
@@ -2221,7 +2288,7 @@ async function resolveTab(tabId, leaseKey, initialUrl, blankFirst = false) {
     } catch (err) {
       if (err instanceof CommandFailure) throw err;
       if (existingSession && !existingSession.owned) {
-        automationSessions.delete(leaseKey);
+        await removeLeaseSession(leaseKey, existingSession);
         throw new CommandFailure(
           "bound_tab_gone",
           `Bound tab for session "${existingSession.session}" no longer exists.`,
@@ -2246,7 +2313,7 @@ async function resolveTab(tabId, leaseKey, initialUrl, blankFirst = false) {
       }
     } catch (err) {
       if (err instanceof CommandFailure) throw err;
-      await removeLeaseSession(leaseKey);
+      await removeLeaseSession(leaseKey, session);
       if (!session.owned) {
         throw new CommandFailure(
           "bound_tab_gone",
@@ -2254,11 +2321,11 @@ async function resolveTab(tabId, leaseKey, initialUrl, blankFirst = false) {
           'Run "bycli browser bind" again, then retry the command.'
         );
       }
-      return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
+      return createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst);
     }
   }
   if (!existingSession || existingSession.owned && existingSession.preferredTabId === null) {
-    return createOwnedTabLease(leaseKey, initialUrl, blankFirst);
+    return createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst);
   }
   const windowId = await getAutomationWindow(leaseKey, initialUrl);
   const tabs = await chrome.tabs.query({ windowId });
@@ -2287,26 +2354,33 @@ async function resolveTabId(tabId, leaseKey, initialUrl) {
   const resolved = await resolveTab(tabId, leaseKey, initialUrl);
   return resolved.tabId;
 }
-async function listAutomationTabs(leaseKey) {
+async function resolveTabIdUnlocked(tabId, leaseKey, initialUrl) {
+  const resolved = await resolveTabUnlocked(tabId, leaseKey, initialUrl);
+  return resolved.tabId;
+}
+async function listAutomationTabsUnlocked(leaseKey) {
   const session = automationSessions.get(leaseKey);
   if (!session) return [];
   if (session.preferredTabId !== null) {
     try {
       return [await chrome.tabs.get(session.preferredTabId)];
     } catch {
-      automationSessions.delete(leaseKey);
+      await removeLeaseSession(leaseKey, session);
       return [];
     }
   }
   try {
     return await chrome.tabs.query({ windowId: session.windowId });
   } catch {
-    automationSessions.delete(leaseKey);
+    await removeLeaseSession(leaseKey, session);
     return [];
   }
 }
 async function listAutomationWebTabs(leaseKey) {
-  const tabs = await listAutomationTabs(leaseKey);
+  return withLeaseLock(leaseKey, () => listAutomationWebTabsUnlocked(leaseKey));
+}
+async function listAutomationWebTabsUnlocked(leaseKey) {
+  const tabs = await listAutomationTabsUnlocked(leaseKey);
   return tabs.filter((tab) => isDebuggableUrl(tab.url));
 }
 async function handleExec(cmd, leaseKey) {
@@ -2341,6 +2415,9 @@ async function handleFrames(cmd, leaseKey) {
   }
 }
 async function handleNavigate(cmd, leaseKey) {
+  return withLeaseLock(leaseKey, () => handleNavigateUnlocked(cmd, leaseKey));
+}
+async function handleNavigateUnlocked(cmd, leaseKey) {
   if (!cmd.url) return { id: cmd.id, ok: false, error: "Missing url" };
   if (!isSafeNavigationUrl(cmd.url)) {
     return { id: cmd.id, ok: false, error: "Blocked URL scheme -- only http:// and https:// are allowed" };
@@ -2355,7 +2432,7 @@ async function handleNavigate(cmd, leaseKey) {
     };
   }
   const cmdTabId = await resolveCommandTabId(cmd);
-  const resolved = await resolveTab(cmdTabId, leaseKey, cmd.url, true);
+  const resolved = await resolveTabUnlocked(cmdTabId, leaseKey, cmd.url, true);
   const tabId = resolved.tabId;
   const beforeTab = resolved.tab ?? await chrome.tabs.get(tabId);
   const beforeNormalized = normalizeUrlForComparison(beforeTab.url);
@@ -2465,16 +2542,163 @@ async function handleNavigate(cmd, leaseKey) {
     }
   });
 }
+function captureFocusLease(leaseKey, lease) {
+  if (!lease.owned || lease.preferredTabId === null) return null;
+  return {
+    revision: leaseRevisions.get(leaseKey) ?? 0,
+    session: lease.session,
+    surface: lease.surface,
+    kind: lease.kind,
+    windowId: lease.windowId,
+    preferredTabId: lease.preferredTabId,
+    contextId: lease.contextId,
+    ownership: lease.ownership,
+    lifecycle: lease.lifecycle,
+    windowRole: lease.windowRole,
+    windowMode: getWindowMode(leaseKey)
+  };
+}
+function isFocusLeaseCurrent(leaseKey, expected) {
+  const current = automationSessions.get(leaseKey);
+  return (leaseRevisions.get(leaseKey) ?? 0) === expected.revision && current?.owned === true && current.session === expected.session && current.surface === expected.surface && current.kind === expected.kind && current.windowId === expected.windowId && current.preferredTabId === expected.preferredTabId && current.contextId === expected.contextId && current.ownership === expected.ownership && current.lifecycle === expected.lifecycle && current.windowRole === expected.windowRole && getWindowMode(leaseKey) === expected.windowMode;
+}
+function focusLeaseChangedResult(id) {
+  return { id, ok: false, error: "Current automation lease changed during focus; no further focus action was performed" };
+}
+async function handleFocusUnlocked(cmd, leaseKey) {
+  const currentSession = automationSessions.get(leaseKey);
+  const focusLease = currentSession ? captureFocusLease(leaseKey, currentSession) : null;
+  if (!focusLease) {
+    return { id: cmd.id, ok: false, error: "No owned tab is leased to the current automation session" };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+  const tabId = cmdTabId ?? focusLease.preferredTabId;
+  if (tabId !== focusLease.preferredTabId) {
+    return { id: cmd.id, ok: false, error: "Page is not leased to the current automation session" };
+  }
+  let tab;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    return { id: cmd.id, ok: false, error: "Current automation session tab no longer exists" };
+  }
+  if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+  if (!Number.isInteger(tab.windowId) || tab.windowId < 0 || tab.windowId !== focusLease.windowId) {
+    return { id: cmd.id, ok: false, error: "Current automation session tab is outside its owned window" };
+  }
+  const updateWindow = chrome.windows.update;
+  if (typeof updateWindow !== "function") throw new Error("chrome.windows.update is unavailable");
+  const activatedTab = await chrome.tabs.update(tabId, { active: true });
+  if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+  if (activatedTab.id !== tabId || activatedTab.windowId !== focusLease.windowId) {
+    return { id: cmd.id, ok: false, error: "Current automation session tab changed window during focus" };
+  }
+  await updateWindow(focusLease.windowId, { focused: true });
+  if (!isFocusLeaseCurrent(leaseKey, focusLease)) return focusLeaseChangedResult(cmd.id);
+  return { id: cmd.id, ok: true, data: { focused: true } };
+}
+async function handleTabNewUnlocked(cmd, leaseKey) {
+  const currentSession = automationSessions.get(leaseKey);
+  if (currentSession && !currentSession.owned) {
+    return boundTabMutationResult(cmd, currentSession);
+  }
+  if (cmd.url && !isSafeNavigationUrl(cmd.url)) {
+    return { id: cmd.id, ok: false, error: "Blocked URL scheme -- only http:// and https:// are allowed" };
+  }
+  if (!automationSessions.has(leaseKey)) {
+    const created = await createOwnedTabLeaseUnlocked(leaseKey, cmd.url);
+    return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
+  }
+  const windowId = await getAutomationWindow(leaseKey);
+  const activateNewTab = getWindowMode(leaseKey) === "foreground";
+  const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
+  if (!tab.id) return { id: cmd.id, ok: false, error: "Failed to create tab" };
+  await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
+  setLeaseSession(leaseKey, {
+    session: getSessionFromKey(leaseKey),
+    surface: getSurfaceFromKey(leaseKey),
+    kind: "owned",
+    windowId: tab.windowId,
+    owned: true,
+    preferredTabId: tab.id
+  });
+  resetWindowIdleTimer(leaseKey);
+  return pageScopedResult(cmd.id, tab.id, { url: tab.url });
+}
+async function handleTabCloseUnlocked(cmd, leaseKey) {
+  const lockedSession = automationSessions.get(leaseKey);
+  if (lockedSession && !lockedSession.owned) {
+    return boundTabMutationResult(cmd, lockedSession);
+  }
+  if (cmd.index !== void 0) {
+    const tabs = await listAutomationWebTabsUnlocked(leaseKey);
+    const target = tabs[cmd.index];
+    if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
+    const closedPage2 = await resolveTargetId(target.id).catch(() => void 0);
+    const currentSession2 = automationSessions.get(leaseKey);
+    if (currentSession2?.preferredTabId === target.id) {
+      await releaseLeaseUnlocked(leaseKey, "tab close");
+    } else {
+      await safeDetach(target.id);
+      await chrome.tabs.remove(target.id);
+    }
+    return { id: cmd.id, ok: true, data: { closed: closedPage2 } };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabIdUnlocked(cmdTabId, leaseKey);
+  const closedPage = await resolveTargetId(tabId).catch(() => void 0);
+  const currentSession = automationSessions.get(leaseKey);
+  if (currentSession?.preferredTabId === tabId) {
+    await releaseLeaseUnlocked(leaseKey, "tab close");
+  } else {
+    await safeDetach(tabId);
+    await chrome.tabs.remove(tabId);
+  }
+  return { id: cmd.id, ok: true, data: { closed: closedPage } };
+}
+function boundTabMutationResult(cmd, session) {
+  return {
+    id: cmd.id,
+    ok: false,
+    errorCode: "bound_tab_mutation_blocked",
+    error: `Session "${session.session}" is bound to a user tab; tab new/select/close/focus requires an owned byCLI session.`,
+    errorHint: "Unbind the session first, or use a different session for owned byCLI tabs."
+  };
+}
+async function handleTabSelectUnlocked(cmd, leaseKey) {
+  const lockedSession = automationSessions.get(leaseKey);
+  if (lockedSession && !lockedSession.owned) {
+    return boundTabMutationResult(cmd, lockedSession);
+  }
+  if (cmd.index === void 0 && cmd.page === void 0) {
+    return { id: cmd.id, ok: false, error: "Missing index or page" };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  if (cmdTabId !== void 0) {
+    const session = automationSessions.get(leaseKey);
+    let tab;
+    try {
+      tab = await chrome.tabs.get(cmdTabId);
+    } catch {
+      return { id: cmd.id, ok: false, error: "Page no longer exists" };
+    }
+    if (!session || tab.windowId !== session.windowId) {
+      return { id: cmd.id, ok: false, error: "Page is not in the automation container" };
+    }
+    await chrome.tabs.update(cmdTabId, { active: true });
+    return pageScopedResult(cmd.id, cmdTabId, { selected: true });
+  }
+  const tabs = await listAutomationWebTabsUnlocked(leaseKey);
+  const target = tabs[cmd.index];
+  if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
+  await chrome.tabs.update(target.id, { active: true });
+  return pageScopedResult(cmd.id, target.id, { selected: true });
+}
 async function handleTabs(cmd, leaseKey) {
   const session = automationSessions.get(leaseKey);
   if (session && !session.owned && cmd.op !== "list") {
-    return {
-      id: cmd.id,
-      ok: false,
-      errorCode: "bound_tab_mutation_blocked",
-      error: `Session "${session.session}" is bound to a user tab; tab new/select/close requires an owned byCLI session.`,
-      errorHint: "Unbind the session first, or use a different session for owned byCLI tabs."
-    };
+    return boundTabMutationResult(cmd, session);
   }
   switch (cmd.op) {
     case "list": {
@@ -2489,81 +2713,14 @@ async function handleTabs(cmd, leaseKey) {
       }));
       return { id: cmd.id, ok: true, data };
     }
-    case "new": {
-      if (cmd.url && !isSafeNavigationUrl(cmd.url)) {
-        return { id: cmd.id, ok: false, error: "Blocked URL scheme -- only http:// and https:// are allowed" };
-      }
-      if (!automationSessions.has(leaseKey)) {
-        const created = await createOwnedTabLease(leaseKey, cmd.url);
-        return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
-      }
-      const windowId = await getAutomationWindow(leaseKey);
-      const activateNewTab = getWindowMode(leaseKey) === "foreground";
-      const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
-      if (!tab.id) return { id: cmd.id, ok: false, error: "Failed to create tab" };
-      await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
-      setLeaseSession(leaseKey, {
-        session: getSessionFromKey(leaseKey),
-        surface: getSurfaceFromKey(leaseKey),
-        kind: "owned",
-        windowId: tab.windowId,
-        owned: true,
-        preferredTabId: tab.id
-      });
-      resetWindowIdleTimer(leaseKey);
-      return pageScopedResult(cmd.id, tab.id, { url: tab.url });
-    }
-    case "close": {
-      if (cmd.index !== void 0) {
-        const tabs = await listAutomationWebTabs(leaseKey);
-        const target = tabs[cmd.index];
-        if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
-        const closedPage2 = await resolveTargetId(target.id).catch(() => void 0);
-        const currentSession2 = automationSessions.get(leaseKey);
-        if (currentSession2?.preferredTabId === target.id) {
-          await releaseLease(leaseKey, "tab close");
-        } else {
-          await safeDetach(target.id);
-          await chrome.tabs.remove(target.id);
-        }
-        return { id: cmd.id, ok: true, data: { closed: closedPage2 } };
-      }
-      const cmdTabId = await resolveCommandTabId(cmd);
-      const tabId = await resolveTabId(cmdTabId, leaseKey);
-      const closedPage = await resolveTargetId(tabId).catch(() => void 0);
-      const currentSession = automationSessions.get(leaseKey);
-      if (currentSession?.preferredTabId === tabId) {
-        await releaseLease(leaseKey, "tab close");
-      } else {
-        await safeDetach(tabId);
-        await chrome.tabs.remove(tabId);
-      }
-      return { id: cmd.id, ok: true, data: { closed: closedPage } };
-    }
-    case "select": {
-      if (cmd.index === void 0 && cmd.page === void 0)
-        return { id: cmd.id, ok: false, error: "Missing index or page" };
-      const cmdTabId = await resolveCommandTabId(cmd);
-      if (cmdTabId !== void 0) {
-        const session2 = automationSessions.get(leaseKey);
-        let tab;
-        try {
-          tab = await chrome.tabs.get(cmdTabId);
-        } catch {
-          return { id: cmd.id, ok: false, error: `Page no longer exists` };
-        }
-        if (!session2 || tab.windowId !== session2.windowId) {
-          return { id: cmd.id, ok: false, error: `Page is not in the automation container` };
-        }
-        await chrome.tabs.update(cmdTabId, { active: true });
-        return pageScopedResult(cmd.id, cmdTabId, { selected: true });
-      }
-      const tabs = await listAutomationWebTabs(leaseKey);
-      const target = tabs[cmd.index];
-      if (!target?.id) return { id: cmd.id, ok: false, error: `Tab index ${cmd.index} not found` };
-      await chrome.tabs.update(target.id, { active: true });
-      return pageScopedResult(cmd.id, target.id, { selected: true });
-    }
+    case "new":
+      return withLeaseLock(leaseKey, () => handleTabNewUnlocked(cmd, leaseKey));
+    case "close":
+      return withLeaseLock(leaseKey, () => handleTabCloseUnlocked(cmd, leaseKey));
+    case "select":
+      return withLeaseLock(leaseKey, () => handleTabSelectUnlocked(cmd, leaseKey));
+    case "focus":
+      return withLeaseLock(leaseKey, () => handleFocusUnlocked(cmd, leaseKey));
     default:
       return { id: cmd.id, ok: false, error: `Unknown tabs op: ${cmd.op}` };
   }
@@ -2745,17 +2902,20 @@ async function handleWaitDownload(cmd) {
   }
 }
 async function releaseLease(leaseKey, reason = "released") {
+  return withLeaseLock(leaseKey, () => releaseLeaseUnlocked(leaseKey, reason));
+}
+async function releaseLeaseUnlocked(leaseKey, reason) {
   const session = automationSessions.get(leaseKey);
   if (!session) {
     sessionTimeoutOverrides.delete(leaseKey);
     sessionWindowModeOverrides.delete(leaseKey);
     sessionLifecycleOverrides.delete(leaseKey);
-    scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+    cancelIdleExpiry(leaseKey);
     await persistRuntimeState();
     return;
   }
   if (session.idleTimer) clearTimeout(session.idleTimer);
-  scheduleIdleAlarm(leaseKey, IDLE_TIMEOUT_NONE);
+  cancelIdleExpiry(leaseKey);
   if (session.owned) {
     const tabId = session.preferredTabId;
     if (tabId !== null) {
@@ -2786,10 +2946,12 @@ async function releaseLease(leaseKey, reason = "released") {
     await safeDetach(session.preferredTabId);
     console.log(`[bycli] Detached borrowed tab lease ${session.preferredTabId} (session=${session.session}, surface=${session.surface}, ${reason})`);
   }
-  automationSessions.delete(leaseKey);
-  sessionTimeoutOverrides.delete(leaseKey);
-  sessionWindowModeOverrides.delete(leaseKey);
-  sessionLifecycleOverrides.delete(leaseKey);
+  if (automationSessions.get(leaseKey) === session) {
+    deleteAutomationSession(leaseKey);
+    sessionTimeoutOverrides.delete(leaseKey);
+    sessionWindowModeOverrides.delete(leaseKey);
+    sessionLifecycleOverrides.delete(leaseKey);
+  }
   await persistRuntimeState();
 }
 async function reconcileTargetLeaseRegistry() {
@@ -2807,7 +2969,7 @@ async function reconcileTargetLeaseRegistry() {
       }
     }
   }
-  automationSessions.clear();
+  clearAutomationSessions();
   for (const [leaseKey, stored] of Object.entries(registry.leases)) {
     const tabId = stored.preferredTabId;
     if (tabId === null) continue;
@@ -2826,7 +2988,7 @@ async function reconcileTargetLeaseRegistry() {
         preferredTabId: tabId
       });
       const timeout = getIdleTimeout(leaseKey);
-      automationSessions.set(leaseKey, {
+      storeAutomationSession(leaseKey, {
         ...session,
         idleTimer: null,
         idleDeadlineAt: stored.idleDeadlineAt
@@ -2850,9 +3012,12 @@ async function reconcileTargetLeaseRegistry() {
   await persistRuntimeState();
 }
 async function handleBind(cmd, leaseKey) {
+  return withLeaseLock(leaseKey, () => handleBindUnlocked(cmd, leaseKey));
+}
+async function handleBindUnlocked(cmd, leaseKey) {
   const existing = automationSessions.get(leaseKey);
   if (existing?.owned) {
-    await releaseLease(leaseKey, "rebind");
+    await releaseLeaseUnlocked(leaseKey, "rebind");
   }
   const activeTabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   const fallbackTabs = await chrome.tabs.query({ lastFocusedWindow: true });

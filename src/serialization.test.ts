@@ -1,9 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import type { CliCommand } from './registry.js';
-import { Strategy } from './registry.js';
+import { cli, Strategy } from './registry.js';
 import { formatCommandExample, formatRegistryHelpText, serializeCommand } from './serialization.js';
 
 describe('formatRegistryHelpText', () => {
+  it('preserves conditional browser metadata without serializing its resolver', () => {
+    const requiresBrowser = (args: Record<string, unknown>) => args['auth-source'] !== 'env';
+    const cmd = cli({
+      site: 'wechat',
+      name: 'search',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      browser: requiresBrowser,
+      args: [],
+      func: async () => [],
+    });
+
+    expect(serializeCommand(cmd)).toMatchObject({ browser: 'conditional' });
+    expect(serializeCommand(cmd)).not.toHaveProperty('requiresBrowser');
+    expect(formatRegistryHelpText(cmd)).toContain('Browser: conditional');
+  });
+
+  it('keeps static browser metadata as booleans', () => {
+    const browserCmd = cli({ site: 'static', name: 'on', access: 'read', browser: true, args: [], func: async () => [] });
+    const noBrowserCmd = cli({ site: 'static', name: 'off', access: 'read', browser: false, args: [], func: async () => [] });
+
+    expect(serializeCommand(browserCmd)).toMatchObject({ browser: true });
+    expect(serializeCommand(noBrowserCmd)).toMatchObject({ browser: false });
+  });
+
   it('summarizes long choices lists so help text stays readable', () => {
     const cmd: CliCommand = {
       site: 'demo',

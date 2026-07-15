@@ -2,8 +2,17 @@
  * Tests for registry.ts: Strategy enum, cli() registration, helpers.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { cli, getRegistry, fullName, strategyLabel, registerCommand, Strategy, type CliCommand } from './registry.js';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  cli,
+  getRegistry,
+  fullName,
+  strategyLabel,
+  registerCommand,
+  Strategy,
+  type CliCommand,
+  type ConditionalBrowserCliCommand,
+} from './registry.js';
 
 describe('cli() registration', () => {
   it('registers a command and returns it', () => {
@@ -67,6 +76,37 @@ describe('cli() registration', () => {
     expect(cmd.browser).toBe(false);
   });
 
+  it('normalizes a browser predicate without evaluating it', () => {
+    const predicate = vi.fn((args: Record<string, unknown>) => args['auth-source'] !== 'env');
+    const cmd = cli({
+      site: 'wechat',
+      name: 'search',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      browser: predicate,
+      args: [{ name: 'auth-source', choices: ['browser', 'env'], default: 'browser' }],
+      func: async () => [],
+    });
+
+    expect(cmd.browser).toBe('conditional');
+    expect('requiresBrowser' in cmd && cmd.requiresBrowser).toBe(predicate);
+    expect(predicate).not.toHaveBeenCalled();
+  });
+
+  it('preserves static browser declarations', () => {
+    const browserCommand = cli({
+      site: 'test-registry', name: 'static-browser', access: 'read', browser: true,
+    });
+    const nonBrowserCommand = cli({
+      site: 'test-registry', name: 'static-no-browser', access: 'read', browser: false,
+    });
+
+    expect(browserCommand.browser).toBe(true);
+    expect(nonBrowserCommand.browser).toBe(false);
+    expect('requiresBrowser' in browserCommand).toBe(false);
+    expect('requiresBrowser' in nonBrowserCommand).toBe(false);
+  });
+
   it('overwrites existing command on re-registration', () => {
     cli({ site: 'test-registry', name: 'overwrite', access: 'read', description: 'v1' });
     cli({ site: 'test-registry', name: 'overwrite', access: 'read', description: 'v2' });
@@ -126,7 +166,7 @@ describe('cli() registration', () => {
 describe('fullName', () => {
   it('returns site/name', () => {
     const cmd: CliCommand = {
-      site: 'bilibili', name: 'hot', access: 'read', description: '', args: [],
+      site: 'bilibili', name: 'hot', access: 'read', description: '', args: [], browser: true,
     };
     expect(fullName(cmd)).toBe('bilibili/hot');
   });
@@ -136,14 +176,14 @@ describe('strategyLabel', () => {
   it('returns strategy string', () => {
     const cmd: CliCommand = {
       site: 'test', name: 'test', access: 'read', description: '', args: [],
-      strategy: Strategy.INTERCEPT,
+      strategy: Strategy.INTERCEPT, browser: true,
     };
     expect(strategyLabel(cmd)).toBe('intercept');
   });
 
   it('returns public when no strategy set', () => {
     const cmd: CliCommand = {
-      site: 'test', name: 'test', access: 'read', description: '', args: [],
+      site: 'test', name: 'test', access: 'read', description: '', args: [], browser: true,
     };
     expect(strategyLabel(cmd)).toBe('public');
   });
@@ -163,6 +203,46 @@ describe('registerCommand', () => {
 
     const reg = getRegistry();
     expect(reg.get('test-registry/direct-reg')?.strategy).toBe(Strategy.COOKIE);
+  });
+
+  it('preserves an already-normalized conditional command', () => {
+    const predicate = vi.fn(() => true);
+    const cmd: ConditionalBrowserCliCommand = {
+      site: 'test-registry',
+      name: 'normalized-conditional',
+      access: 'read',
+      description: 'already normalized',
+      args: [],
+      strategy: Strategy.INTERCEPT,
+      browser: 'conditional',
+      requiresBrowser: predicate,
+      navigateBefore: true,
+      func: async () => [],
+    };
+
+    registerCommand(cmd);
+
+    const registered = getRegistry().get('test-registry/normalized-conditional');
+    expect(registered).toBe(cmd);
+    expect(registered?.browser).toBe('conditional');
+    expect('requiresBrowser' in registered! && registered.requiresBrowser).toBe(predicate);
+    expect(predicate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a normalized conditional command without a resolver', () => {
+    const cmd = {
+      site: 'test-registry',
+      name: 'invalid-normalized-conditional',
+      access: 'read',
+      description: '',
+      args: [],
+      browser: 'conditional',
+      requiresBrowser: true,
+    } as unknown as ConditionalBrowserCliCommand;
+
+    expect(() => registerCommand(cmd)).toThrow(
+      'Command test-registry/invalid-normalized-conditional requiresBrowser must be a function',
+    );
   });
 });
 
