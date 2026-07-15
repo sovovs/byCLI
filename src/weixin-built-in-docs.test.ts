@@ -4,15 +4,31 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
-const forbiddenCrawlerProcessPatterns = [
+const forbiddenChildProcessAccessPatterns = [
   /\bfrom\s+['"](?:node:)?child_process['"]/u,
-  /\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/u,
-  /\bimport\(\s*['"](?:node:)?child_process['"]\s*\)/u,
-  /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(/u,
+  /\bimport\s+['"](?:node:)?child_process['"]/u,
+  /\brequire\s*\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+  /\bimport\s*\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+  /\bprocess\.getBuiltinModule\(\s*['"](?:node:)?child_process['"]\s*\)/u,
 ];
 
 function containsForbiddenCrawlerProcess(source: string): boolean {
-  return forbiddenCrawlerProcessPatterns.some(pattern => pattern.test(source));
+  return forbiddenChildProcessAccessPatterns.some(pattern => pattern.test(source));
+}
+
+function listProductionJavaScript(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listProductionJavaScript(entryPath));
+    } else if (entry.isFile()
+      && entry.name.endsWith('.js')
+      && !/\.(?:e2e\.)?(?:test|spec)\.js$/u.test(entry.name)) {
+      files.push(entryPath);
+    }
+  }
+  return files;
 }
 
 describe('built-in weixin history command release artifacts', () => {
@@ -21,25 +37,34 @@ describe('built-in weixin history command release artifacts', () => {
       .map(file => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n');
     const adapterDir = path.join(root, 'clis/weixin');
-    const adapterFiles = fs.readdirSync(adapterDir, { recursive: true, withFileTypes: true })
-      .filter(entry => entry.isFile() && entry.name.endsWith('.js') && !entry.name.match(/(?:^|\.)test\.js$/u));
+    const adapterFiles = listProductionJavaScript(adapterDir);
     const adapterSource = adapterFiles
-      .map(entry => fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8'));
+      .map(file => fs.readFileSync(file, 'utf8'));
 
     expect(packageFiles).not.toMatch(/wechat-article-crawler|wechat-crawler/);
     expect(adapterSource.join('\n')).not.toMatch(/wechat-article-crawler|wechat-crawler/);
     expect(
       adapterFiles.filter((_, index) => containsForbiddenCrawlerProcess(adapterSource[index]!))
-        .map(entry => path.relative(root, path.join(entry.parentPath, entry.name))),
+        .map(file => path.relative(root, file)),
     ).toEqual([]);
   });
 
   it.each([
-    "import { spawn } from 'node:child_process'; spawn('wechat-crawler', []);",
-    "const childProcess = require('child_process'); childProcess.execFile('wechat-crawler');",
-    "import('node:child_process').then(({ spawnSync }) => spawnSync('wechat-crawler'));",
+    "import { exec } from 'node:child_process'; exec('crawler');",
+    "const childProcess = require('child_process'); childProcess.fork('crawler.js');",
+    "import('node:child_process').then(({ exec }) => exec('crawler'));",
+    "process.getBuiltinModule('child_process').fork('crawler.js');",
   ])('detects forbidden crawler process source: %s', source => {
     expect(containsForbiddenCrawlerProcess(source)).toBe(true);
+  });
+
+  it('allows adapter-local functions that happen to be named spawn or execFile', () => {
+    expect(containsForbiddenCrawlerProcess(`
+      function spawn(value) { return value; }
+      const execFile = value => value;
+      spawn('local');
+      execFile('local');
+    `)).toBe(false);
   });
 
   it('publishes the three conditional commands with stable manifest contracts', () => {
