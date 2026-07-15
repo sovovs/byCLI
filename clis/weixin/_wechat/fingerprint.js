@@ -55,25 +55,55 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
     }, { operation: 'install', stateKey: STATE_KEY });
 
     let entryClicked = false;
+    let overflowClicked = false;
     let submitted = false;
     let focusedForManualOpen = false;
     let automaticPolls = 0;
     while (Date.now() - startedAt < timeoutMs) {
       if (!submitted) {
-        const picker = await page.evaluate(({ operation, allowClick }) => {
-          if (operation !== 'open-picker') return { dialogVisible: false, entryClicked: false };
+        const picker = await page.evaluate(({ operation, allowClick, allowOverflowClick }) => {
+          if (operation !== 'open-picker') {
+            return { dialogVisible: false, entryClicked: false, overflowClicked: false };
+          }
           const root = /** @type {any} */ (window);
+          const INSERT_TOOL_LABELS = [
+            '图片', '视频', '音频', '超链接', '小程序', '模板', '投票', '搜索', '地理位置',
+          ];
           const visible = element => {
             const style = window.getComputedStyle(element);
             const rect = element.getBoundingClientRect();
             return style.display !== 'none' && style.visibility !== 'hidden'
               && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
           };
+          const exactText = element => (element.textContent ?? '').replace(/\s+/g, '').trim();
+          const clickable = element => element.closest?.('button, a, [role="button"], [role="menuitem"]') ?? element;
           const dialogs = Array.from(document.querySelectorAll(
             '[role="dialog"], .weui-desktop-dialog, [class*="dialog"]',
           )).filter(visible).filter(element => /插入账号名片/.test(element.textContent ?? ''));
-          if (dialogs.length === 1) return { dialogVisible: true, entryClicked: false };
-          if (!allowClick) return { dialogVisible: false, entryClicked: false };
+          if (dialogs.length === 1) {
+            return { dialogVisible: true, entryClicked: false, overflowClicked: false };
+          }
+
+          if (allowClick) {
+            const menuTargets = new Set();
+            const menus = Array.from(document.querySelectorAll(
+              '[role="menu"], [class*="menu"], [class*="dropdown"], [class*="popover"]',
+            )).filter(visible);
+            for (const menu of menus) {
+              for (const element of Array.from(menu.querySelectorAll(
+                'button, a, [role="button"], [role="menuitem"], li, [class*="item"]',
+              ))) {
+                if (visible(element) && exactText(element) === '账号名片') {
+                  menuTargets.add(clickable(element));
+                }
+              }
+            }
+            if (menuTargets.size === 1) {
+              const [target] = menuTargets;
+              target.click();
+              return { dialogVisible: false, entryClicked: true, overflowClicked: false };
+            }
+          }
 
           const selector = [
             'header button', 'header a', 'header [role="button"]', 'header [class*="tool"]',
@@ -82,24 +112,64 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
             '.edui-editor-toolbarbox [role="button"]', '.edui-editor-toolbarbox [class*="tool"]',
             '.weui-desktop-toolbar button', '.weui-desktop-toolbar a',
             '.weui-desktop-toolbar [role="button"]', '.weui-desktop-toolbar [class*="tool"]',
-            'button', 'a', '[role="button"]',
           ].join(', ');
           const maxHeaderTop = Math.max(160, (Number(root.innerHeight) || 800) * 0.25);
           const targets = new Set();
           for (const element of Array.from(document.querySelectorAll(selector))) {
             if (!visible(element)) continue;
-            if ((element.textContent ?? '').replace(/\s+/g, '').trim() !== '账号名片') continue;
+            if (exactText(element) !== '账号名片') continue;
             const rect = element.getBoundingClientRect();
             if (Number(rect.top ?? 0) > maxHeaderTop) continue;
-            targets.add(element.closest('button, a, [role="button"]') ?? element);
+            targets.add(clickable(element));
           }
-          if (targets.size !== 1) return { dialogVisible: false, entryClicked: false };
-          const [target] = targets;
-          target.click();
-          return { dialogVisible: false, entryClicked: true };
-        }, { operation: 'open-picker', allowClick: !entryClicked });
+          if (allowClick && targets.size === 1) {
+            const [target] = targets;
+            target.click();
+            return { dialogVisible: false, entryClicked: true, overflowClicked: false };
+          }
+
+          if (allowOverflowClick) {
+            const candidates = Array.from(new Set(document.querySelectorAll(
+              'header, [role="banner"], nav, [class*="toolbar"]',
+            ))).filter(visible).map(element => {
+              const text = exactText(element);
+              const score = INSERT_TOOL_LABELS.filter(label => text.includes(label)).length;
+              return { element, score };
+            }).filter(candidate => candidate.score >= 3);
+            const bestScore = Math.max(0, ...candidates.map(candidate => candidate.score));
+            const best = candidates.filter(candidate => candidate.score === bestScore);
+            const innermost = best.filter(candidate => !best.some(other =>
+              other !== candidate && candidate.element.contains?.(other.element)));
+            if (innermost.length === 1) {
+              const overflowTargets = new Set();
+              for (const element of Array.from(innermost[0].element.querySelectorAll(
+                'button, a, [role="button"], [class*="more"], [class*="ellipsis"]',
+              ))) {
+                if (!visible(element)) continue;
+                const text = exactText(element);
+                const attributes = ['aria-label', 'title']
+                  .map(name => element.getAttribute?.(name) ?? '').join(' ');
+                const className = typeof element.className === 'string' ? element.className : '';
+                if (!['...', '…', '•••'].includes(text)
+                    && !/更多|more|ellipsis/i.test(`${attributes} ${className}`)) continue;
+                overflowTargets.add(clickable(element));
+              }
+              if (overflowTargets.size === 1) {
+                const [target] = overflowTargets;
+                target.click();
+                return { dialogVisible: false, entryClicked: false, overflowClicked: true };
+              }
+            }
+          }
+          return { dialogVisible: false, entryClicked: false, overflowClicked: false };
+        }, {
+          operation: 'open-picker',
+          allowClick: !entryClicked,
+          allowOverflowClick: !overflowClicked,
+        });
 
         entryClicked ||= picker?.entryClicked === true;
+        overflowClicked ||= picker?.overflowClicked === true;
         if (picker?.dialogVisible) {
           const result = await page.evaluate(({ operation, query: searchQuery }) => {
             if (operation !== 'submit-search') return { submitted: false, reason: 'operation' };

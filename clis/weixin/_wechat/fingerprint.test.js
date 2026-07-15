@@ -88,6 +88,7 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
 function makeAccountCardPage({
   triggerRequest = true,
   entryVisible = true,
+  entryInOverflow = false,
   revealEntryAfterWait = false,
   manualDialogAfterFocus = false,
   inputCount = 1,
@@ -100,6 +101,9 @@ function makeAccountCardPage({
   let entryIsVisible = entryVisible;
   let entryClicks = 0;
   let insertClicks = 0;
+  let insertOverflowClicks = 0;
+  let formatOverflowClicks = 0;
+  let overflowMenuVisible = false;
   let requestTriggered = false;
   const operations = [];
   const input = {
@@ -130,9 +134,53 @@ function makeAccountCardPage({
   };
   const entry = {
     textContent: '账号名片',
-    getBoundingClientRect: () => ({ width: entryIsVisible ? 80 : 0, height: entryIsVisible ? 32 : 0 }),
+    getBoundingClientRect: () => ({
+      width: (entryInOverflow ? overflowMenuVisible : entryIsVisible) ? 80 : 0,
+      height: (entryInOverflow ? overflowMenuVisible : entryIsVisible) ? 32 : 0,
+    }),
     click: vi.fn(() => { entryClicks += 1; dialogVisible = true; }),
     closest: vi.fn(() => entry),
+  };
+  const insertOverflow = {
+    textContent: '…',
+    className: 'toolbar-more',
+    getAttribute: name => name === 'aria-label' ? '更多' : null,
+    getBoundingClientRect: () => ({ width: 32, height: 32, top: 20 }),
+    click: vi.fn(() => { insertOverflowClicks += 1; overflowMenuVisible = true; }),
+    closest: vi.fn(() => insertOverflow),
+  };
+  const formatOverflow = {
+    textContent: '…',
+    className: 'toolbar-more',
+    getAttribute: name => name === 'aria-label' ? '更多' : null,
+    getBoundingClientRect: () => ({ width: 32, height: 32, top: 90 }),
+    click: vi.fn(() => { formatOverflowClicks += 1; }),
+    closest: vi.fn(() => formatOverflow),
+  };
+  const insertToolbar = {
+    textContent: '图片 视频 音频 超链接 小程序 …',
+    className: 'insert-toolbar',
+    getBoundingClientRect: () => ({ width: 900, height: 48, top: 0 }),
+    querySelectorAll: () => [insertOverflow],
+    contains: element => element === insertOverflow,
+  };
+  const formatToolbar = {
+    textContent: '17px B I U …',
+    className: 'format-toolbar',
+    getBoundingClientRect: () => ({ width: 900, height: 48, top: 70 }),
+    querySelectorAll: () => [formatOverflow],
+    contains: element => element === formatOverflow,
+  };
+  const overflowMenu = {
+    textContent: '视频号 账号名片 问答 礼物',
+    className: 'toolbar-dropdown-menu',
+    getBoundingClientRect: () => ({
+      width: overflowMenuVisible ? 180 : 0,
+      height: overflowMenuVisible ? 240 : 0,
+      top: 48,
+    }),
+    querySelectorAll: () => overflowMenuVisible ? [entry] : [],
+    contains: element => element === entry,
   };
   vi.stubGlobal('window', {
     location: { href: 'https://mp.weixin.qq.com/cgi-bin/appmsg' },
@@ -152,7 +200,11 @@ function makeAccountCardPage({
   vi.stubGlobal('document', {
     querySelectorAll: selector => {
       if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) return [dialog];
-      if (selector.includes('header') || selector.includes('[role="banner"]')) return [entry];
+      if (entryInOverflow && selector.includes('[class*="toolbar"]')) return [insertToolbar, formatToolbar];
+      if (entryInOverflow && (selector.includes('[role="menu"]') || selector.includes('dropdown') || selector.includes('popover'))) {
+        return [overflowMenu];
+      }
+      if (selector.includes('header') || selector.includes('[role="banner"]')) return entryInOverflow ? [] : [entry];
       if (selector.startsWith('input')) return dialogVisible ? [input] : [];
       return [];
     },
@@ -169,6 +221,8 @@ function makeAccountCardPage({
     page, operations,
     entryClicks: () => entryClicks,
     insertClicks: () => insertClicks,
+    insertOverflowClicks: () => insertOverflowClicks,
+    formatOverflowClicks: () => formatOverflowClicks,
     submittedQuery: () => input.value,
     originalFetch, originalOpen,
   };
@@ -182,6 +236,20 @@ describe('captureSearchBizFingerprint', () => {
     expect(fixture.operations.indexOf('install')).toBeLessThan(fixture.operations.indexOf('open-picker'));
     expect(fixture.entryClicks()).toBe(1);
     expect(fixture.submittedQuery()).toBe('前端之神');
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('opens account card from the insert-toolbar overflow without clicking the formatting overflow', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ entryInOverflow: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.insertOverflowClicks()).toBe(1);
+    expect(fixture.formatOverflowClicks()).toBe(0);
+    expect(fixture.entryClicks()).toBe(1);
     expect(fixture.insertClicks()).toBe(0);
   });
 
