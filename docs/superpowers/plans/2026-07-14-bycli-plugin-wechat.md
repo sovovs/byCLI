@@ -1,5 +1,7 @@
 # bycli-plugin-wechat Implementation Plan
 
+> **Superseded:** This historical independent-plugin plan is retained for context only. The current design implements `accounts`, `articles`, and `save-articles` as built-in `clis/weixin` commands（当前为内置 `weixin` 方案）; follow [the built-in weixin design](../../2026-07-14-bycli-plugin-wechat-design.md) instead. Do not execute the plugin installation, separate npm package, crawler subprocess, or exit-code mapping steps below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build an independently published byCLI plugin that searches WeChat public accounts, lists their articles, and saves Markdown through the `wechat-crawler` CLI boundary.
