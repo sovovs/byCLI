@@ -40,6 +40,12 @@ jobs:
             exit 1
           fi
 
+      - name: Test recorder core
+        run: npm test --workspace @sovovs/bycli-recorder-core
+
+      - name: Verify installable npm tarballs
+        run: npm run check:package-install
+
       - name: Install extension dependencies
         run: npm ci
         working-directory: extension
@@ -64,6 +70,11 @@ jobs:
           generate_release_notes: true
           files: |
             bycli-extension-v*.zip
+
+      - name: Publish recorder core to npm
+        run: npm publish --workspace @sovovs/bycli-recorder-core --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
         run: npm publish --provenance --access public
