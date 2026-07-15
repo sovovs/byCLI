@@ -52,7 +52,9 @@ All commands also accept byCLI's common output option, such as `-f table|json|ya
 
 ## Login and authentication
 
-The default `--auth-source browser` mode connects through Browser Bridge and reuses Chrome's `mp.weixin.qq.com` session. If the session is not authenticated, byCLI opens the Official Accounts login page, brings it to the foreground, and waits up to 180 seconds for you to scan the QR code (扫码) and finish login. Already-authenticated runs do not deliberately steal focus. `accounts` additionally captures the session's `fingerprint` from a genuine backend account-search request.
+The default `--auth-source browser` mode connects through Browser Bridge and reuses Chrome's `mp.weixin.qq.com` session. If the session is not authenticated, byCLI opens the Official Accounts login page, brings it to the foreground, and waits up to 180 seconds for you to scan the QR code (扫码) and finish login. Already-authenticated runs do not deliberately steal focus.
+
+For `accounts`, byCLI opens the editor's **账号名片** picker, enters the query in the **插入账号名片** dialog, and captures only the `fingerprint` value from the resulting backend search request. It does not select a result, click **插入**, save the draft, or persist credentials. If the picker cannot be opened automatically after the editor has had time to render, byCLI brings the window to the foreground and waits for you to open the **插入账号名片** dialog manually; once the dialog appears, the command fills the query and continues automatically.
 
 For automation, explicitly select environment authentication:
 
