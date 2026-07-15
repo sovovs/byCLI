@@ -174,6 +174,67 @@ rtk git add clis/weixin/_wechat/fingerprint.js clis/weixin/_wechat/fingerprint.t
 rtk git commit -m "fix(weixin): open account card picker for fingerprint"
 ```
 
+### Task 1A: Open account card from the insert-toolbar overflow
+
+**Files:**
+- Modify: `clis/weixin/_wechat/fingerprint.test.js`
+- Modify: `clis/weixin/_wechat/fingerprint.js`
+
+- [ ] **Step 1: Add a failing two-overflow regression fixture**
+
+Extend `makeAccountCardPage` with `entryInOverflow`. In this mode the page contains an insert toolbar whose visible text includes at least `图片`, `视频`, `音频`, `超链接`, and `小程序`, plus a separate formatting toolbar. Both toolbars expose an ellipsis button. Clicking the insert-toolbar ellipsis reveals a menu item with exact text `账号名片`; clicking that item opens the existing `插入账号名片` dialog. Record insert-toolbar and formatting-toolbar ellipsis click counts separately.
+
+```js
+it('opens account card from the insert-toolbar overflow without clicking the formatting overflow', async () => {
+  const fixture = makeAccountCardPage({ entryInOverflow: true });
+  await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+    .resolves.toBe('前端之神-fp');
+  expect(fixture.insertOverflowClicks()).toBe(1);
+  expect(fixture.formatOverflowClicks()).toBe(0);
+  expect(fixture.entryClicks()).toBe(1);
+  expect(fixture.insertClicks()).toBe(0);
+});
+```
+
+- [ ] **Step 2: Run the test and confirm RED**
+
+```bash
+rtk npx vitest run clis/weixin/_wechat/fingerprint.test.js --project adapter
+```
+
+Expected: the new test times out because `open-picker` only searches for a directly visible `账号名片` target.
+
+- [ ] **Step 3: Identify only the insert toolbar and its overflow**
+
+In `open-picker`, after direct `账号名片` lookup fails, inspect visible candidate containers from `header`, `[role="banner"]`, `nav`, and classes containing `toolbar`. Score each container by the number of distinct labels it contains from:
+
+```js
+const INSERT_TOOL_LABELS = ['图片', '视频', '音频', '超链接', '小程序', '模板', '投票', '搜索', '地理位置'];
+```
+
+Require at least three labels. If nested candidates have the same best score, keep the innermost candidate using `contains`. Within that single trusted container, collect visible clickable descendants whose normalized text is `...`, `…`, or `•••`, or whose `aria-label`, `title`, or class indicates `更多`, `more`, or `ellipsis`. Normalize descendants to their closest `button`, `a`, or `[role="button"]`; click only when the resulting target set has exactly one element.
+
+Return `{ overflowClicked: true }` and pass `allowOverflowClick: false` on subsequent polls so the overflow is never clicked twice.
+
+- [ ] **Step 4: Select account card only from the revealed menu**
+
+After overflow click, allow exact-text `账号名片` only when it is inside a visible `[role="menu"]`, menu/dropdown/popover class container, or the already trusted top header area. Click exactly one normalized clickable target. If toolbar, overflow, or menu item is ambiguous, do not click and let the existing 50-poll foreground/manual fallback handle it.
+
+- [ ] **Step 5: Run fingerprint tests and confirm GREEN**
+
+```bash
+rtk npx vitest run clis/weixin/_wechat/fingerprint.test.js --project adapter
+```
+
+Expected: direct-entry, overflow-entry, delayed rendering, manual fallback, cleanup, timeout, and concurrency tests all pass.
+
+- [ ] **Step 6: Commit the overflow correction**
+
+```bash
+rtk git add clis/weixin/_wechat/fingerprint.js clis/weixin/_wechat/fingerprint.test.js
+rtk git commit -m "fix(weixin): open account card overflow menu"
+```
+
 ### Task 2: Generate an exact token-aware Referer
 
 **Files:**
