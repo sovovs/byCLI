@@ -17,11 +17,13 @@ describe('weixin accounts command', () => {
     expect(command).toMatchObject({ site: 'weixin', name: 'accounts', access: 'read', strategy: 'intercept', domain: 'mp.weixin.qq.com', browser: 'conditional', columns: ['nickname', 'fakeid', 'alias'] });
     expect(command.requiresBrowser({ 'auth-source': 'browser' })).toBe(true);
     expect(command.requiresBrowser({ 'auth-source': 'env' })).toBe(false);
+    expect(() => command.requiresBrowser({ 'auth-source': 'invalid' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
     expect(command.args).toEqual([
       expect.objectContaining({ name: 'query', positional: true, required: true }),
       expect.objectContaining({ name: 'limit', default: 10 }),
       expect.objectContaining({ name: 'auth-source', default: 'browser' }),
     ]);
+    expect(command.args.find(arg => arg.name === 'auth-source').choices).toEqual(['browser', 'env']);
   });
 
   it('uses browser credentials, captures fingerprint, and returns all similar accounts', async () => {

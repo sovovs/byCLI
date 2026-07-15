@@ -16,6 +16,8 @@ describe('weixin articles command', () => {
     expect(command.args.map(a => [a.name, a.positional, a.required, a.default])).toEqual([
       ['fakeid', true, true, undefined], ['name', undefined, undefined, undefined], ['limit', undefined, undefined, undefined], ['max-pages', undefined, undefined, undefined], ['auth-source', undefined, undefined, 'browser'],
     ]);
+    expect(command.args.find(arg => arg.name === 'auth-source').choices).toEqual(['browser', 'env']);
+    expect(() => command.requiresBrowser({ 'auth-source': 'invalid' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
   });
   it('orchestrates env collection without browser and maps optional fields to null', async () => {
     auth.readEnvironmentCredentials.mockReturnValue({ token: 't', cookie: 'c' });

@@ -3,15 +3,10 @@ import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
 import { captureSearchBizFingerprint } from './_wechat/fingerprint.js';
 import { executeSearchBiz } from './_wechat/search-biz.js';
+import { readAuthSource } from './_wechat/args.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
-const browserRequired = args => args['auth-source'] !== 'env';
-
-function source(args) {
-  const value = args['auth-source'] ?? 'browser';
-  if (value !== 'browser' && value !== 'env') throw new ArgumentError('auth-source must be browser or env');
-  return value;
-}
+const browserRequired = args => readAuthSource(args) === 'browser';
 
 export const accountsCommand = cli({
   site: 'weixin', name: 'accounts', access: 'read', domain: DOMAIN,
@@ -19,7 +14,7 @@ export const accountsCommand = cli({
   args: [
     { name: 'query', positional: true, required: true, help: 'Official-account name to search for' },
     { name: 'limit', type: 'int', default: 10 },
-    { name: 'auth-source', default: 'browser' },
+    { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
   ],
   columns: ['nickname', 'fakeid', 'alias'],
   func: async (page, args) => {
@@ -27,7 +22,7 @@ export const accountsCommand = cli({
     if (!query) throw new ArgumentError('query is required');
     const limit = args.limit ?? 10;
     if (!Number.isSafeInteger(limit) || limit <= 0) throw new ArgumentError('limit must be a positive safe integer');
-    const authSource = source(args);
+    const authSource = readAuthSource(args);
     let credentials;
     if (authSource === 'env') {
       credentials = readEnvironmentCredentials(true);

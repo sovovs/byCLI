@@ -4,14 +4,10 @@ import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat
 import { collectArticles } from './_wechat/article-service.js';
 import { saveArticles } from './_wechat/save-service.js';
 import { createWechatApi } from './_wechat/wechat-api.js';
+import { readAuthSource } from './_wechat/args.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
-const browserRequired = args => args['auth-source'] !== 'env';
-function source(args) {
-  const value = args['auth-source'] ?? 'browser';
-  if (value !== 'browser' && value !== 'env') throw new ArgumentError('auth-source must be browser or env');
-  return value;
-}
+const browserRequired = args => readAuthSource(args) === 'browser';
 
 async function fetchArticleHtml(article) {
   try {
@@ -30,13 +26,13 @@ export const saveArticlesCommand = cli({
   args: [
     { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name' },
     { name: 'output', default: './weixin-articles' }, { name: 'limit', type: 'int' },
-    { name: 'max-pages', type: 'int' }, { name: 'auth-source', default: 'browser' },
+    { name: 'max-pages', type: 'int' }, { name: 'auth-source', default: 'browser', choices: ['browser', 'env'] },
   ],
   columns: ['title', 'status', 'stage', 'path', 'error', 'url'],
   func: async (page, args) => {
     const fakeid = String(args.fakeid ?? '').trim();
     if (!fakeid) throw new ArgumentError('fakeid is required');
-    const authSource = source(args);
+    const authSource = readAuthSource(args);
     const credentials = authSource === 'env'
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
     const { fetchPage } = createWechatApi(credentials);

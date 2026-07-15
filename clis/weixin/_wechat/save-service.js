@@ -88,7 +88,7 @@ function writeExclusive(root, rootFd, rootIdentity, target, markdown, fsImpl) {
   }
 }
 
-export async function saveArticles({ articles, accountName, outputDir, fetchArticleHtml, fsImpl = defaultFs }) {
+export async function saveArticles({ articles, accountName, outputDir, fetchArticleHtml, buildMarkdown = wechatArticleToMarkdown, fsImpl = defaultFs }) {
   if (!Array.isArray(articles) || articles.length > 1000) {
     throw new ArgumentError('articles must be an array of at most 1000 items');
   }
@@ -118,14 +118,19 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
 
   try {
     for (const article of articles) {
+      let articleHtml;
+      try {
+        articleHtml = await fetchArticleHtml(article);
+      } catch {
+        rows.push({ title: article.title || '', url: article.url || '', status: 'failed', stage: 'download', saved: '', error: 'article download failed' });
+        continue;
+      }
       let markdown;
       try {
-        const articleHtml = await fetchArticleHtml(article);
-        markdown = wechatArticleToMarkdown({ html: articleHtml, title: article.title, accountName,
+        markdown = buildMarkdown({ html: articleHtml, title: article.title, accountName,
           author: article.author, publishedAt: article.publishedAt, digest: article.digest, url: article.url });
-      } catch (error) {
-        const reason = error instanceof CommandExecutionError ? 'invalid article content' : 'fetch failed';
-        rows.push({ title: article.title || '', url: article.url || '', status: 'failed', stage: 'download', saved: '', error: reason });
+      } catch {
+        rows.push({ title: article.title || '', url: article.url || '', status: 'failed', stage: 'download', saved: '', error: 'invalid article content' });
         continue;
       }
 

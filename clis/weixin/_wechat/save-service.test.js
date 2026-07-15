@@ -55,7 +55,27 @@ describe('saveArticles', () => {
     expect(result.map(row => row.status)).toEqual(['failed', 'failed', 'saved']);
     expect(result.every(row => Object.keys(row).sort().join(',') === 'error,saved,stage,status,title,url')).toBe(true);
     expect(result.map(row => row.stage)).toEqual(['download', 'download', null]);
-    expect(result.slice(0, 2).map(row => row.error)).toEqual(['fetch failed', 'invalid article content']);
+    expect(result.slice(0, 2).map(row => row.error)).toEqual(['article download failed', 'invalid article content']);
+  });
+
+  it('classifies a typed transport failure as a redacted download failure', async () => {
+    const fsImpl = memoryFs();
+    const [row] = await saveArticles({
+      articles: [article('private')], accountName: 'acct', outputDir: '/out',
+      fetchArticleHtml: async () => { throw new CommandExecutionError('HTTP 500 token=secret'); }, fsImpl,
+    });
+    expect(row).toMatchObject({ status: 'failed', stage: 'download', error: 'article download failed' });
+    expect(JSON.stringify(row)).not.toContain('secret');
+  });
+
+  it('classifies converter failures as invalid article content', async () => {
+    const fsImpl = memoryFs();
+    const [row] = await saveArticles({
+      articles: [article('bad-content')], accountName: 'acct', outputDir: '/out',
+      fetchArticleHtml: async () => html('bad-content'),
+      buildMarkdown: () => { throw new Error('converter failed'); }, fsImpl,
+    });
+    expect(row).toMatchObject({ status: 'failed', stage: 'download', error: 'invalid article content' });
   });
 
   it('rejects article arrays above the absolute cap before filesystem or fetch work', async () => {
