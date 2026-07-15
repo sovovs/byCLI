@@ -125,7 +125,7 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
           author: article.author, publishedAt: article.publishedAt, digest: article.digest, url: article.url });
       } catch (error) {
         const reason = error instanceof CommandExecutionError ? 'invalid article content' : 'fetch failed';
-        rows.push({ title: article.title || '', url: article.url || '', status: 'failed', saved: '', error: reason });
+        rows.push({ title: article.title || '', url: article.url || '', status: 'failed', stage: 'download', saved: '', error: reason });
         continue;
       }
 
@@ -161,7 +161,7 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
       if (suffix > MAX_FILENAME_ATTEMPTS) {
         throw new CommandExecutionError(`Failed to reserve an article filename after ${MAX_FILENAME_ATTEMPTS} attempts`);
       }
-      rows.push({ title: article.title || '', url: article.url || '', status: 'saved', saved: target, error: '' });
+      rows.push({ title: article.title || '', url: article.url || '', status: 'saved', stage: null, saved: target, error: '' });
     }
   } finally {
     fsImpl.closeSync(rootFd);

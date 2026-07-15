@@ -40,8 +40,8 @@ describe('saveArticles', () => {
     expect(fsImpl.realpathSync).toHaveBeenCalledTimes(1);
     expect([...fsImpl.files.keys()].map(value => path.basename(value))).toEqual(['same.md', 'same-2.md']);
     expect(result).toEqual([
-      expect.objectContaining({ title: 'same', status: 'saved', saved: expect.stringMatching(/\/same\.md$/) }),
-      expect.objectContaining({ title: 'same', status: 'saved', saved: expect.stringMatching(/\/same-2\.md$/) }),
+      expect.objectContaining({ title: 'same', status: 'saved', stage: null, saved: expect.stringMatching(/\/same\.md$/) }),
+      expect.objectContaining({ title: 'same', status: 'saved', stage: null, saved: expect.stringMatching(/\/same-2\.md$/) }),
     ]);
     expect(result.every(row => path.isAbsolute(row.saved))).toBe(true);
   });
@@ -53,7 +53,8 @@ describe('saveArticles', () => {
       return item.title === 'empty' ? '<p>no article</p>' : html('ok');
     }, fsImpl });
     expect(result.map(row => row.status)).toEqual(['failed', 'failed', 'saved']);
-    expect(result.every(row => Object.keys(row).sort().join(',') === 'error,saved,status,title,url')).toBe(true);
+    expect(result.every(row => Object.keys(row).sort().join(',') === 'error,saved,stage,status,title,url')).toBe(true);
+    expect(result.map(row => row.stage)).toEqual(['download', 'download', null]);
     expect(result.slice(0, 2).map(row => row.error)).toEqual(['fetch failed', 'invalid article content']);
   });
 
