@@ -14,7 +14,8 @@ describe('extractWechatArticleContent', () => {
     expect(value.contentHtml).not.toMatch(/script|style|line-index/);
     expect(value.contentHtml).toContain('src="https://img/a.png"');
     expect(value.imageUrls).toEqual(['https://img/a.png', 'https://img/b.jpg']);
-    expect(value.codeBlocks).toEqual([{ lang: 'js', code: 'const x = 1 < 2;' }]);
-    expect(value.contentHtml).toContain('CODEBLOCK-PLACEHOLDER-0');
+    expect(value.codeBlocks).toEqual([]);
+    expect(value.contentHtml).toContain('<pre data-lang="js"><code>const x = 1 &lt; 2;</code></pre>');
+    expect(value.contentHtml).not.toContain('CODEBLOCK-PLACEHOLDER');
   });
 });

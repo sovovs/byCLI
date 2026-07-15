@@ -12,6 +12,7 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { httpDownload, sanitizeFilename } from './index.js';
 import { formatBytes } from './progress.js';
+export { extractWechatArticleHtml } from './wechat-article.js';
 
 const IMAGE_CONCURRENCY = 5;
 
@@ -109,6 +110,20 @@ function createTurndown(
     bulletListMarker: '-',
   });
   td.use(gfm);
+  td.addRule('safeFencedCodeBlock', {
+    filter: 'pre',
+    replacement: (_content, node) => {
+      const element = node as Element;
+      const code = element.textContent || '';
+      const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map(match => match[0].length));
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      const className = element.querySelector('code')?.getAttribute('class') || '';
+      const language = element.getAttribute('data-lang')
+        || /(?:^|\s)language-([^\s]+)/.exec(className)?.[1]
+        || '';
+      return `\n${fence}${language}\n${code.replace(/\n$/, '')}\n${fence}\n`;
+    },
+  });
   td.remove(STRIPPED_TAGS);
   // turndown-plugin-gfm@1.0.2 emits single-tilde strikethrough (`~x~`), which
   // is not the canonical GFM form. Override it so exported markdown is
@@ -209,11 +224,13 @@ function convertToMarkdown(
   const td = createTurndown(configure, cleanSelectors);
   let md = td.turndown(contentHtml);
 
-  // Restore code block placeholders
-  codeBlocks.forEach((block, i) => {
-    const placeholder = `CODEBLOCK-PLACEHOLDER-${i}`;
-    const fenced = `\n\`\`\`${block.lang}\n${block.code}\n\`\`\`\n`;
-    md = md.replace(placeholder, fenced);
+  // Legacy callers may still supply extracted blocks. New callers preserve
+  // real <pre>/<code> nodes so Turndown owns fencing without collision-prone
+  // magic text; legacy blocks are appended with safe dynamic fences.
+  codeBlocks.forEach((block) => {
+    const longest = Math.max(0, ...[...block.code.matchAll(/`+/g)].map(match => match[0].length));
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    md += `\n\n${fence}${block.lang}\n${block.code}\n${fence}`;
   });
 
   // Clean up
@@ -226,6 +243,10 @@ function convertToMarkdown(
   md = md.replace(/\n{3,}/g, '\n\n');
 
   return md;
+}
+
+export function convertArticleHtmlToMarkdown(contentHtml: string): string {
+  return convertToMarkdown(contentHtml, []);
 }
 
 function replaceImageUrls(md: string, urlMap: Record<string, string>): string {

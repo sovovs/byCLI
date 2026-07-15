@@ -1,27 +1,12 @@
-import { decodeWechatEntities, extractWechatArticleContentFromHtml } from './article-content.js';
+import { convertArticleHtmlToMarkdown, extractWechatArticleHtml } from '@sovovs/bycli/download/article-download';
 
-function htmlToMarkdown(html) {
-  return decodeWechatEntities(html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi, (_m, level, text) => `\n${'#'.repeat(Number(level))} ${text.replace(/<[^>]+>/g, '')}\n`)
-    .replace(/<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1[^>]*\bsrc\s*=\s*(["'])(.*?)\3[^>]*>/gi, '\n![$2]($4)\n')
-    .replace(/<img\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1[^>]*>/gi, '\n![]($2)\n')
-    .replace(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi, '[$3]($2)')
-    .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '**$2**')
-    .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi, '*$2*')
-    .replace(/<li\b[^>]*>([\s\S]*?)<\/li\s*>/gi, '\n- $1')
-    .replace(/<\/?(?:p|div|section|article|ul|ol|blockquote|pre)\b[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\u00a0/g, ' '));
-}
-
-export function cleanMarkdownFilename(title, maxLength = 100) {
+export function cleanMarkdownFilename(title, maxLength = 100, suffix = '') {
   let cleaned = String(title || '')
     .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_')
     .trim().replace(/[. ]+$/g, '');
   let bounded = '';
   for (const char of [...cleaned].slice(0, maxLength)) {
-    if (Buffer.byteLength(`${bounded}${char}.md`) > 255) break;
+    if (Buffer.byteLength(`${bounded}${char}${suffix}.md`) > 255) break;
     bounded += char;
   }
   cleaned = bounded.replace(/[. ]+$/g, '');
@@ -30,13 +15,12 @@ export function cleanMarkdownFilename(title, maxLength = 100) {
 }
 
 export function wechatArticleToMarkdown({ html, title, accountName, author, publishedAt, url }) {
-  const extracted = extractWechatArticleContentFromHtml(html);
-  let markdown = htmlToMarkdown(extracted.contentHtml);
-  extracted.codeBlocks.forEach((block, index) => {
-    markdown = markdown.replace(`CODEBLOCK-PLACEHOLDER-${index}`, `\n\`\`\`${block.lang}\n${block.code}\n\`\`\`\n`);
-  });
+  const extracted = extractWechatArticleHtml(String(html || ''));
+  let markdown = convertArticleHtmlToMarkdown(extracted.contentHtml);
   markdown = markdown.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-  const metadata = [accountName && `> 公众号: ${accountName}`, author && `> 作者: ${author}`,
-    publishedAt && `> 发布时间: ${publishedAt}`, url && `> 原文链接: ${url}`].filter(Boolean);
-  return [`# ${title || 'Untitled'}`, ...metadata, '', '---', '', markdown, ''].join('\n');
+  const safe = value => String(value || '').replace(/\s+/g, ' ').trim()
+    .replace(/([\\`*_[\]{}()#+.!|>~-])/g, '\\$1');
+  const metadata = [accountName && `> 公众号: ${safe(accountName)}`, author && `> 作者: ${safe(author)}`,
+    publishedAt && `> 发布时间: ${safe(publishedAt)}`, url && `> 原文链接: ${safe(url)}`].filter(Boolean);
+  return [`# ${safe(title || 'Untitled').replace(/\\>/g, '&gt;')}`, ...metadata, '', '---', '', markdown, ''].join('\n');
 }

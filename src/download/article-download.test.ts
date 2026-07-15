@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { downloadArticle } from './article-download.js';
+import { convertArticleHtmlToMarkdown, downloadArticle } from './article-download.js';
 
 const tempDirs: string[] = [];
 
@@ -36,6 +36,17 @@ async function runAndRead(
 }
 
 describe('downloadArticle', () => {
+  it('exports robust Markdown conversion for fenced code and URLs with parentheses', () => {
+    const md = convertArticleHtmlToMarkdown('<pre><code>const ticks = ```;</code></pre><img alt="x" src="https://img/a_(1).png">');
+    expect(md).toContain('const ticks = ```;');
+    expect(md).toContain('https://img/a_\(1\).png');
+    const fence = md.match(/(^|\n)(`{3,})[^\n]*\nconst ticks/m)?.[2] || '';
+    expect(fence.length).toBeGreaterThan(3);
+  });
+  it('does not replace user text that resembles the legacy code placeholder', () => {
+    expect(convertArticleHtmlToMarkdown('<p>CODEBLOCK-PLACEHOLDER-0</p><pre><code>ok()</code></pre>'))
+      .toContain('CODEBLOCK-PLACEHOLDER-0');
+  });
   it('returns the saved markdown file path on success', async () => {
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
     tempDirs.push(tempDir);

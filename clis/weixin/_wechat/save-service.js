@@ -1,6 +1,6 @@
 import * as defaultFs from 'node:fs';
 import path from 'node:path';
-import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { cleanMarkdownFilename, wechatArticleToMarkdown } from './markdown.js';
 
 export const MAX_FILENAME_ATTEMPTS = 100;
@@ -17,6 +17,9 @@ function assertInside(root, target) {
 }
 
 export async function saveArticles({ articles, accountName, outputDir, fetchArticleHtml, fsImpl = defaultFs }) {
+  if (!Array.isArray(articles) || articles.length > 1000) {
+    throw new ArgumentError('articles must be an array of at most 1000 items');
+  }
   const requestedRoot = path.resolve(outputDir);
   try { fsImpl.mkdirSync(requestedRoot, { recursive: true }); } catch (error) { throw commandError('create output directory', error); }
   let root;
@@ -31,15 +34,16 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
       markdown = wechatArticleToMarkdown({ html: articleHtml, title: article.title, accountName,
         author: article.author, publishedAt: article.publishedAt, url: article.url });
     } catch (error) {
-      rows.push({ title: article.title || '', url: article.url || '', status: 'failed', saved: '' });
+      const reason = error instanceof CommandExecutionError ? 'invalid article content' : 'fetch failed';
+      rows.push({ title: article.title || '', url: article.url || '', status: 'failed', saved: '', error: reason });
       continue;
     }
 
-    const base = cleanMarkdownFilename(article.title);
     let suffix = 1;
     let target;
     while (suffix <= MAX_FILENAME_ATTEMPTS) {
-      const name = suffix === 1 ? base : `${base}-${suffix}`;
+      const suffixText = suffix === 1 ? '' : `-${suffix}`;
+      const name = `${cleanMarkdownFilename(article.title, 100, suffixText)}${suffixText}`;
       target = path.resolve(root, `${name}.md`);
       assertInside(root, target);
       if (reserved.has(target)) { suffix += 1; continue; }
@@ -67,7 +71,7 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
     if (suffix > MAX_FILENAME_ATTEMPTS) {
       throw new CommandExecutionError(`Failed to reserve an article filename after ${MAX_FILENAME_ATTEMPTS} attempts`);
     }
-    rows.push({ title: article.title || '', url: article.url || '', status: 'saved', saved: target });
+    rows.push({ title: article.title || '', url: article.url || '', status: 'saved', saved: target, error: '' });
   }
   return rows;
 }

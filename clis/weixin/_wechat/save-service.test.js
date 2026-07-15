@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError } from '@sovovs/bycli/errors';
 import { MAX_FILENAME_ATTEMPTS, saveArticles } from './save-service.js';
 
 const article = (title, url = `https://mp.weixin.qq.com/s/${encodeURIComponent(title)}`) => ({ title, url, publishedAt: '2026-01-02', author: 'A' });
@@ -41,7 +42,17 @@ describe('saveArticles', () => {
       return item.title === 'empty' ? '<p>no article</p>' : html('ok');
     }, fsImpl });
     expect(result.map(row => row.status)).toEqual(['failed', 'failed', 'saved']);
-    expect(result.every(row => Object.keys(row).sort().join(',') === 'saved,status,title,url')).toBe(true);
+    expect(result.every(row => Object.keys(row).sort().join(',') === 'error,saved,status,title,url')).toBe(true);
+    expect(result.slice(0, 2).map(row => row.error)).toEqual(['fetch failed', 'invalid article content']);
+  });
+
+  it('rejects article arrays above the absolute cap before filesystem or fetch work', async () => {
+    const fsImpl = memoryFs();
+    const fetchArticleHtml = vi.fn();
+    await expect(saveArticles({ articles: Array.from({ length: 1001 }, () => article('x')), accountName: 'a', outputDir: '/out', fetchArticleHtml, fsImpl }))
+      .rejects.toBeInstanceOf(ArgumentError);
+    expect(fsImpl.mkdirSync).not.toHaveBeenCalled();
+    expect(fetchArticleHtml).not.toHaveBeenCalled();
   });
 
   it('fails fast with CommandExecutionError on mkdir or write failure', async () => {
