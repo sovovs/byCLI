@@ -4,19 +4,42 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
+const forbiddenCrawlerProcessPatterns = [
+  /\bfrom\s+['"](?:node:)?child_process['"]/u,
+  /\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+  /\bimport\(\s*['"](?:node:)?child_process['"]\s*\)/u,
+  /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(/u,
+];
+
+function containsForbiddenCrawlerProcess(source: string): boolean {
+  return forbiddenCrawlerProcessPatterns.some(pattern => pattern.test(source));
+}
+
 describe('built-in weixin history command release artifacts', () => {
   it('keeps the production package and built-in adapter free of the legacy crawler runtime', () => {
     const packageFiles = ['package.json', 'package-lock.json']
       .map(file => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n');
     const adapterDir = path.join(root, 'clis/weixin');
-    const adapterSource = fs.readdirSync(adapterDir, { recursive: true, withFileTypes: true })
-      .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
-      .map(entry => fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8'))
-      .join('\n');
+    const adapterFiles = fs.readdirSync(adapterDir, { recursive: true, withFileTypes: true })
+      .filter(entry => entry.isFile() && entry.name.endsWith('.js') && !entry.name.match(/(?:^|\.)test\.js$/u));
+    const adapterSource = adapterFiles
+      .map(entry => fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8'));
 
     expect(packageFiles).not.toMatch(/wechat-article-crawler|wechat-crawler/);
-    expect(adapterSource).not.toMatch(/wechat-article-crawler|wechat-crawler/);
+    expect(adapterSource.join('\n')).not.toMatch(/wechat-article-crawler|wechat-crawler/);
+    expect(
+      adapterFiles.filter((_, index) => containsForbiddenCrawlerProcess(adapterSource[index]!))
+        .map(entry => path.relative(root, path.join(entry.parentPath, entry.name))),
+    ).toEqual([]);
+  });
+
+  it.each([
+    "import { spawn } from 'node:child_process'; spawn('wechat-crawler', []);",
+    "const childProcess = require('child_process'); childProcess.execFile('wechat-crawler');",
+    "import('node:child_process').then(({ spawnSync }) => spawnSync('wechat-crawler'));",
+  ])('detects forbidden crawler process source: %s', source => {
+    expect(containsForbiddenCrawlerProcess(source)).toBe(true);
   });
 
   it('publishes the three conditional commands with stable manifest contracts', () => {
