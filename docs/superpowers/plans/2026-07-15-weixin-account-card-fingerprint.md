@@ -151,7 +151,7 @@ const submitted = await page.evaluate(({ operation, query: searchQuery }) => {
 
 - [ ] **Step 5: Add the deadline-based automatic and manual phases**
 
-Use the existing `startedAt`, `timeoutMs`, 100 ms polling interval, and one absolute deadline. For at most `Math.min(5_000, timeoutMs)` automatically look for/click the header entry and wait for the dialog. Click the entry no more than once. If the dialog is still absent after that phase, call `page.focusWindow()` once when available and continue waiting for a manually opened dialog until the original deadline.
+Use the existing `startedAt`, `timeoutMs`, 100 ms polling interval, and one absolute deadline. Automatically probe for the header entry/dialog for at most 50 polls (nominally five seconds); a shorter absolute deadline always wins. Click the entry no more than once. If 50 probes complete while time remains and the dialog is still absent, call `page.focusWindow()` once when available and continue waiting for a manually opened dialog until the original deadline. Tests use mocked `page.wait`, so the poll-count boundary is deterministic without wall-clock sleeps.
 
 When the dialog appears, run `submit-search` exactly once. Map `reason: 'input'` to `CommandExecutionError('WeChat account-card search input was not found', ...)`. If no dialog or no fingerprint appears before the absolute deadline, throw `TimeoutError('WeChat account-card search fingerprint capture', timeoutMs / 1000)`.
 
