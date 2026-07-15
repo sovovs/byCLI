@@ -6,7 +6,11 @@ function makePage({ submitted = true, fingerprint = 'fp-value', failPoll = false
   let reads = 0;
   return {
     evaluate: vi.fn(async (_callback, argument) => {
-      if (argument?.operation === 'install') return { submitted };
+      if (argument?.operation === 'install') return { installed: true };
+      if (argument?.operation === 'open-picker') return { dialogVisible: true, entryClicked: false };
+      if (argument?.operation === 'submit-search') {
+        return submitted ? { submitted: true } : { submitted: false, reason: 'input', inputCount: 0 };
+      }
       if (argument?.operation === 'read') {
         reads += 1;
         if (failPoll) throw new Error('poll failed');
@@ -29,11 +33,22 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
   const originalOpen = vi.fn();
   class FakeXHR {}
   FakeXHR.prototype.open = originalOpen;
-  const scope = { querySelectorAll: selector => selector.includes('button') ? [button] : [] };
+  const scope = {
+    textContent: '插入账号名片',
+    getBoundingClientRect: () => ({ width: 800, height: 600 }),
+    querySelectorAll: selector => {
+      if (selector.includes('input')) return [input];
+      return selector.includes('button') ? [button] : [];
+    },
+  };
   const input = {
     value: '',
     focus: vi.fn(),
-    dispatchEvent: vi.fn(),
+    dispatchEvent: vi.fn(event => {
+      if (triggerRequest && event.type === 'keydown' && event.key === 'Enter') {
+        window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp&token=token-secret`);
+      }
+    }),
     closest: vi.fn(() => trustedContainer ? scope : null),
     getBoundingClientRect: () => ({ width: 100, height: 24 }),
   };
@@ -53,9 +68,15 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
   vi.stubGlobal('XMLHttpRequest', FakeXHR);
   vi.stubGlobal('HTMLInputElement', class HTMLInputElement {});
   vi.stubGlobal('Event', class Event { constructor(type, options) { this.type = type; this.options = options; } });
-  vi.stubGlobal('KeyboardEvent', class KeyboardEvent {});
+  vi.stubGlobal('KeyboardEvent', class KeyboardEvent {
+    constructor(type, options = {}) { this.type = type; this.key = options.key; this.code = options.code; }
+  });
   vi.stubGlobal('document', {
-    querySelectorAll: selector => selector.startsWith('input') ? [input] : includeUnrelatedButton && selector.includes('button') ? [button] : [],
+    querySelectorAll: selector => {
+      if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) return [scope];
+      if (selector.startsWith('input')) return [input];
+      return includeUnrelatedButton && selector.includes('button') ? [button] : [];
+    },
   });
   const page = {
     evaluate: vi.fn(async (callback, argument) => callback(argument)),
@@ -64,7 +85,132 @@ function makeRealPage({ triggerRequest = true, trustedContainer = true, includeU
   return { page, originalFetch, originalOpen };
 }
 
+function makeAccountCardPage({
+  triggerRequest = true,
+  entryVisible = true,
+  revealEntryAfterWait = false,
+  manualDialogAfterFocus = false,
+  inputCount = 1,
+} = {}) {
+  const originalFetch = vi.fn(async () => ({ ok: true }));
+  const originalOpen = vi.fn();
+  class FakeXHR {}
+  FakeXHR.prototype.open = originalOpen;
+  let dialogVisible = false;
+  let entryIsVisible = entryVisible;
+  let entryClicks = 0;
+  let insertClicks = 0;
+  let requestTriggered = false;
+  const operations = [];
+  const input = {
+    value: '',
+    focus: vi.fn(),
+    getBoundingClientRect: () => ({ width: dialogVisible ? 300 : 0, height: dialogVisible ? 32 : 0 }),
+    dispatchEvent: vi.fn(event => {
+      if (triggerRequest && !requestTriggered && event.type === 'keydown' && event.key === 'Enter') {
+        requestTriggered = true;
+        window.fetch(`https://mp.weixin.qq.com/cgi-bin/searchbiz?action=search_biz&fingerprint=${encodeURIComponent(input.value)}-fp`);
+      }
+    }),
+    closest: vi.fn(() => dialog),
+  };
+  const insertButton = {
+    textContent: '插入',
+    getBoundingClientRect: () => ({ width: dialogVisible ? 60 : 0, height: dialogVisible ? 30 : 0 }),
+    click: vi.fn(() => { insertClicks += 1; }),
+  };
+  const dialog = {
+    textContent: '插入账号名片',
+    getBoundingClientRect: () => ({ width: dialogVisible ? 800 : 0, height: dialogVisible ? 600 : 0 }),
+    querySelectorAll: selector => {
+      if (selector.includes('input')) return dialogVisible ? Array.from({ length: inputCount }, () => input) : [];
+      if (selector.includes('button')) return dialogVisible ? [insertButton] : [];
+      return [];
+    },
+  };
+  const entry = {
+    textContent: '账号名片',
+    getBoundingClientRect: () => ({ width: entryIsVisible ? 80 : 0, height: entryIsVisible ? 32 : 0 }),
+    click: vi.fn(() => { entryClicks += 1; dialogVisible = true; }),
+    closest: vi.fn(() => entry),
+  };
+  vi.stubGlobal('window', {
+    location: { href: 'https://mp.weixin.qq.com/cgi-bin/appmsg' },
+    fetch: originalFetch,
+    XMLHttpRequest: FakeXHR,
+    getComputedStyle: element => ({
+      display: element.getBoundingClientRect().width > 0 ? 'block' : 'none',
+      visibility: 'visible', opacity: '1',
+    }),
+  });
+  vi.stubGlobal('XMLHttpRequest', FakeXHR);
+  vi.stubGlobal('HTMLInputElement', class HTMLInputElement {});
+  vi.stubGlobal('Event', class Event { constructor(type) { this.type = type; } });
+  vi.stubGlobal('KeyboardEvent', class KeyboardEvent {
+    constructor(type, options = {}) { this.type = type; this.key = options.key; this.code = options.code; }
+  });
+  vi.stubGlobal('document', {
+    querySelectorAll: selector => {
+      if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) return [dialog];
+      if (selector.includes('header') || selector.includes('[role="banner"]')) return [entry];
+      if (selector.startsWith('input')) return dialogVisible ? [input] : [];
+      return [];
+    },
+  });
+  const page = {
+    evaluate: vi.fn(async (callback, argument) => {
+      operations.push(argument.operation);
+      return callback(argument);
+    }),
+    wait: vi.fn(async () => { if (revealEntryAfterWait) entryIsVisible = true; }),
+    focusWindow: vi.fn(async () => { if (manualDialogAfterFocus) dialogVisible = true; }),
+  };
+  return {
+    page, operations,
+    entryClicks: () => entryClicks,
+    insertClicks: () => insertClicks,
+    submittedQuery: () => input.value,
+    originalFetch, originalOpen,
+  };
+}
+
 describe('captureSearchBizFingerprint', () => {
+  it('opens the header account-card picker before submitting its dialog search', async () => {
+    const fixture = makeAccountCardPage();
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.operations.indexOf('install')).toBeLessThan(fixture.operations.indexOf('open-picker'));
+    expect(fixture.entryClicks()).toBe(1);
+    expect(fixture.submittedQuery()).toBe('前端之神');
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('focuses the window and continues after the user manually opens the dialog', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ entryVisible: false, manualDialogAfterFocus: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+    await expect(captureSearchBizFingerprint(fixture.page, '微信派', 6_000)).resolves.toBe('微信派-fp');
+    expect(fixture.page.focusWindow).toHaveBeenCalledTimes(1);
+    expect(fixture.entryClicks()).toBe(0);
+  });
+
+  it('waits for delayed editor rendering before clicking the account-card entry', async () => {
+    const fixture = makeAccountCardPage({ entryVisible: false, revealEntryAfterWait: true });
+    await expect(captureSearchBizFingerprint(fixture.page, '微信派', 1_000)).resolves.toBe('微信派-fp');
+    expect(fixture.page.wait).toHaveBeenCalled();
+    expect(fixture.entryClicks()).toBe(1);
+  });
+
+  it('rejects an ambiguous account-card dialog input', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ inputCount: 2 });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+    await expect(captureSearchBizFingerprint(fixture.page, '微信派', 1_000))
+      .rejects.toBeInstanceOf(CommandExecutionError);
+  });
+
   it('polls with page.wait seconds and always cleans up after success', async () => {
     const page = makePage();
     await expect(captureSearchBizFingerprint(page, '微信派', 1_000)).resolves.toBe('fp-value');
@@ -72,9 +218,12 @@ describe('captureSearchBizFingerprint', () => {
     expect(page.evaluate.mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ operation: 'cleanup' }));
   });
 
-  it('reports a page-change hint when no visible search control was submitted', async () => {
+  it('reports a page-change hint when the account-card dialog has no search input', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
     const page = makePage({ submitted: false });
-    const error = await captureSearchBizFingerprint(page, '微信派').catch(value => value);
+    page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+    const error = await captureSearchBizFingerprint(page, '微信派', 200).catch(value => value);
     expect(error).toBeInstanceOf(CommandExecutionError);
     expect(error.hint).toMatch(/page|layout|control/i);
     expect(page.evaluate.mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ operation: 'cleanup' }));
@@ -181,10 +330,8 @@ describe('captureSearchBizFingerprint', () => {
     await expect(captureSearchBizFingerprint(page, 'dialog', 1_000)).resolves.toBe('dialog-fp');
   });
 
-  it('rejects an input that has only an unrelated global search button', async () => {
+  it('does not depend on an unrelated global search button', async () => {
     const { page } = makeRealPage({ trustedContainer: false, includeUnrelatedButton: true });
-    const error = await captureSearchBizFingerprint(page, 'global', 1_000).catch(value => value);
-    expect(error).toBeInstanceOf(CommandExecutionError);
-    expect(error.hint).toMatch(/layout|control/i);
+    await expect(captureSearchBizFingerprint(page, 'dialog', 1_000)).resolves.toBe('dialog-fp');
   });
 });
