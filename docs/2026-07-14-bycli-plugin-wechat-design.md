@@ -211,7 +211,12 @@ domain: mp.weixin.qq.com
                     → 最长等待 180 秒
   → 读取 token 与目标域 Cookie
   → 进入图文编辑场景
-  → accounts 额外触发真实 search_biz UI 请求并捕获 fingerprint
+  → accounts 安装一次性请求监听器
+      → 等待并点击 header 中的“账号名片”入口
+      → 等待“插入账号名片”弹窗
+      → 在弹窗内输入 query 并触发搜索
+      → 捕获真实 search_biz 请求中的 fingerprint
+      → 使用当前会话凭证直接请求 search_biz
 ```
 
 页面预检只接受标准 HTTPS `https://mp.weixin.qq.com` origin、`/cgi-bin/` 路径与非空 token；可见登录表单、二维码或登录提示构成未登录信号。预检只是快速判断，真正的业务请求仍必须校验微信响应。
@@ -233,11 +238,25 @@ articles/save-articles: WECHAT_TOKEN + WECHAT_COOKIE
 
 ## 6. fingerprint 与 `search_biz`
 
-浏览器模式进入公众号图文编辑页，在页面上下文临时包装 `fetch` 与 `XMLHttpRequest.open`，触发真实公众号搜索控件，只保存匹配 `/cgi-bin/searchbiz` 请求中的 `fingerprint` 参数：
+浏览器模式进入公众号图文编辑页后，在页面上下文临时包装 `fetch` 与 `XMLHttpRequest.open`。监听器必须先于任何 UI 交互安装，随后按真实后台流程触发公众号搜索：
+
+```text
+等待 header 中可见且文本为“账号名片”的入口
+  → 点击入口一次
+  → 等待标题为“插入账号名片”的可见弹窗
+  → 只在该弹窗内定位搜索输入框
+  → 写入 query 并触发搜索按钮或 Enter
+  → 捕获 /cgi-bin/searchbiz 请求
+```
+
+自动交互只打开弹窗并执行搜索，不选择搜索结果、不点击“插入”，因此不修改或保存草稿。选择器必须以 header 和“插入账号名片”弹窗为可信作用域，不使用无作用域的全局“搜索”按钮或输入框。
+
+页面动态渲染时，在统一超时预算内等待入口与弹窗。若自动等待后仍找不到“账号名片”入口，则将窗口置前并等待用户手动打开“插入账号名片”弹窗；检测到弹窗后自动填写并继续。入口和弹窗均未在超时前出现时抛 `TimeoutError`；弹窗已出现但缺少唯一搜索输入框时抛 `CommandExecutionError`，明确报告页面结构变化。
+
+监听器只保存匹配 `/cgi-bin/searchbiz` 请求中的 `fingerprint` 参数：
 
 - 不保存或返回完整请求 URL。
 - 成功、失败或超时均恢复原函数并删除临时属性。
-- 页面布局中找不到搜索控件时抛 `CommandExecutionError`，明确提示页面结构可能变化。
 - fingerprint 与 token、Cookie 必须来自同一浏览器会话。
 
 `search_biz` 请求包含：
@@ -255,7 +274,7 @@ f=json
 ajax=1
 ```
 
-浏览器模式使用 `page.fetchJson`；环境变量模式使用 Node `fetch` 并设置 Cookie、Referer 与 `X-Requested-With`。响应要求 HTTP 成功、JSON 可解析、`base_resp.ret===0`、`list` 为数组、每项包含非空 `nickname` 与 `fakeid`。
+捕获 fingerprint 后不复用 UI 搜索结果，而是使用统一 transport 再请求一次 `search_biz`，以保持 `limit`、响应校验和错误映射一致。浏览器模式使用 `page.fetchJson`；环境变量模式使用 Node `fetch` 并设置 Cookie、Referer 与 `X-Requested-With`。Referer 必须根据当前 token 动态生成，包含图文编辑页参数 `type=10`、`token=<token>` 与 `lang=zh_CN`，不得使用缺少 token 的静态 Referer。响应要求 HTTP 成功、JSON 可解析、`base_resp.ret===0`、`list` 为数组、每项包含非空 `nickname` 与 `fakeid`。
 
 认证失效只按 fixture 覆盖的 ret/message allowlist 映射为 `AuthRequiredError`；未知非零响应为 `CommandExecutionError`。
 
@@ -317,8 +336,10 @@ fakeid + token + Cookie
 - 已登录复用、未登录扫码、focus、边界登录成功与超时。
 - HTTPS origin、恶意域名、过期 Cookie 与 HttpOnly Cookie。
 - 登录 UI DOM 回调真实执行，覆盖二维码、可见性和登录文本。
-- fingerprint 只捕获参数值并在所有路径恢复页面函数。
-- `search_biz` URL、headers、browser/env transport 与响应分类。
+- fingerprint 监听器先于交互安装，只捕获参数值并在所有路径恢复页面函数。
+- 自动点击 header“账号名片”、等待“插入账号名片”弹窗、弹窗作用域输入与搜索触发。
+- 延迟渲染、自动入口缺失后的手动开窗继续、超时，以及不选择结果/不点击“插入”。
+- `search_biz` URL、动态 token Referer、headers、browser/env transport 与响应分类。
 - 微信文章分页、去重、limit/max-pages 和停止条件。
 - Markdown 转换、文件名清理、重复标题、写盘失败与逐篇部分失败。
 - 脱敏的编码变体、短值上下文、线性复杂度、对象投影与日志安全。
