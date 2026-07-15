@@ -46,7 +46,7 @@ export const saveArticlesCommand = cli({
       outputDir: args.output ?? './weixin-articles', fetchArticleHtml,
     });
     return rows.map(row => ({
-      title: row.title, status: row.status, stage: 'save', path: row.saved || null,
+      title: row.title, status: row.status, stage: row.stage || null, path: row.saved || null,
       error: row.error || null, url: row.url,
     }));
   },

@@ -19,9 +19,9 @@ describe('weixin save-articles command', () => {
   it('collects then saves and normalizes partial save rows', async () => {
     auth.readEnvironmentCredentials.mockReturnValue({ token: 't', cookie: 'c' }); const fetchPage = vi.fn(); apiModule.createWechatApi.mockReturnValue({ fetchPage });
     const articles = [{ title: 'A', url: 'u' }, { title: 'B', url: 'v' }]; articleService.collectArticles.mockResolvedValue({ articles });
-    saveService.saveArticles.mockResolvedValue([{ title: 'A', status: 'saved', saved: '/x/a.md', error: '', url: 'u' }, { title: 'B', status: 'failed', saved: '', error: 'fetch failed', url: 'v' }]);
+    saveService.saveArticles.mockResolvedValue([{ title: 'A', status: 'saved', saved: '/x/a.md', error: '', url: 'u' }, { title: 'B', status: 'failed', stage: 'download', saved: '', error: 'fetch failed', url: 'v' }]);
     await expect(command.func(null, { fakeid: 'f', name: 'Acct', output: '/x', limit: 2, 'max-pages': 3, 'auth-source': 'env' })).resolves.toEqual([
-      { title: 'A', status: 'saved', stage: 'save', path: '/x/a.md', error: null, url: 'u' }, { title: 'B', status: 'failed', stage: 'save', path: null, error: 'fetch failed', url: 'v' },
+      { title: 'A', status: 'saved', stage: null, path: '/x/a.md', error: null, url: 'u' }, { title: 'B', status: 'failed', stage: 'download', path: null, error: 'fetch failed', url: 'v' },
     ]);
     expect(saveService.saveArticles).toHaveBeenCalledWith(expect.objectContaining({ articles, accountName: 'Acct', outputDir: '/x', fetchArticleHtml: expect.any(Function) }));
     expect(articleService.collectArticles).toHaveBeenCalledWith({ fakeid: 'f', fetchPage, limit: 2, maxPages: 3 });
