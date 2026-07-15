@@ -341,7 +341,7 @@ describe('runVerifyRunner (orchestration: started → exactly one result)', () =
     expect(events.at(-1)).toMatchObject({
       type: 'result', ok: false,
       data: { stage: 'load', sourceSha256: HASH },
-      error: { code: 'source_hash_mismatch' },
+      error: { code: 'validation_failed' },
     });
   });
 });

@@ -316,7 +316,7 @@ export async function runVerifyRunner(
       emit({
         type: 'result', requestId: input.requestId, ok: false,
         data: { stage: 'load', sourceSha256 },
-        error: { code: 'source_hash_mismatch', message: 'adapter source hash does not match expected source' },
+        error: { code: 'validation_failed', message: 'adapter source hash does not match expected source' },
       });
       return;
     }

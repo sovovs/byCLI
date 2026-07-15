@@ -393,6 +393,7 @@
             "stage": { "enum": ["fixture", "load", "execute", "validate"] },
             "rows": { "type": "integer" },
             "fieldCount": { "type": "integer" },
+            "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "fixture": {
               "type": "object",
               "properties": {
@@ -408,7 +409,8 @@
                 "path": { "type": ["string", "null"] }
               }
             }
-          }
+          },
+          "additionalProperties": false
         },
         "error": {
           "type": ["object", "null"],
@@ -439,6 +441,7 @@
         "stage": { "type": "string" },
         "rows": { "type": "integer" },
         "fieldCount": { "type": "integer" },
+        "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "fixture": {
           "type": "object",
           "required": ["status"],

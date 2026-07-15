@@ -10,6 +10,8 @@ import { WrapperRegistry } from './wrapper-registry.js';
 import { loadWrapperConfig } from './wrapper-config.js';
 import type { WrapperConfig } from './wrapper-config.js';
 import type { createAdapterDraft } from '../highlevel/init.js';
+import { getConfigDir } from '../../config-paths.js';
+import * as path from 'node:path';
 
 const TOKEN = 'test-token-1234567890';
 
@@ -219,6 +221,37 @@ describe('M9b wrapper — verify (202 + runner 代理 + seed 不泄漏)', () => 
     expect(st.json.status).toBe('succeeded');
     expect(st.json.result.ok).toBe(true);
     expect(st.json.result.fieldCount).toBe(1);
+  });
+
+  it('safely parses and forwards adapterPath with a lowercase expected source hash', async () => {
+    let captured: Record<string, unknown> | null = null;
+    const runner = makeFakeRunner({ onStart: (input) => { captured = input; } });
+    const port = await start(makeCfg(), { runner, sessionKeyFor: () => 'k' });
+    const adapterPath = path.join(getConfigDir(), '.recorder-drafts', 'session-1', 'draft.js');
+    const expectedSourceSha256 = 'a'.repeat(64);
+
+    const accepted = await VERIFY(port, { name: 'site/cmd', adapterPath, expectedSourceSha256 });
+    expect(accepted.status).toBe(202);
+    expect((captured as Record<string, unknown> | null)?.adapterPath).toBe(adapterPath);
+    expect((captured as Record<string, unknown> | null)?.expectedSourceSha256).toBe(expectedSourceSha256);
+  });
+
+  it.each([
+    { adapterPath: 42 },
+    { adapterPath: '' },
+    { expectedSourceSha256: 42 },
+    { expectedSourceSha256: 'A'.repeat(64) },
+    { expectedSourceSha256: 'a'.repeat(63) },
+  ])('rejects unsafe verify override fields without starting the runner: %j', async (override) => {
+    let started = false;
+    const runner = makeFakeRunner({ onStart: () => { started = true; } });
+    const port = await start(makeCfg(), { runner, sessionKeyFor: () => 'k' });
+
+    const accepted = await VERIFY(port, { name: 'site/cmd', ...override });
+    const status = await POLL(port, accepted.json.requestId);
+    expect(status.json.status).toBe('failed');
+    expect(status.json.error.code).toBe('validation_failed');
+    expect(started).toBe(false);
   });
 
   it('runner queue_full → poll failed queue_full', async () => {

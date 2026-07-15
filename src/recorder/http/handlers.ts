@@ -197,7 +197,35 @@ export async function handleVerify(ctx: HandlerCtx, body: Record<string, unknown
       ? (body.executionSeedArgs as Record<string, unknown>)
       : undefined;
 
-  const input: VerifyInput = { name, requestId, sessionId, executionSeedArgs, fixture, trace };
+  const adapterPathRaw = body.adapterPath;
+  const expectedSourceSha256Raw = body.expectedSourceSha256;
+  const invalidAdapterPath = adapterPathRaw !== undefined
+    && (typeof adapterPathRaw !== 'string' || adapterPathRaw.trim().length === 0);
+  const invalidExpectedSourceHash = expectedSourceSha256Raw !== undefined
+    && (typeof expectedSourceSha256Raw !== 'string' || !/^[0-9a-f]{64}$/.test(expectedSourceSha256Raw));
+  if (invalidAdapterPath || invalidExpectedSourceHash) {
+    ctx.registry.finalizeRequest(requestId, {
+      status: 'failed',
+      error: errorBody('validation_failed', 'adapterPath or expectedSourceSha256 is invalid'),
+    });
+    return { status: 202, body: accepted(requestId) };
+  }
+
+  const adapterPath = typeof adapterPathRaw === 'string' ? adapterPathRaw : undefined;
+  const expectedSourceSha256 = typeof expectedSourceSha256Raw === 'string'
+    ? expectedSourceSha256Raw
+    : undefined;
+
+  const input: VerifyInput = {
+    name,
+    requestId,
+    sessionId,
+    executionSeedArgs,
+    fixture,
+    trace,
+    adapterPath,
+    expectedSourceSha256,
+  };
   const result = await verifyAdapter(input, sessionHmacKey, ctx.runner);
   if (!result.ok) {
     ctx.registry.finalizeRequest(requestId, { status: 'failed', error: errorBody(result.errorCode, result.reason) });
