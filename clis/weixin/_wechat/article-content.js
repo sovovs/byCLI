@@ -12,6 +12,20 @@ export function extractWechatArticleContent(document) {
     const dataSrc = img.getAttribute('data-src');
     if (dataSrc) img.setAttribute('src', dataSrc);
   });
+  contentEl.querySelectorAll('[href], [src], [poster], [data-src]').forEach(el => {
+    ['href', 'src', 'poster', 'data-src'].forEach(name => {
+      if (!el.hasAttribute(name)) return;
+      const raw = (el.getAttribute(name) || '').trim();
+      const normalized = raw.startsWith('//') ? `https:${raw}` : raw;
+      try {
+        const url = new URL(normalized);
+        if (!['http:', 'https:'].includes(url.protocol)) el.removeAttribute(name);
+        else el.setAttribute(name, url.href);
+      } catch {
+        el.removeAttribute(name);
+      }
+    });
+  });
   contentEl.querySelectorAll('.code-snippet__line-index').forEach(node => node.remove());
   ['script', 'style', '.qr_code_pc', '.reward_area'].forEach(selector => {
     contentEl.querySelectorAll(selector).forEach(node => node.remove());

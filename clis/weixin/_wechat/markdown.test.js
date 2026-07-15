@@ -55,6 +55,23 @@ describe('wechatArticleToMarkdown', () => {
     expect(result).toContain('const x = ```;');
     expect(result).toMatch(/`{4,}js\nconst x = ```;\n`{4,}/);
   });
+
+  it('neutralizes metadata and hostile link/image contexts without breaking safe URLs', () => {
+    const result = wechatArticleToMarkdown({
+      title: '<img onerror=alert(1)>', accountName: '<script>alert(2)</script>',
+      author: 'A & "B"', publishedAt: '<b>today</b>', digest: '<svg onload=alert(3)>',
+      html: `<div id="js_content">
+        <img src="javascript:alert(4)" alt="](javascript:alert(5)) <svg onload=alert(6)>">
+        <img src="https://safe.example/a_(1).png" alt="safe ] label">
+        <a href="javascript:alert(7)">bad</a><a href="https://safe.example/a_(1)">safe ] link</a>
+      </div>`,
+    });
+    expect(result).not.toMatch(/<(?:img|script|svg|b)\b/i);
+    expect(result).not.toMatch(/\]\(\s*javascript:/i);
+    expect(result).toContain(String.raw`&lt;img onerror=alert\(1\)&gt;`);
+    expect(result).toContain(String.raw`https://safe.example/a_\(1\).png`);
+    expect(result).toContain(String.raw`https://safe.example/a_\(1\)`);
+  });
 });
 
 describe('cleanMarkdownFilename', () => {

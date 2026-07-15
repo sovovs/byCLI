@@ -37,14 +37,14 @@ async function runAndRead(
 
 describe('downloadArticle', () => {
   it('exports robust Markdown conversion for fenced code and URLs with parentheses', () => {
-    const md = convertArticleHtmlToMarkdown('<pre><code>const ticks = ```;</code></pre><img alt="x" src="https://img/a_(1).png">');
+    const md = convertArticleHtmlToMarkdown('<pre><code>const ticks = ```;</code></pre><img alt="x" src="https://img/a_(1).png">', { safeFencedCodeBlocks: true });
     expect(md).toContain('const ticks = ```;');
-    expect(md).toContain('https://img/a_\(1\).png');
+    expect(md).toContain(String.raw`https://img/a_\(1\).png`);
     const fence = md.match(/(^|\n)(`{3,})[^\n]*\nconst ticks/m)?.[2] || '';
     expect(fence.length).toBeGreaterThan(3);
   });
   it('does not replace user text that resembles the legacy code placeholder', () => {
-    expect(convertArticleHtmlToMarkdown('<p>CODEBLOCK-PLACEHOLDER-0</p><pre><code>ok()</code></pre>'))
+    expect(convertArticleHtmlToMarkdown('<p>CODEBLOCK-PLACEHOLDER-0</p><pre><code>ok()</code></pre>', { safeFencedCodeBlocks: true }))
       .toContain('CODEBLOCK-PLACEHOLDER-0');
   });
   it('returns the saved markdown file path on success', async () => {
@@ -68,6 +68,20 @@ describe('downloadArticle', () => {
     expect(path.extname(result[0].saved)).toBe('.md');
     expect(fs.existsSync(result[0].saved)).toBe(true);
     expect(fs.readFileSync(result[0].saved, 'utf8')).toContain('Hello world');
+  });
+
+  it('escapes untrusted header fields when secure Markdown is enabled', async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(tempDir);
+    const [result] = await downloadArticle({
+      title: '<img onerror=alert(1)>', author: '<script>alert(2)</script>',
+      publishTime: '<b>today</b>', sourceUrl: 'https://safe.example/a_(1)',
+      contentHtml: '<p>safe</p>',
+    }, { output: tempDir, downloadImages: false, secureMarkdown: true });
+    const md = fs.readFileSync(result.saved, 'utf8');
+    expect(md).not.toMatch(/<(?:img|script|b)\b/i);
+    expect(md).toContain(String.raw`# &lt;img onerror=alert\(1\)&gt;`);
+    expect(md).toContain(String.raw`https://safe\.example/a\_\(1\)`);
   });
 
   describe('markdown pipeline', () => {

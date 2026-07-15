@@ -14,13 +14,16 @@ export function cleanMarkdownFilename(title, maxLength = 100, suffix = '') {
   return cleaned || 'untitled';
 }
 
-export function wechatArticleToMarkdown({ html, title, accountName, author, publishedAt, url }) {
+export function wechatArticleToMarkdown({ html, title, accountName, author, publishedAt, url, digest }) {
   const extracted = extractWechatArticleHtml(String(html || ''));
-  let markdown = convertArticleHtmlToMarkdown(extracted.contentHtml);
+  let markdown = convertArticleHtmlToMarkdown(extracted.contentHtml, { safeFencedCodeBlocks: true });
   markdown = markdown.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   const safe = value => String(value || '').replace(/\s+/g, ' ').trim()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     .replace(/([\\`*_[\]{}()#+.!|>~-])/g, '\\$1');
   const metadata = [accountName && `> 公众号: ${safe(accountName)}`, author && `> 作者: ${safe(author)}`,
-    publishedAt && `> 发布时间: ${safe(publishedAt)}`, url && `> 原文链接: ${safe(url)}`].filter(Boolean);
-  return [`# ${safe(title || 'Untitled').replace(/\\>/g, '&gt;')}`, ...metadata, '', '---', '', markdown, ''].join('\n');
+    publishedAt && `> 发布时间: ${safe(publishedAt)}`, digest && `> 摘要: ${safe(digest)}`,
+    url && `> 原文链接: ${safe(url)}`].filter(Boolean);
+  return [`# ${safe(title || 'Untitled')}`, ...metadata, '', '---', '', markdown, ''].join('\n');
 }

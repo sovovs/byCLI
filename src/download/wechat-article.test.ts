@@ -22,4 +22,14 @@ describe('extractWechatArticleHtml', () => {
     expect(() => extractWechatArticleHtml(`<div id="js_content">${'<pre>x</pre>'.repeat(MAX_WECHAT_CODE_BLOCKS + 1)}</div>`))
       .toThrow(/code block limit/);
   });
+
+  it('normalizes safe URL attributes and removes active schemes', () => {
+    const result = extractWechatArticleHtml(`<div id="js_content">
+      <a href="//safe.example/a">safe</a><a href="javascript:alert(1)">bad</a>
+      <img src="data:image/png,x"><img src="https://safe.example/a.png">
+      <video poster="file:///tmp/x"></video></div>`);
+    expect(result.contentHtml).toContain('href="https://safe.example/a"');
+    expect(result.contentHtml).toContain('src="https://safe.example/a.png"');
+    expect(result.contentHtml).not.toMatch(/javascript:|data:|file:/);
+  });
 });

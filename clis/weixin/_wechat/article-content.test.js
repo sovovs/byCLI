@@ -18,4 +18,12 @@ describe('extractWechatArticleContent', () => {
     expect(value.contentHtml).toContain('<pre data-lang="js"><code>const x = 1 &lt; 2;</code></pre>');
     expect(value.contentHtml).not.toContain('CODEBLOCK-PLACEHOLDER');
   });
+
+  it('normalizes safe URL attributes and removes active schemes in browser extraction', () => {
+    const document = new JSDOM(`<div id="js_content"><a href="javascript:alert(1)">bad</a>
+      <a href="//safe.example/a">safe</a><img data-src="data:image/png,x"><video poster="file:///x"></video></div>`).window.document;
+    const value = extractWechatArticleContent(document);
+    expect(value.contentHtml).toContain('href="https://safe.example/a"');
+    expect(value.contentHtml).not.toMatch(/javascript:|data:|file:/);
+  });
 });

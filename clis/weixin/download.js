@@ -275,6 +275,7 @@ cli({
                 const m = url.match(/wx_fmt=(\w+)/) || url.match(/\.(\w{3,4})(?:\?|$)/);
                 return m ? m[1] : 'png';
             },
+            secureMarkdown: true,
         });
     },
 });

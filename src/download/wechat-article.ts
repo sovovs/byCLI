@@ -21,6 +21,16 @@ function hasClass(node: Element, name: string): boolean {
   return (attr(node, 'class') || '').split(/\s+/).includes(name);
 }
 
+function safeUrl(value: string): string | undefined {
+  const normalized = value.trim().startsWith('//') ? `https:${value.trim()}` : value.trim();
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function textContent(node: Node): string {
   if ('value' in node) return node.value;
   if (!('childNodes' in node)) return '';
@@ -69,6 +79,11 @@ export function extractWechatArticleHtml(html: string): ExtractedWechatArticle {
     });
     for (const node of parent.childNodes) {
       if (isElement(node)) {
+        node.attrs = node.attrs.flatMap(item => {
+          if (!['href', 'src', 'poster', 'data-src'].includes(item.name)) return [item];
+          const value = safeUrl(item.value);
+          return value ? [{ ...item, value }] : [];
+        });
         if (node.tagName === 'img') {
           const lazy = attr(node, 'data-src');
           if (lazy) {
