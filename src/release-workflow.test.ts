@@ -12,6 +12,7 @@ describe('release workflow', () => {
     expect(workflow).toContain("if: steps.recorder_core_status.outputs.published != 'true'");
     expect(workflow).toContain('id: package_status');
     expect(workflow).toContain("if: steps.package_status.outputs.published != 'true'");
-    expect(workflow).toContain("if: ${{ secrets.WEBSITE_DEPLOY_TOKEN != '' }}");
+    expect(workflow).toContain('WEBSITE_DEPLOY_TOKEN: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}');
+    expect(workflow).toContain("if: env.WEBSITE_DEPLOY_TOKEN != ''");
   });
 });
