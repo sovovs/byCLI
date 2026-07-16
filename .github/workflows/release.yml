@@ -71,7 +71,19 @@ jobs:
           files: |
             bycli-extension-v*.zip
 
+      - name: Check recorder core publication status
+        id: recorder_core_status
+        run: |
+          PACKAGE_NAME=$(node -p "require('./packages/recorder-core/package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./packages/recorder-core/package.json').version")
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish recorder core to npm
+        if: steps.recorder_core_status.outputs.published != 'true'
         run: npm publish --workspace @sovovs/bycli-recorder-core --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
