@@ -22,6 +22,8 @@ Treat the daemon port the way you'd treat your unlocked desktop: never put it on
 
 Keep Chrome, the extension, and the daemon **all on your local machine**. Use a reverse port forward so the remote process can reach your daemon by connecting to its own `localhost:19825`. The daemon itself never leaves localhost.
 
+For an isolated per-user container whose network ingress is access-controlled by the hosting platform, the daemon may be started with `BYCLI_DAEMON_HOST=0.0.0.0`. This override is intended only for that sandbox deployment model. Do not use it on a workstation, shared host, or directly exposed public container: the daemon protocol does not provide client authentication.
+
 ```
 ┌─ Local ─────────────────────────────────┐    ┌─ Remote ──────────┐
 │  Chrome ↔ Extension ↔ Daemon (127.0.0.1) │ ←┐ │  bycli-cli      │

@@ -17,7 +17,7 @@
  * Lifecycle:
  *   - Auto-spawned by bycli on first browser command
  *   - Persistent — stays alive until explicit shutdown, SIGTERM, or uninstall
- *   - Listens on localhost:19825
+ *   - Listens on 127.0.0.1:19825 by default; isolated sandboxes may opt into 0.0.0.0
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -48,8 +48,10 @@ import {
   buildExtensionDisconnectFailure,
   getResponseCorsHeaders,
 } from './daemon-utils.js';
+import { resolveDaemonHost } from './daemon-config.js';
 
 const PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
+const HOST = resolveDaemonHost();
 
 // The verify runner (M6b) spawns child processes that connect back to THIS daemon for a
 // browser Page. Hand them our port (→ BYCLI_DAEMON_PORT in the child env) so the child's
@@ -640,8 +642,8 @@ wss.on('connection', (ws: WebSocket) => {
 
 // ─── Start ───────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, '127.0.0.1', () => {
-  log.info(`[daemon] Listening on http://127.0.0.1:${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  log.info(`[daemon] Listening on http://${HOST}:${PORT}`);
   // Temp-store reap policy (M7b · 09:27-29). Resolved once at startup; out-of-range env → throws,
   // but we keep the daemon alive by falling back to the (validated-elsewhere) defaults on error.
   let tempPolicy;
