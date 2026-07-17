@@ -2,10 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { execFile, spawnSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
-import { createAdapterDraft, recoverInitTransactions } from './init.js';
+import { getUserClisDir } from '../../config-paths.js';
+import { discoverClis } from '../../discovery.js';
+import { getRegistry } from '../../registry.js';
+import { createAdapterDraft, recoverInitTransactions, saveAdapterSource } from './init.js';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
+const execFileAsync = promisify(execFile);
 
 // ── createAdapterDraft: write transaction (M5b follow-up) + H-002 browser derivation ──
 describe('createAdapterDraft (write transaction + browser derivation)', () => {
@@ -64,6 +71,136 @@ describe('createAdapterDraft (write transaction + browser derivation)', () => {
     const r = createAdapterDraft({ name: 'bad name', writePolicy: 'write', responsibleUseAcknowledgedAt: ack });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errorCode).toBe('validation_failed');
+  });
+});
+
+describe('saveAdapterSource (filesystem-authoritative publish)', () => {
+  let configDir: string;
+  let previousConfigDir: string | undefined;
+  const registryKeys: string[] = [];
+
+  beforeEach(() => {
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'save-adapter-test-'));
+    previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = configDir;
+  });
+
+  afterEach(() => {
+    for (const key of registryKeys.splice(0)) getRegistry().delete(key);
+    if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+    else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it('creates once by default, then returns adapter_exists without changing adapter or report', () => {
+    const first = saveAdapterSource({ name: 'demo/search', source: 'export const version = 1;\n' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const originalAdapter = fs.readFileSync(first.adapterPath, 'utf8');
+    const originalReport = fs.readFileSync(first.reportPath, 'utf8');
+
+    const second = saveAdapterSource({ name: 'demo/search', source: 'export const version = 2;\n' });
+    expect(second).toMatchObject({
+      ok: false,
+      errorCode: 'adapter_exists',
+      adapterPath: first.adapterPath,
+    });
+    expect(fs.readFileSync(first.adapterPath, 'utf8')).toBe(originalAdapter);
+    expect(fs.readFileSync(first.reportPath, 'utf8')).toBe(originalReport);
+    expect(fs.readdirSync(path.dirname(first.adapterPath)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('overwrite=true atomically replaces the adapter from a sibling temp and leaves drafts intact', () => {
+    const draft = path.join(configDir, '.recorder-drafts', 'session-1', 'draft.js');
+    fs.mkdirSync(path.dirname(draft), { recursive: true });
+    fs.writeFileSync(draft, 'draft remains');
+    const first = saveAdapterSource({ name: 'demo/search', source: 'export const version = 1;\n' });
+    expect(first.ok).toBe(true);
+
+    const replaced = saveAdapterSource({
+      name: 'demo/search',
+      source: 'export const version = 2;\n',
+      overwrite: true,
+    });
+    expect(replaced.ok).toBe(true);
+    if (!replaced.ok) return;
+    expect(fs.readFileSync(replaced.adapterPath, 'utf8')).toContain('version = 2');
+    expect(fs.readFileSync(replaced.adapterPath, 'utf8')).not.toContain('version = 1');
+    expect(fs.readFileSync(draft, 'utf8')).toBe('draft remains');
+    expect(fs.readdirSync(path.dirname(replaced.adapterPath)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('allows exactly one winner when independent processes concurrently create without overwrite', async () => {
+    const initModuleUrl = pathToFileURL(path.resolve('src/recorder/highlevel/init.ts')).href;
+    const attempts = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+      const script = `const { saveAdapterSource } = await import(${JSON.stringify(initModuleUrl)}); console.log(JSON.stringify(saveAdapterSource({ name: 'race/create', source: ${JSON.stringify(`export const contender = ${index};\n`)} })));`;
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ['--import', 'tsx', '--input-type=module', '--eval', script],
+        { cwd: process.cwd(), env: { ...process.env, BYCLI_CONFIG_DIR: configDir } },
+      );
+      return JSON.parse(stdout.trim()) as { ok: boolean; errorCode?: string };
+    }));
+
+    expect(attempts.filter((result) => result.ok)).toHaveLength(1);
+    expect(attempts.filter((result) => !result.ok)).toHaveLength(5);
+    expect(attempts.filter((result) => !result.ok).every((result) => result.errorCode === 'adapter_exists')).toBe(true);
+    const siteDir = path.join(getUserClisDir(), 'race');
+    expect(fs.readdirSync(siteDir).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    expect(fs.readFileSync(path.join(siteDir, 'create.js'), 'utf8')).toMatch(/contender = [0-5]/);
+  });
+
+  it('invalidates stale user manifests so new and updated CLIs are discovered from clis/', async () => {
+    const site = `saved-${Date.now()}`;
+    const key = `${site}/hello`;
+    registryKeys.push(key);
+    const userManifest = path.join(configDir, 'cli-manifest.json');
+    fs.writeFileSync(userManifest, '[]\n');
+    const registryModuleUrl = pathToFileURL(path.resolve('src/registry.ts')).href;
+    const source = (version: string) => `import { cli } from ${JSON.stringify(registryModuleUrl)};\ncli({ site: ${JSON.stringify(site)}, name: 'hello', browser: false, description: 'saved', access: 'read', args: [], func: async () => [{ version: ${JSON.stringify(version)} }] });\n`;
+
+    const saved = saveAdapterSource({ name: key, source: source('v1') });
+    expect(saved.ok).toBe(true);
+    expect(fs.existsSync(userManifest)).toBe(false);
+
+    await discoverClis(getUserClisDir());
+    expect(getRegistry().get(key)).toMatchObject({ site, name: 'hello', description: 'saved' });
+
+    // Simulate a stale pre-compiled index returning before an update. The overwrite removes it,
+    // and a fresh real byCLI process must execute the replaced source rather than stale metadata.
+    fs.writeFileSync(userManifest, '[]\n');
+    const updated = saveAdapterSource({ name: key, source: source('v2'), overwrite: true });
+    expect(updated.ok).toBe(true);
+    expect(fs.existsSync(userManifest)).toBe(false);
+    const run = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', 'src/main.ts', site, 'hello', '-f', 'json'],
+      { cwd: process.cwd(), env: { ...process.env, BYCLI_CONFIG_DIR: configDir }, encoding: 'utf8' },
+    );
+    expect(run.status, run.stderr).toBe(0);
+    expect(JSON.parse(run.stdout)).toEqual([{ version: 'v2' }]);
+  });
+
+  it('rejects traversal, non-boolean overwrite, and a symlinked site directory', () => {
+    expect(saveAdapterSource({ name: '../etc/passwd', source: 'x' })).toMatchObject({
+      ok: false,
+      errorCode: 'validation_failed',
+    });
+    expect(saveAdapterSource({ name: 'demo/search', source: 'x', overwrite: 'yes' } as unknown as Parameters<typeof saveAdapterSource>[0])).toMatchObject({
+      ok: false,
+      errorCode: 'validation_failed',
+    });
+
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'save-adapter-outside-'));
+    try {
+      fs.mkdirSync(getUserClisDir(), { recursive: true });
+      fs.symlinkSync(outside, path.join(getUserClisDir(), 'linked'));
+      const result = saveAdapterSource({ name: 'linked/escape', source: 'x' });
+      expect(result).toMatchObject({ ok: false, errorCode: 'validation_failed' });
+      expect(fs.existsSync(path.join(outside, 'escape.js'))).toBe(false);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

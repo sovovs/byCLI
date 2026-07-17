@@ -330,7 +330,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         return;
       }
       const result = saveAdapterSource(body as SaveAdapterInput);
-      if (!result.ok) { jsonResponse(res, 400, { ok: false, errorCode: result.errorCode, error: result.reason }); return; }
+      if (!result.ok) {
+        if (result.errorCode === 'adapter_exists') {
+          jsonResponse(res, 409, {
+            ok: false,
+            errorCode: result.errorCode,
+            error: result.reason,
+            data: { adapterPath: result.adapterPath },
+          });
+          return;
+        }
+        jsonResponse(res, 400, { ok: false, errorCode: result.errorCode, error: result.reason });
+        return;
+      }
       jsonResponse(res, 200, { ok: true, data: { adapterPath: result.adapterPath, reportPath: result.reportPath } });
     } catch (err) {
       jsonResponse(res, 400, { ok: false, errorCode: 'validation_failed', error: err instanceof Error ? err.message : String(err) });

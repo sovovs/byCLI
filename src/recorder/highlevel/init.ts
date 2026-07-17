@@ -17,6 +17,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getUserClisDir, getSitesDir, getSiteRecorderDir } from '../../config-paths.js';
+import { getCliManifestPath } from '../../package-paths.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   validateAdapterName, renderAdapterTemplate, buildProvenanceHeader, computeDryRunDiff,
@@ -113,11 +114,95 @@ function atomicWrite(finalPath: string, content: string): void {
   const dir = path.dirname(finalPath);
   fs.mkdirSync(dir, { recursive: true });
   const tmp = path.join(dir, `.${path.basename(finalPath)}.${randomUUID()}.tmp`);
-  const fd = fs.openSync(tmp, 'wx', 0o600); // exclusive create
-  try { fs.writeSync(fd, content); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
-  fs.renameSync(tmp, finalPath);
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(tmp, 'wx', 0o600); // exclusive create
+    fs.writeFileSync(fd, content);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    fs.renameSync(tmp, finalPath);
+    fsyncDir(dir);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    // A failed write/rename must not strand sibling temp files.
+    try { fs.rmSync(tmp, { force: true }); } catch { /* best-effort cleanup */ }
+  }
+}
+
+/**
+ * Commit a fully-written sibling temp as the live adapter.
+ *
+ * For overwrite=false, hard-link creation is the atomic no-clobber primitive: it either
+ * creates finalPath pointing at the complete inode, or fails with EEXIST. Unlike an
+ * existsSync()+rename sequence, concurrent saves cannot both win. The temp is guaranteed to
+ * be on the same filesystem because it is created beside finalPath.
+ */
+function commitAdapterTemp(tmp: string, finalPath: string, overwrite: boolean): boolean {
+  const dir = path.dirname(finalPath);
+  if (overwrite) {
+    fs.renameSync(tmp, finalPath);
+  } else {
+    try {
+      fs.linkSync(tmp, finalPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false;
+      throw err;
+    }
+    fs.unlinkSync(tmp);
+  }
   fsyncDir(dir);
+  return true;
+}
+
+function isPathInside(parent: string, candidate: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+/** Resolve/create the adapter directory while refusing a site symlink or non-directory. */
+function resolveSafeAdapterPath(site: string, command: string):
+  | { ok: true; adapterPath: string }
+  | { ok: false; reason: string } {
+  const root = path.resolve(getUserClisDir());
+  fs.mkdirSync(root, { recursive: true });
+  const canonicalRoot = fs.realpathSync(root);
+  const siteDir = path.join(root, site);
+
+  try {
+    fs.mkdirSync(siteDir, { mode: 0o700 });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+  }
+
+  const siteStat = fs.lstatSync(siteDir);
+  if (siteStat.isSymbolicLink() || !siteStat.isDirectory()) {
+    return { ok: false, reason: 'adapter site path must be a real directory under the byCLI config root' };
+  }
+  const canonicalSite = fs.realpathSync(siteDir);
+  if (!isPathInside(canonicalRoot, canonicalSite) || path.dirname(canonicalSite) !== canonicalRoot) {
+    return { ok: false, reason: 'adapter site path escapes the byCLI config root' };
+  }
+
+  const adapterPath = path.join(siteDir, `${command}.js`);
+  try {
+    const targetStat = fs.lstatSync(adapterPath);
+    if (targetStat.isSymbolicLink() || !targetStat.isFile()) {
+      return { ok: false, reason: 'adapter target must be a regular file' };
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+  return { ok: true, adapterPath };
+}
+
+/**
+ * User adapters are filesystem-authoritative. Removing the optional compiled user manifest
+ * makes the next byCLI process fall back to scanning clis/, so a new or replaced adapter is
+ * discovered without a second daemon notification endpoint.
+ */
+function invalidateUserCliManifest(): void {
+  fs.rmSync(getCliManifestPath(getUserClisDir()), { force: true });
 }
 
 function writeManifest(manifestPath: string, manifest: InitTxnManifest): void {
@@ -209,10 +294,13 @@ export interface SaveAdapterInput {
   source: string;
   /** 生成所用模型(标进 provenance)。 */
   llmModel?: string;
+  /** 是否允许覆盖已有 adapter；默认 false。 */
+  overwrite?: boolean;
 }
 export type SaveAdapterResult =
   | { ok: true; adapterPath: string; reportPath: string }
-  | { ok: false; errorCode: 'validation_failed'; reason: string };
+  | { ok: false; errorCode: 'validation_failed'; reason: string }
+  | { ok: false; errorCode: 'adapter_exists'; reason: string; adapterPath: string };
 
 export function saveAdapterSource(input: SaveAdapterInput): SaveAdapterResult {
   const v = validateAdapterName(input.name);
@@ -220,16 +308,58 @@ export function saveAdapterSource(input: SaveAdapterInput): SaveAdapterResult {
   if (typeof input.source !== 'string' || !input.source.trim()) {
     return { ok: false, errorCode: 'validation_failed', reason: 'source required' };
   }
+  if (input.overwrite !== undefined && typeof input.overwrite !== 'boolean') {
+    return { ok: false, errorCode: 'validation_failed', reason: 'overwrite must be a boolean' };
+  }
   const { site, command } = v.parts;
-  const adapterPath = path.join(clisDir(site), `${command}.js`);
+  const resolved = resolveSafeAdapterPath(site, command);
+  if (!resolved.ok) return { ok: false, errorCode: 'validation_failed', reason: resolved.reason };
+  const { adapterPath } = resolved;
   const reportPath = path.join(getSiteRecorderDir(site), `${command}-report.json`);
   const txnId = randomUUID();
   const report = { adapterPath, reportPath, source: 'llm-generated', llmModel: input.llmModel ?? null, savedAt: Date.now() };
   const reportJson = JSON.stringify(report, null, 2);
   const header = buildProvenanceHeader({ txnId, reportPath, reportSha256: sha256(reportJson), llmModel: input.llmModel });
   const rendered = input.source.startsWith('// @generated-by') ? input.source : `${header}\n${input.source}`;
+  const overwrite = input.overwrite ?? false;
+  const dir = path.dirname(adapterPath);
+  const tmp = path.join(dir, `.${path.basename(adapterPath)}.${randomUUID()}.tmp`);
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(tmp, 'wx', 0o600);
+    fs.writeFileSync(fd, rendered);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+
+    // Re-check the directory after creating the temp, immediately before publication. This
+    // catches ordinary symlink replacement attempts; name validation plus sibling temp/link
+    // keeps the final path contained and the no-clobber decision atomic.
+    const canonicalRoot = fs.realpathSync(path.resolve(getUserClisDir()));
+    const canonicalDir = fs.realpathSync(dir);
+    if (fs.lstatSync(dir).isSymbolicLink() || path.dirname(canonicalDir) !== canonicalRoot) {
+      return { ok: false, errorCode: 'validation_failed', reason: 'adapter site path changed during save' };
+    }
+
+    // Invalidation is part of the same save operation. Do it before publishing so a successful
+    // adapter commit can never remain hidden behind a stale user manifest.
+    invalidateUserCliManifest();
+    if (!commitAdapterTemp(tmp, adapterPath, overwrite)) {
+      return {
+        ok: false,
+        errorCode: 'adapter_exists',
+        reason: 'CLI adapter already exists',
+        adapterPath,
+      };
+    }
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    try { fs.rmSync(tmp, { force: true }); } catch { /* best-effort cleanup */ }
+  }
+
+  // The adapter file is authoritative; recorder metadata is refreshed only after the adapter
+  // has been atomically published, so an adapter_exists response never changes the report.
   atomicWrite(reportPath, reportJson);
-  atomicWrite(adapterPath, rendered);
   return { ok: true, adapterPath, reportPath };
 }
 
