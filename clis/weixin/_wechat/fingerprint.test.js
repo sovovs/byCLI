@@ -96,6 +96,7 @@ function makeAccountCardPage({
   entryVisible = true,
   directEntryInToolbar = false,
   entryInOverflow = false,
+  wechatEditorOverflow = false,
   genericDialog = false,
   nestedDialogMatches = false,
   ambiguousGenericSearchTargets = false,
@@ -117,7 +118,9 @@ function makeAccountCardPage({
   let searchClicks = 0;
   let insertOverflowClicks = 0;
   let formatOverflowClicks = 0;
+  let weixinOverflowClicks = 0;
   let overflowMenuVisible = false;
+  let weixinOverflowMenuVisible = false;
   let requestTriggered = false;
   let componentQuery = '';
   const networkEntries = [];
@@ -239,6 +242,37 @@ function makeAccountCardPage({
     querySelectorAll: () => overflowMenuVisible ? [entry] : [],
     contains: element => element === entry,
   };
+  const weixinProfileEntry = {
+    id: 'js_editor_insertProfile',
+    textContent: '账号名片',
+    getBoundingClientRect: () => ({
+      width: weixinOverflowMenuVisible ? 80 : 0,
+      height: weixinOverflowMenuVisible ? 32 : 0,
+      top: 48,
+    }),
+    click: vi.fn(() => { entryClicks += 1; dialogVisible = true; }),
+    closest: vi.fn(() => weixinProfileEntry),
+  };
+  const weixinOverflowMenu = {
+    className: 'tpl_dropdown_menu editor_showmore_dropdown_menu js_more_plugins_menu',
+    getBoundingClientRect: () => ({
+      width: weixinOverflowMenuVisible ? 180 : 0,
+      height: weixinOverflowMenuVisible ? 240 : 0,
+      top: 48,
+    }),
+    querySelectorAll: selector => selector.includes('#js_editor_insertProfile')
+      || selector.includes('li') ? [weixinProfileEntry] : [],
+    contains: element => element === weixinProfileEntry,
+  };
+  const weixinOverflow = {
+    id: 'editor_showmore',
+    className: 'tpl_item tpl_item_dropdown jsInsertIcon more',
+    getBoundingClientRect: () => ({ width: 32, height: 32, top: 20 }),
+    querySelectorAll: selector => selector.includes('.editor_showmore_dropdown_menu')
+      ? [weixinOverflowMenu] : [],
+    click: vi.fn(() => { weixinOverflowClicks += 1; weixinOverflowMenuVisible = true; }),
+    closest: vi.fn(() => weixinOverflow),
+  };
   vi.stubGlobal('window', {
     location: { href: 'https://mp.weixin.qq.com/cgi-bin/appmsg' },
     fetch: originalFetch,
@@ -259,6 +293,7 @@ function makeAccountCardPage({
       && dialogVisible ? [searchButton] : [],
     querySelectorAll: selector => {
       if (selector === '.weui-desktop-dialog__wrp.profile_dialog') return dialogVisible ? [dialog] : [];
+      if (selector === '#editor_showmore') return wechatEditorOverflow ? [weixinOverflow] : [];
       if (selector.includes('[role="dialog"]') || selector.includes('.weui-desktop-dialog')) {
         if (nestedDialogMatches) return dialogVisible ? [dialog, dialogInner, dialogHeader, dialogTitle] : [];
         return genericDialog ? [] : [dialog];
@@ -269,8 +304,11 @@ function makeAccountCardPage({
       if (entryInOverflow && (selector.includes('[role="menu"]') || selector.includes('dropdown') || selector.includes('popover'))) {
         return [overflowMenu];
       }
+      if (wechatEditorOverflow && (selector.includes('[role="menu"]') || selector.includes('dropdown') || selector.includes('popover'))) {
+        return [weixinOverflowMenu];
+      }
       if (selector.includes('header') || selector.includes('[role="banner"]')) {
-        return entryInOverflow || directEntryInToolbar ? [] : [entry];
+        return entryInOverflow || directEntryInToolbar || wechatEditorOverflow ? [] : [entry];
       }
       if (selector.startsWith('input')) return dialogVisible ? [input] : [];
       return [];
@@ -314,6 +352,7 @@ function makeAccountCardPage({
     searchClicks: () => searchClicks,
     insertOverflowClicks: () => insertOverflowClicks,
     formatOverflowClicks: () => formatOverflowClicks,
+    weixinOverflowClicks: () => weixinOverflowClicks,
     submittedQuery: () => input.value,
     originalFetch, originalOpen,
   };
@@ -376,6 +415,20 @@ describe('captureSearchBizFingerprint', () => {
     expect(fixture.insertOverflowClicks()).toBe(1);
     expect(fixture.formatOverflowClicks()).toBe(0);
     expect(fixture.entryClicks()).toBe(1);
+    expect(fixture.insertClicks()).toBe(0);
+  });
+
+  it('opens account card through the WeChat editor show-more menu', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = makeAccountCardPage({ wechatEditorOverflow: true });
+    fixture.page.wait.mockImplementation(async seconds => { now += seconds * 1_000; });
+
+    await expect(captureSearchBizFingerprint(fixture.page, '前端之神', 1_000))
+      .resolves.toBe('前端之神-fp');
+    expect(fixture.weixinOverflowClicks()).toBe(1);
+    expect(fixture.entryClicks()).toBe(1);
+    expect(fixture.formatOverflowClicks()).toBe(0);
     expect(fixture.insertClicks()).toBe(0);
   });
 

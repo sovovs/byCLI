@@ -151,6 +151,29 @@ async function captureSearchBizFingerprintOwned(page, query, timeoutMs) {
           }
 
           if (allowClick) {
+            const wechatOverflowTriggers = Array.from(document.querySelectorAll('#editor_showmore'))
+              .filter(visible);
+            if (wechatOverflowTriggers.length === 1) {
+              const trigger = wechatOverflowTriggers[0];
+              const scopedMenus = Array.from(trigger.querySelectorAll(
+                '.editor_showmore_dropdown_menu',
+              )).filter(visible);
+              if (scopedMenus.length === 1) {
+                const profileTargets = new Set(Array.from(scopedMenus[0].querySelectorAll(
+                  '#js_editor_insertProfile',
+                )).filter(element => visible(element) && exactText(element) === '账号名片')
+                  .map(clickable));
+                if (profileTargets.size === 1) {
+                  const [target] = profileTargets;
+                  target.click();
+                  return { dialogVisible: false, entryClicked: true, overflowClicked: false };
+                }
+              } else if (scopedMenus.length === 0 && allowOverflowClick) {
+                clickable(trigger).click();
+                return { dialogVisible: false, entryClicked: false, overflowClicked: true };
+              }
+            }
+
             const menuTargets = new Set();
             const menus = Array.from(document.querySelectorAll(
               '[role="menu"], [class*="menu"], [class*="dropdown"], [class*="popover"]',
