@@ -716,8 +716,9 @@ await globalThis.__lateNeverSettles;
 
     try {
       const timedOut = executeCommand(placeholder, {});
+      const timedOutAssertion = expect(timedOut).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
       await started;
-      await expect(timedOut).rejects.toMatchObject({ code: 'ADAPTER_LOAD' });
+      await timedOutAssertion;
       const ordinary = cli({
         site, name: 'ordinary-late', access: 'read', browser: false, func: async () => 'ordinary',
       });
