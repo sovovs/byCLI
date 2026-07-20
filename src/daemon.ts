@@ -21,6 +21,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { spawn } from 'node:child_process';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { DEFAULT_DAEMON_PORT } from './constants.js';
 import { EXIT_CODES } from './errors.js';
@@ -52,6 +53,7 @@ import { resolveDaemonHost } from './daemon-config.js';
 
 const PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const HOST = resolveDaemonHost();
+const BROWSER_RECOVERY_COMMAND = process.env.BYCLI_BROWSER_RECOVERY_COMMAND?.trim();
 
 // The verify runner (M6b) spawns child processes that connect back to THIS daemon for a
 // browser Page. Hand them our port (→ BYCLI_DAEMON_PORT in the child env) so the child's
@@ -400,6 +402,31 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     // summary is null while queued/running, a VerifySummary once terminal (M6c adds queued).
     logger.debug('daemon.requests', { requestId, status: runStatus.status });
     jsonResponse(res, 200, { ok: true, data: { requestId, status: runStatus.status, result: runStatus.summary } });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/v1/browser/recover') {
+    if (!BROWSER_RECOVERY_COMMAND) {
+      jsonResponse(res, 503, {
+        ok: false,
+        errorCode: 'browser_recovery_unavailable',
+        error: 'Browser recovery is not configured.',
+      });
+      return;
+    }
+    try {
+      const child = spawn(BROWSER_RECOVERY_COMMAND, [], { detached: true, stdio: 'ignore' });
+      child.on('error', () => logger.warn('daemon.browser_recover', { errorCode: 'browser_recovery_spawn_failed' }));
+      child.unref();
+      jsonResponse(res, 202, { ok: true, data: { started: true } });
+    } catch {
+      logger.warn('daemon.browser_recover', { errorCode: 'browser_recovery_spawn_failed' });
+      jsonResponse(res, 503, {
+        ok: false,
+        errorCode: 'browser_recovery_unavailable',
+        error: 'Browser recovery could not be started.',
+      });
+    }
     return;
   }
 

@@ -34,6 +34,43 @@ describe('getResponseCorsHeaders', () => {
 });
 
 describe('daemon command dispatch', () => {
+  it('starts the configured browser recovery command through the restricted recovery endpoint', async () => {
+    const probe = createServer();
+    probe.listen(0, '127.0.0.1');
+    await once(probe, 'listening');
+    const address = probe.address();
+    if (address === null || typeof address === 'string') throw new Error('failed to reserve daemon port');
+    const port = address.port;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+    const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'src/daemon.ts'], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        BYCLI_DAEMON_HOST: '127.0.0.1',
+        BYCLI_DAEMON_PORT: String(port),
+        BYCLI_BROWSER_RECOVERY_COMMAND: process.execPath,
+      },
+      stdio: 'ignore',
+    });
+    try {
+      await expect.poll(async () => (await fetch(`http://127.0.0.1:${port}/ping`)).status, {
+        timeout: 10_000,
+      }).toBe(200);
+
+      const response = await fetch(`http://127.0.0.1:${port}/v1/browser/recover`, {
+        method: 'POST',
+        headers: { 'X-byCLI': '1' },
+      });
+
+      expect(response.status).toBe(202);
+      await expect(response.json()).resolves.toEqual({ ok: true, data: { started: true } });
+    } finally {
+      daemon.kill('SIGTERM');
+      await once(daemon, 'exit');
+    }
+  });
+
   it('routes command requests with proxy query parameters to the command handler', async () => {
     const probe = createServer();
     probe.listen(0, '127.0.0.1');
