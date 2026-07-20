@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 import {
   COMMAND_RESULT_UNKNOWN_CODE,
@@ -31,6 +34,43 @@ describe('getResponseCorsHeaders', () => {
 });
 
 describe('daemon command dispatch', () => {
+  it('routes command requests with proxy query parameters to the command handler', async () => {
+    const probe = createServer();
+    probe.listen(0, '127.0.0.1');
+    await once(probe, 'listening');
+    const address = probe.address();
+    if (address === null || typeof address === 'string') throw new Error('failed to reserve daemon port');
+    const port = address.port;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+    const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'src/daemon.ts'], {
+      cwd: process.cwd(),
+      env: { ...process.env, BYCLI_DAEMON_HOST: '127.0.0.1', BYCLI_DAEMON_PORT: String(port) },
+      stdio: 'ignore',
+    });
+    try {
+      await expect.poll(async () => (await fetch(`http://127.0.0.1:${port}/ping`)).status, {
+        timeout: 10_000,
+      }).toBe(200);
+
+      const response = await fetch(`http://127.0.0.1:${port}/command?token=proxy-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-byCLI': '1' },
+        body: JSON.stringify({ id: 'query-command', action: 'navigate' }),
+      });
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        id: 'query-command',
+        ok: false,
+        errorCode: 'extension_not_connected',
+      });
+    } finally {
+      daemon.kill('SIGTERM');
+      await once(daemon, 'exit');
+    }
+  });
+
   it('uses a distinct command_result_unknown contract for ambiguous dispatched commands', () => {
     expect(COMMAND_RESULT_UNKNOWN_CODE).toBe('command_result_unknown');
     expect(commandResultUnknownMessage('navigate')).toContain('navigate command was dispatched');

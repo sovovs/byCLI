@@ -469,7 +469,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  if (req.method === 'POST' && url === '/command') {
+  if (req.method === 'POST' && pathname === '/command') {
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.id) {
