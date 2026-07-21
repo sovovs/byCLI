@@ -1551,7 +1551,11 @@ function getWindowRole(key, ownership) {
   return ownership === "borrowed" ? "borrowed-user" : getOwnedWindowRole(key);
 }
 function getWindowMode(key) {
-  return sessionWindowModeOverrides.get(key) ?? (getOwnedWindowRole(key) === "interactive" ? "foreground" : "background");
+  return sessionWindowModeOverrides.get(key) ?? "foreground";
+}
+function getWindowModeForOwnedPage(key, url) {
+  if (getSurfaceFromKey(key) === "browser" && url === BLANK_PAGE) return "background";
+  return getWindowMode(key);
 }
 function makeAlarmName(leaseKey) {
   return `${LEASE_IDLE_ALARM_PREFIX}${encodeURIComponent(leaseKey)}`;
@@ -1962,7 +1966,8 @@ async function createOwnedTabLeaseUnlocked(leaseKey, initialUrl, blankFirst = fa
 async function createOwnedTabLeaseMutationUnlocked(leaseKey, initialUrl, blankFirst = false) {
   const createUrl = blankFirst ? BLANK_PAGE : initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
   const role = getOwnedWindowRole(leaseKey);
-  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? void 0 : initialUrl, getWindowMode(leaseKey));
+  const windowMode = getWindowModeForOwnedPage(leaseKey, createUrl);
+  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? void 0 : initialUrl, windowMode);
   let tab;
   if (initialTabIsAvailable(initialTabId)) {
     tab = await chrome.tabs.get(initialTabId);
@@ -1972,7 +1977,7 @@ async function createOwnedTabLeaseMutationUnlocked(leaseKey, initialUrl, blankFi
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    const activateTab = getWindowMode(leaseKey) === "foreground";
+    const activateTab = windowMode === "foreground";
     tab = await chrome.tabs.create({ windowId, url: createUrl, active: activateTab });
   }
   if (!tab.id) throw new Error("Failed to create tab lease in automation container");
@@ -2011,7 +2016,8 @@ async function getAutomationWindow(leaseKey, initialUrl) {
     }
   }
   const role = getOwnedWindowRole(leaseKey);
-  return (await ensureOwnedContainerWindow(role, initialUrl, getWindowMode(leaseKey))).windowId;
+  const url = initialUrl && isSafeNavigationUrl(initialUrl) ? initialUrl : BLANK_PAGE;
+  return (await ensureOwnedContainerWindow(role, initialUrl, getWindowModeForOwnedPage(leaseKey, url))).windowId;
 }
 chrome.windows.onRemoved.addListener(async (windowId) => {
   for (const container of Object.values(ownedContainers)) {
@@ -2345,7 +2351,7 @@ async function resolveTabUnlocked(tabId, leaseKey, initialUrl, blankFirst = fals
   const newTab = await chrome.tabs.create({
     windowId,
     url: BLANK_PAGE,
-    active: getWindowMode(leaseKey) === "foreground"
+    active: getWindowModeForOwnedPage(leaseKey, BLANK_PAGE) === "foreground"
   });
   if (!newTab.id) throw new Error("Failed to create tab in automation container");
   return { tabId: newTab.id, tab: newTab };
@@ -2526,7 +2532,7 @@ async function handleNavigateUnlocked(cmd, leaseKey) {
       console.warn(`[bycli] Failed to recover drifted tab: ${moveErr}`);
     }
   }
-  const navWindowMode = getWindowMode(leaseKey);
+  const navWindowMode = getWindowModeForOwnedPage(leaseKey, targetUrl);
   await focusOwnedWindowIfRequested(tab.windowId, navWindowMode);
   if (navWindowMode === "foreground") {
     await chrome.tabs.update(tabId, { active: true }).catch(() => {
@@ -2614,9 +2620,10 @@ async function handleTabNewUnlocked(cmd, leaseKey) {
     const created = await createOwnedTabLeaseUnlocked(leaseKey, cmd.url);
     return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
   }
-  const windowId = await getAutomationWindow(leaseKey);
-  const activateNewTab = getWindowMode(leaseKey) === "foreground";
-  const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
+  const newTabUrl = cmd.url ?? BLANK_PAGE;
+  const windowId = await getAutomationWindow(leaseKey, cmd.url);
+  const activateNewTab = getWindowModeForOwnedPage(leaseKey, newTabUrl) === "foreground";
+  const tab = await chrome.tabs.create({ windowId, url: newTabUrl, active: activateNewTab });
   if (!tab.id) return { id: cmd.id, ok: false, error: "Failed to create tab" };
   await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
   setLeaseSession(leaseKey, {
@@ -2936,7 +2943,7 @@ async function releaseLeaseUnlocked(leaseKey, reason) {
         try {
           const tab = await chrome.tabs.update(tabId, {
             url: BLANK_PAGE,
-            active: getWindowMode(leaseKey) === "foreground"
+            active: getWindowModeForOwnedPage(leaseKey, BLANK_PAGE) === "foreground"
           });
           await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), session.windowId, [tab.id ?? tabId]);
           console.log(`[bycli] Released owned tab lease ${tabId} as reusable placeholder (session=${session.session}, surface=${session.surface}, ${reason})`);

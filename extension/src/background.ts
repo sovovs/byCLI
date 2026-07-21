@@ -340,7 +340,12 @@ function getWindowRole(key: string, ownership: LeaseOwnership): WindowRole {
 
 function getWindowMode(key: string): WindowMode {
   return sessionWindowModeOverrides.get(key)
-    ?? (getOwnedWindowRole(key) === 'interactive' ? 'foreground' : 'background');
+    ?? 'foreground';
+}
+
+function getWindowModeForOwnedPage(key: string, url: string): WindowMode {
+  if (getSurfaceFromKey(key) === 'browser' && url === BLANK_PAGE) return 'background';
+  return getWindowMode(key);
 }
 
 function makeAlarmName(leaseKey: string): string {
@@ -859,7 +864,8 @@ async function createOwnedTabLeaseMutationUnlocked(leaseKey: string, initialUrl?
   // behaviour of opening directly at initialUrl.
   const createUrl = blankFirst ? BLANK_PAGE : ((initialUrl && isSafeNavigationUrl(initialUrl)) ? initialUrl : BLANK_PAGE);
   const role = getOwnedWindowRole(leaseKey);
-  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? undefined : initialUrl, getWindowMode(leaseKey));
+  const windowMode = getWindowModeForOwnedPage(leaseKey, createUrl);
+  const { windowId, initialTabId } = await ensureOwnedContainerWindow(role, blankFirst ? undefined : initialUrl, windowMode);
   let tab: chrome.tabs.Tab;
 
   if (initialTabIsAvailable(initialTabId)) {
@@ -871,8 +877,7 @@ async function createOwnedTabLeaseMutationUnlocked(leaseKey: string, initialUrl?
       tab = await chrome.tabs.get(initialTabId);
     }
   } else {
-    // background 模式:tab 不抢激活(active:false),配合窗口 focused:false,录制 tab 不夺走 dashboard 焦点。
-    const activateTab = getWindowMode(leaseKey) === 'foreground';
+    const activateTab = windowMode === 'foreground';
     tab = await chrome.tabs.create({ windowId, url: createUrl, active: activateTab });
   }
   if (!tab.id) throw new Error('Failed to create tab lease in automation container');
@@ -920,7 +925,8 @@ async function getAutomationWindow(leaseKey: string, initialUrl?: string): Promi
   }
 
   const role = getOwnedWindowRole(leaseKey);
-  return (await ensureOwnedContainerWindow(role, initialUrl, getWindowMode(leaseKey))).windowId;
+  const url = (initialUrl && isSafeNavigationUrl(initialUrl)) ? initialUrl : BLANK_PAGE;
+  return (await ensureOwnedContainerWindow(role, initialUrl, getWindowModeForOwnedPage(leaseKey, url))).windowId;
 }
 
 // Clean up when an owned container window is closed
@@ -1341,7 +1347,7 @@ async function resolveTabUnlocked(tabId: number | undefined, leaseKey: string, i
   const newTab = await chrome.tabs.create({
     windowId,
     url: BLANK_PAGE,
-    active: getWindowMode(leaseKey) === 'foreground',
+    active: getWindowModeForOwnedPage(leaseKey, BLANK_PAGE) === 'foreground',
   });
   if (!newTab.id) throw new Error('Failed to create tab in automation container');
   return { tabId: newTab.id, tab: newTab };
@@ -1577,11 +1583,9 @@ async function handleNavigateUnlocked(cmd: Command, leaseKey: string): Promise<R
     }
   }
 
-  // 导航完成后把承载录制页的 owned 窗口提到前台并激活该 tab:复用已有 tab 时不走
-  // ensureOwnedContainerWindow 的聚焦路径(仅 chrome.tabs.update url),窗口会停在后台,
-  // 用户点「新建录制会话并打开」后看不到目标页。仅前台(interactive/browser surface)会话生效;
-  // background(automation)会话经 getWindowMode → focusOwnedWindowIfRequested 自动 no-op。
-  const navWindowMode = getWindowMode(leaseKey);
+  // Real-page navigation is interactive for both owned surfaces; only Browser
+  // blank placeholders stay in the background.
+  const navWindowMode = getWindowModeForOwnedPage(leaseKey, targetUrl);
   await focusOwnedWindowIfRequested(tab.windowId, navWindowMode);
   if (navWindowMode === 'foreground') {
     await chrome.tabs.update(tabId, { active: true }).catch(() => {});
@@ -1706,9 +1710,10 @@ async function handleTabNewUnlocked(cmd: Command, leaseKey: string): Promise<Res
     const created = await createOwnedTabLeaseUnlocked(leaseKey, cmd.url);
     return pageScopedResult(cmd.id, created.tabId, { url: created.tab?.url });
   }
-  const windowId = await getAutomationWindow(leaseKey);
-  const activateNewTab = getWindowMode(leaseKey) === 'foreground';
-  const tab = await chrome.tabs.create({ windowId, url: cmd.url ?? BLANK_PAGE, active: activateNewTab });
+  const newTabUrl = cmd.url ?? BLANK_PAGE;
+  const windowId = await getAutomationWindow(leaseKey, cmd.url);
+  const activateNewTab = getWindowModeForOwnedPage(leaseKey, newTabUrl) === 'foreground';
+  const tab = await chrome.tabs.create({ windowId, url: newTabUrl, active: activateNewTab });
   if (!tab.id) return { id: cmd.id, ok: false, error: 'Failed to create tab' };
   await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), windowId, [tab.id]);
   setLeaseSession(leaseKey, {
@@ -2054,7 +2059,7 @@ async function releaseLeaseUnlocked(leaseKey: string, reason: string): Promise<v
         try {
           const tab = await chrome.tabs.update(tabId, {
             url: BLANK_PAGE,
-            active: getWindowMode(leaseKey) === 'foreground',
+            active: getWindowModeForOwnedPage(leaseKey, BLANK_PAGE) === 'foreground',
           });
           await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), session.windowId, [tab.id ?? tabId]);
           console.log(`[bycli] Released owned tab lease ${tabId} as reusable placeholder (session=${session.session}, surface=${session.surface}, ${reason})`);
