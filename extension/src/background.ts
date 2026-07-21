@@ -1338,7 +1338,11 @@ async function resolveTabUnlocked(tabId: number | undefined, leaseKey: string, i
   }
 
   // Fallback: create a new tab
-  const newTab = await chrome.tabs.create({ windowId, url: BLANK_PAGE, active: true });
+  const newTab = await chrome.tabs.create({
+    windowId,
+    url: BLANK_PAGE,
+    active: getWindowMode(leaseKey) === 'foreground',
+  });
   if (!newTab.id) throw new Error('Failed to create tab in automation container');
   return { tabId: newTab.id, tab: newTab };
 }
@@ -2048,7 +2052,10 @@ async function releaseLeaseUnlocked(leaseKey: string, reason: string): Promise<v
         console.log(`[bycli] Released owned tab lease ${tabId} (session=${session.session}, surface=${session.surface}, ${reason})`);
       } else {
         try {
-          const tab = await chrome.tabs.update(tabId, { url: BLANK_PAGE, active: true });
+          const tab = await chrome.tabs.update(tabId, {
+            url: BLANK_PAGE,
+            active: getWindowMode(leaseKey) === 'foreground',
+          });
           await ensureOwnedContainerTabGroup(getOwnedWindowRole(leaseKey), session.windowId, [tab.id ?? tabId]);
           console.log(`[bycli] Released owned tab lease ${tabId} as reusable placeholder (session=${session.session}, surface=${session.surface}, ${reason})`);
         } catch {

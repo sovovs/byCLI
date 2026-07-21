@@ -840,7 +840,7 @@ describe('background tab isolation', () => {
     const releasing = mod.__test__.handleCommand(
       { id: 'release-paused', action: 'close-window', session: 'wechat', surface: 'adapter' },
     );
-    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: true }));
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: false }));
 
     const binding = mod.__test__.handleBind(
       { id: 'replacement-bind', action: 'bind', session: 'wechat', surface: 'adapter' },
@@ -1026,7 +1026,7 @@ describe('background tab isolation', () => {
     const releasing = mod.__test__.handleCommand(
       { id: 'stale-release', action: 'close-window', session: 'wechat', surface: 'adapter' },
     );
-    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: true }));
+    await vi.waitFor(() => expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: false }));
 
     mod.__test__.setSession(adapterKey('wechat'), { windowId: 2, owned: true, preferredTabId: 2 });
     releaseCleanup.resolve({ ...tabs[0], url: 'about:blank', active: true });
@@ -1502,7 +1502,7 @@ describe('background tab isolation', () => {
     expect(mod.__test__.getSession(adapterKey('second'))).toBeNull();
 
     await mod.__test__.handleCommand({ id: 'close-first', action: 'close-window', session: 'first', surface: 'adapter' });
-    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank' });
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: false });
     expect(chrome.windows.remove).not.toHaveBeenCalled();
   });
 
@@ -1523,9 +1523,26 @@ describe('background tab isolation', () => {
       ok: true,
       data: { closed: 'target-1' },
     }));
-    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: true });
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { url: 'about:blank', active: false });
     expect(chrome.windows.remove).not.toHaveBeenCalled();
     expect(mod.__test__.getSession(adapterKey('twitter'))).toBeNull();
+  });
+
+  it('creates fallback blank tabs inactive for background adapter sessions', async () => {
+    const { chrome, tabs, create, update } = createChromeMock();
+    tabs[0].url = 'chrome://extensions';
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    mod.__test__.setSession(adapterKey('fallback'), { windowId: 1, owned: true, preferredTabId: 1 });
+    chrome.tabs.update = vi.fn(async (tabId: number, changes: { active?: boolean; url?: string }) => {
+      if (tabId === 1 && changes.url === 'about:blank') return tabs[0];
+      return update(tabId, changes);
+    });
+
+    await mod.__test__.resolveTabId(undefined, adapterKey('fallback'));
+
+    expect(create).toHaveBeenCalledWith({ windowId: 1, url: 'about:blank', active: false });
   });
 
   it('reconciles an owned container with no stored leases without closing it', async () => {
