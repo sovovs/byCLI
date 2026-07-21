@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "byCLI",
-  "version": "2.1.6",
+  "version": "2.1.9",
   "description": "Browser automation bridge for the byCLI CLI tool. Executes commands in Chrome tab leases via a local daemon.",
   "permissions": [
     "debugger",

@@ -1,17 +1,13 @@
 # WeChat (微信公众号)
 
-**Mode**: 🌐 / 🔐 Browser · **Domains**: `weixin.sogou.com`, `mp.weixin.qq.com`
+**Mode**: 🔐 Browser · **Domain**: `mp.weixin.qq.com`
 
-The built-in `weixin` adapter has two distinct search paths:
-
-- `weixin search` searches **articles** through Sogou Weixin. It does not return a public-account `fakeid`.
-- `weixin accounts` searches the logged-in WeChat Official Accounts backend and returns public accounts plus their `fakeid`. Use that `fakeid` with `articles` or `save-articles`.
+`weixin accounts` searches the logged-in WeChat Official Accounts backend and returns public accounts plus their `fakeid`. Use that `fakeid` with `articles` or `save-articles`.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `bycli weixin search` | Search Sogou Weixin article results |
 | `bycli weixin accounts` | Search backend public accounts and obtain `fakeid` values |
 | `bycli weixin articles` | List published articles for an explicit `fakeid` |
 | `bycli weixin save-articles` | List and save published articles as Markdown |
@@ -24,17 +20,14 @@ The built-in `weixin` adapter has two distinct search paths:
 `accounts` and `articles` are intentionally separate: inspect all account matches, choose the correct `fakeid`, and then list its articles before saving them. A similar account name is never selected automatically.
 
 ```bash
-# 1. Search Sogou article results (separate from the backend history workflow)
-bycli weixin search "AI" --page 1 --limit 5
-
-# 2. Search backend accounts; limit defaults to 10
+# 1. Search backend accounts; limit defaults to 10
 bycli weixin accounts "前端之神" --limit 10 --auth-source browser -f json
 
-# 3. Preview history for the selected fakeid
+# 2. Preview history for the selected fakeid
 bycli weixin articles 'Mzg2NjY2NTcyNg==' \
   --name "前端之神" --limit 20 --max-pages 3 --auth-source browser -f json
 
-# 4. Save the selected account's history; output defaults to ./weixin-articles
+# 3. Save the selected account's history; output defaults to ./weixin-articles
 bycli weixin save-articles 'Mzg2NjY2NTcyNg==' \
   --name "前端之神" --output ./weixin-articles \
   --limit 20 --max-pages 3 --auth-source browser -f json
