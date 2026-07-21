@@ -344,6 +344,7 @@ function getWindowMode(key: string): WindowMode {
 }
 
 function getWindowModeForOwnedPage(key: string, url: string): WindowMode {
+  if (getSurfaceFromKey(key) === 'adapter') return 'foreground';
   if (getSurfaceFromKey(key) === 'browser' && url === BLANK_PAGE) return 'background';
   return getWindowMode(key);
 }

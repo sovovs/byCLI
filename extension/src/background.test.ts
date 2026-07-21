@@ -1870,6 +1870,25 @@ describe('background tab isolation', () => {
     expect(chrome.windows.create).toHaveBeenCalledWith(expect.objectContaining({ focused: true }));
   });
 
+  it('keeps Adapter windows foreground when the client requests background mode', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./background');
+    const result = await mod.__test__.handleCommand({
+      id: 'adapter-background-override',
+      action: 'tabs',
+      op: 'new',
+      session: 'twitter',
+      surface: 'adapter',
+      windowMode: 'background',
+      url: 'https://example.com',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }));
+    expect(chrome.windows.create).toHaveBeenCalledWith(expect.objectContaining({ focused: true }));
+  });
+
   it('reuses the existing adapter tab group when adding another owned lease tab', async () => {
     const { chrome, tabs, groups } = createChromeMock();
     vi.stubGlobal('chrome', chrome);

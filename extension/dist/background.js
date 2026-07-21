@@ -1554,6 +1554,7 @@ function getWindowMode(key) {
   return sessionWindowModeOverrides.get(key) ?? "foreground";
 }
 function getWindowModeForOwnedPage(key, url) {
+  if (getSurfaceFromKey(key) === "adapter") return "foreground";
   if (getSurfaceFromKey(key) === "browser" && url === BLANK_PAGE) return "background";
   return getWindowMode(key);
 }
