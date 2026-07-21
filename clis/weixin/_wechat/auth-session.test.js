@@ -93,7 +93,7 @@ describe('login DOM preflight', () => {
       body: { innerText: '' },
     });
     const page = makePage({ cookies: [] });
-    vi.mocked(page.evaluate).mockImplementationOnce(async callback => callback());
+    vi.mocked(page.evaluate).mockImplementation(async callback => callback());
 
     await expect(resolveBrowserCredentials(page, { now: () => 0 }))
       .rejects.toBeInstanceOf(AuthRequiredError);
@@ -113,7 +113,7 @@ describe('login DOM preflight', () => {
       body: { innerText: '请使用微信扫码登录' },
     });
     const page = makePage({ cookies: [] });
-    vi.mocked(page.evaluate).mockImplementationOnce(async callback => callback());
+    vi.mocked(page.evaluate).mockImplementation(async callback => callback());
 
     await expect(resolveBrowserCredentials(page, { now: () => 0 }))
       .rejects.toBeInstanceOf(AuthRequiredError);
@@ -142,7 +142,7 @@ describe('resolveBrowserCredentials', () => {
     const page = makePage({
       states: [
         { url: 'https://mp.weixin.qq.com/', hasLoginUi: true },
-        { url: 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=456', hasLoginUi: false },
+        { url: 'https://mp.weixin.qq.com/', hasLoginUi: true },
       ],
       cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
     });
@@ -152,5 +152,21 @@ describe('resolveBrowserCredentials', () => {
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
     expect(page.wait).not.toHaveBeenCalled();
     expect(page.getCookies).not.toHaveBeenCalled();
+  });
+
+  it('continues when navigation from a fresh tab reuses cookies and reaches the backend', async () => {
+    const page = makePage({
+      states: [
+        { url: 'about:blank', hasLoginUi: false },
+        { url: 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=456', hasLoginUi: false },
+      ],
+      cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
+    });
+
+    await expect(resolveBrowserCredentials(page, { now: () => 0 })).resolves.toEqual({
+      token: '456', cookie: 'slave_sid=sid',
+    });
+    expect(page.goto).toHaveBeenNthCalledWith(1, 'https://mp.weixin.qq.com/');
+    expect(page.focusWindow).not.toHaveBeenCalled();
   });
 });

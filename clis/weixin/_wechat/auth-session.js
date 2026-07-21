@@ -96,20 +96,24 @@ export async function resolveBrowserCredentials(page, options = {}) {
   let state = await readPreflight(page);
 
   if (!isLoggedInPreflight(state)) {
-    if (!page.focusWindow) {
-      throw new BrowserConnectError(
-        'The connected browser cannot be focused for WeChat login',
-        'Upgrade to byCLI 2.1 or newer to support interactive browser login',
+    await page.goto(LOGIN_URL);
+    state = await readPreflight(page);
+
+    if (!isLoggedInPreflight(state)) {
+      if (!page.focusWindow) {
+        throw new BrowserConnectError(
+          'The connected browser cannot be focused for WeChat login',
+          'Upgrade to byCLI 2.1 or newer to support interactive browser login',
+        );
+      }
+
+      await page.focusWindow();
+
+      throw new AuthRequiredError(
+        DOMAIN,
+        'WeChat login is required. The login tab is open; complete QR-code login and run the command again.',
       );
     }
-
-    await page.goto(LOGIN_URL);
-    await page.focusWindow();
-
-    throw new AuthRequiredError(
-      DOMAIN,
-      'WeChat login is required. The login tab is open; complete QR-code login and run the command again.',
-    );
   }
 
   const finalUrl = state.url;
