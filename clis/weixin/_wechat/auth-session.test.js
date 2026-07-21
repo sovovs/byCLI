@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuthRequiredError, TimeoutError } from '@sovovs/bycli/errors';
+import { AuthRequiredError } from '@sovovs/bycli/errors';
 import {
   isLoggedInPreflight,
   readEnvironmentCredentials,
@@ -95,8 +95,8 @@ describe('login DOM preflight', () => {
     const page = makePage({ cookies: [] });
     vi.mocked(page.evaluate).mockImplementationOnce(async callback => callback());
 
-    await expect(resolveBrowserCredentials(page, { timeoutMs: 0, now: () => 0 }))
-      .rejects.toBeInstanceOf(TimeoutError);
+    await expect(resolveBrowserCredentials(page, { now: () => 0 }))
+      .rejects.toBeInstanceOf(AuthRequiredError);
     expect(queriedSelectors).toContain('img[src*="qrcode"]');
     expect(page.goto).toHaveBeenCalledTimes(1);
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
@@ -115,8 +115,8 @@ describe('login DOM preflight', () => {
     const page = makePage({ cookies: [] });
     vi.mocked(page.evaluate).mockImplementationOnce(async callback => callback());
 
-    await expect(resolveBrowserCredentials(page, { timeoutMs: 0, now: () => 0 }))
-      .rejects.toBeInstanceOf(TimeoutError);
+    await expect(resolveBrowserCredentials(page, { now: () => 0 }))
+      .rejects.toBeInstanceOf(AuthRequiredError);
     expect(page.goto).toHaveBeenCalledTimes(1);
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
   });
@@ -138,7 +138,7 @@ describe('resolveBrowserCredentials', () => {
     expect(page.goto).toHaveBeenLastCalledWith(expect.stringContaining('type=10'));
   });
 
-  it('focuses once before waiting and resolves after login changes to backend state', async () => {
+  it('opens and focuses login, then immediately reports authentication pending', async () => {
     const page = makePage({
       states: [
         { url: 'https://mp.weixin.qq.com/', hasLoginUi: true },
@@ -147,46 +147,10 @@ describe('resolveBrowserCredentials', () => {
       cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
     });
 
-    await expect(resolveBrowserCredentials(page, { now: () => 0 })).resolves.toEqual({
-      token: '456', cookie: 'slave_sid=sid',
-    });
+    await expect(resolveBrowserCredentials(page, { now: () => 0 }))
+      .rejects.toBeInstanceOf(AuthRequiredError);
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
-    expect(page.wait).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(page.focusWindow).mock.invocationCallOrder[0])
-      .toBeLessThan(vi.mocked(page.wait).mock.invocationCallOrder[0] ?? Infinity);
-  });
-
-  it('times out without reading cookies when login state never changes', async () => {
-    let time = 0;
-    const page = makePage({
-      states: [{ url: 'https://mp.weixin.qq.com/', hasLoginUi: true }],
-      onWait: seconds => { time += seconds * 1000; },
-    });
-
-    await expect(resolveBrowserCredentials(page, { timeoutMs: 1_000, now: () => time }))
-      .rejects.toBeInstanceOf(TimeoutError);
-    expect(page.evaluate).toHaveBeenCalledTimes(3);
-    expect(page.goto).toHaveBeenCalledTimes(1);
-    expect(page.focusWindow).toHaveBeenCalledTimes(1);
+    expect(page.wait).not.toHaveBeenCalled();
     expect(page.getCookies).not.toHaveBeenCalled();
-  });
-
-  it('reads the latest state after a bounded final wait and accepts login at the deadline', async () => {
-    let time = 0;
-    const waits = [];
-    const page = makePage({
-      states: [
-        { url: 'https://mp.weixin.qq.com/', hasLoginUi: true },
-        { url: 'https://mp.weixin.qq.com/', hasLoginUi: true },
-        { url: 'https://mp.weixin.qq.com/cgi-bin/home?token=789', hasLoginUi: false },
-      ],
-      cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
-      onWait: seconds => { waits.push(seconds); time += seconds * 1000; },
-    });
-
-    await expect(resolveBrowserCredentials(page, { timeoutMs: 750, now: () => time }))
-      .resolves.toEqual({ token: '789', cookie: 'slave_sid=sid' });
-    expect(waits).toEqual([0.5, 0.25]);
-    expect(page.focusWindow).toHaveBeenCalledTimes(1);
   });
 });

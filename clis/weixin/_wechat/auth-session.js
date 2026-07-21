@@ -1,14 +1,12 @@
-import { AuthRequiredError, BrowserConnectError, TimeoutError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, BrowserConnectError } from '@sovovs/bycli/errors';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const LOGIN_URL = `https://${DOMAIN}/`;
-const DEFAULT_TIMEOUT_MS = 180_000;
-const POLL_INTERVAL_MS = 500;
 
 /**
  * @typedef {{token: string, cookie: string, fingerprint?: string}} WechatCredentials
  * @typedef {{url: string | null, hasLoginUi: boolean}} PreflightState
- * @typedef {{timeoutMs?: number, now?: () => number}} ResolveBrowserCredentialsOptions
+ * @typedef {{now?: () => number}} ResolveBrowserCredentialsOptions
  * @typedef {Pick<import('@sovovs/bycli/types').IPage, 'evaluate' | 'getCookies' | 'goto' | 'wait' | 'focusWindow'>} AuthPage
  */
 
@@ -94,9 +92,7 @@ export async function resolveBrowserCredentials(page, options = {}) {
     throw new BrowserConnectError('No browser page is connected for WeChat authentication');
   }
 
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = options.now ?? Date.now;
-  const startedAt = now();
   let state = await readPreflight(page);
 
   if (!isLoggedInPreflight(state)) {
@@ -110,14 +106,10 @@ export async function resolveBrowserCredentials(page, options = {}) {
     await page.goto(LOGIN_URL);
     await page.focusWindow();
 
-    while (!isLoggedInPreflight(state)) {
-      const remainingMs = timeoutMs - (now() - startedAt);
-      if (remainingMs <= 0) {
-        throw new TimeoutError('WeChat login', timeoutMs / 1000);
-      }
-      await page.wait(Math.min(POLL_INTERVAL_MS, remainingMs) / 1000);
-      state = await readPreflight(page);
-    }
+    throw new AuthRequiredError(
+      DOMAIN,
+      'WeChat login is required. The login tab is open; complete QR-code login and run the command again.',
+    );
   }
 
   const finalUrl = state.url;

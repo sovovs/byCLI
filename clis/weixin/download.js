@@ -8,6 +8,7 @@
  */
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { downloadArticle } from '@sovovs/bycli/download/article-download';
+import { AuthRequiredError } from '@sovovs/bycli/errors';
 import { buildExtractWechatArticleContentJs } from './_wechat/article-content.js';
 export { extractWechatArticleContent } from './_wechat/article-content.js';
 // ============================================================
@@ -249,14 +250,10 @@ cli({
       })()
     `);
         if (data?.errorHint === 'environment verification required') {
-            return [{
-                    title: 'Error',
-                    author: '-',
-                    publish_time: '-',
-                    status: 'failed — verification required in WeChat browser page',
-                    size: '-',
-                    saved: '-',
-                }];
+            throw new AuthRequiredError(
+                'mp.weixin.qq.com',
+                'WeChat article page requires environment verification. Complete it in the open browser tab and run the command again.',
+            );
         }
         return downloadArticle({
             title: data?.title || '',

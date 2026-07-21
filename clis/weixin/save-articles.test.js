@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@sovovs/bycli/registry';
-import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import * as auth from './_wechat/auth-session.js';
 import * as apiModule from './_wechat/wechat-api.js';
 import * as articleService from './_wechat/article-service.js';
@@ -159,8 +159,17 @@ describe('fetchArticleHtmlInBrowser', () => {
     expect(page.wait).toHaveBeenCalledWith(5);
   });
 
+  it('rejects an environment verification page with AuthRequiredError', async () => {
+    const page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn().mockResolvedValue({ finalUrl: 'https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha', html: '', byteLength: 0, accessIssue: 'environment verification required' }),
+    };
+    await expect(fetchArticleHtmlInBrowser({ url: 'https://mp.weixin.qq.com/s/article' }, page))
+      .rejects.toBeInstanceOf(AuthRequiredError);
+  });
+
   it.each([
-    [{ finalUrl: 'https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha', html: '', byteLength: 0, accessIssue: 'environment verification required' }, 'verification'],
     [{ finalUrl: 'https://evil.test/s/article', html: '<html></html>', byteLength: 13, accessIssue: '' }, 'non-article final URL'],
     [{ finalUrl: 'https://mp.weixin.qq.com/s/article', html: '', byteLength: 10 * 1024 * 1024 + 1, tooLarge: true, accessIssue: '' }, 'oversized HTML'],
   ])('rejects browser %s results', async (result) => {

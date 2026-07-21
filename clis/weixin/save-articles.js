@@ -1,4 +1,4 @@
-import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { MAX_WECHAT_HTML_BYTES } from '@sovovs/bycli/download/wechat-article';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
@@ -107,7 +107,12 @@ export async function fetchArticleHtmlInBrowser(article, page) {
         html: byteLength > maxBytes ? '' : html,
       };
     }, { maxBytes: MAX_WECHAT_HTML_BYTES });
-    if (result?.accessIssue) throw new CommandExecutionError('Article browser page requires environment verification');
+    if (result?.accessIssue) {
+      throw new AuthRequiredError(
+        DOMAIN,
+        'WeChat article page requires environment verification. Complete it in the open browser tab and run the command again.',
+      );
+    }
     if (!isTrustedWechatArticleUrl(result?.finalUrl)) {
       throw new CommandExecutionError('Article browser navigation left the trusted article path');
     }
@@ -123,7 +128,7 @@ export async function fetchArticleHtmlInBrowser(article, page) {
     }
     return result.html;
   } catch (error) {
-    if (error instanceof CommandExecutionError) throw error;
+    if (error instanceof CommandExecutionError || error instanceof AuthRequiredError) throw error;
     throw new CommandExecutionError('Article browser request failed');
   }
 }

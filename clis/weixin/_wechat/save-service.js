@@ -1,6 +1,6 @@
 import * as defaultFs from 'node:fs';
 import path from 'node:path';
-import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { cleanMarkdownFilename, wechatArticleToMarkdown } from './markdown.js';
 
 export const MAX_FILENAME_ATTEMPTS = 100;
@@ -121,7 +121,8 @@ export async function saveArticles({ articles, accountName, outputDir, fetchArti
       let articleHtml;
       try {
         articleHtml = await fetchArticleHtml(article);
-      } catch {
+      } catch (error) {
+        if (error instanceof AuthRequiredError) throw error;
         rows.push({ title: article.title || '', url: article.url || '', status: 'failed', stage: 'download', saved: '', error: 'article download failed' });
         continue;
       }

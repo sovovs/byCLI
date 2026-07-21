@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
-import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { ArgumentError } from '@sovovs/bycli/errors';
 import { MAX_FILENAME_ATTEMPTS, saveArticles } from './save-service.js';
 
@@ -66,6 +66,15 @@ describe('saveArticles', () => {
     });
     expect(row).toMatchObject({ status: 'failed', stage: 'download', error: 'article download failed' });
     expect(JSON.stringify(row)).not.toContain('secret');
+  });
+
+  it('propagates authentication-required failures without continuing to another article', async () => {
+    const fsImpl = memoryFs();
+    const fetchArticleHtml = vi.fn(async () => { throw new AuthRequiredError('mp.weixin.qq.com', 'verification required'); });
+    await expect(saveArticles({
+      articles: [article('verification'), article('later')], accountName: 'acct', outputDir: '/out', fetchArticleHtml, fsImpl,
+    })).rejects.toBeInstanceOf(AuthRequiredError);
+    expect(fetchArticleHtml).toHaveBeenCalledTimes(1);
   });
 
   it('classifies converter failures as invalid article content', async () => {
