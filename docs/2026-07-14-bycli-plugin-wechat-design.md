@@ -1,6 +1,6 @@
 # byCLI 内置 weixin 公众号历史文章能力设计
 
-> 本文件沿用原 `bycli-plugin-wechat` 文件名以保留设计演进历史。最终方案不再交付独立插件，也不再依赖外部 `wechat-crawler` CLI。
+> **Superseded (2026-07-27):** 本历史设计由 [`docs/superpowers/specs/2026-07-27-wechat-crawler-package-integration-design.md`](./superpowers/specs/2026-07-27-wechat-crawler-package-integration-design.md) 取代。当前实现使用 `@sovovs/wechat-article-crawler` 的 public root API，不 spawn `wechat-crawler` CLI；本文件保留用于记录演进。
 
 ## 1. 背景与结论
 
@@ -24,8 +24,9 @@ bycli weixin save-articles <fakeid>
 - 新能力进入 OpenCLI 的 `clis/weixin`，随 `@sovovs/bycli` 默认发布。
 - 不创建 `clis/wechat`，不改变现有四个 `weixin` 命令的行为。
 - 不再发布或安装 `bycli-plugin-wechat`。
-- 不依赖 `wechat-article-crawler` npm 包，也不启动 `wechat-crawler` 子进程。
-- 将 crawler 中仍有价值的微信 API、分页、Markdown 和保存逻辑迁入 adapter；不迁入其 CLI 参数解析、JSON envelope、退出码或进程边界。
+- 通过 `@sovovs/wechat-article-crawler` 的 public root API 使用微信历史文章、分页和安全保存能力；不导入 private `src/*`/`bin/*` 路径，也不 spawn `wechat-crawler` CLI。
+- 认证、Browser Bridge 交互、byCLI Markdown 元数据与输出仍由 byCLI 负责；crawler 仅提供可编程 API，不承载 byCLI 的 CLI 参数解析、JSON envelope、退出码或进程边界。
+- crawler 默认安全保存要求 Linux；在非 Linux 平台默认 fail-closed。只有显式注入自定义文件系统实现时才作为库集成使用该能力，普通 byCLI CLI 不绕过此平台约束。
 - 保留已完成的条件浏览器能力：默认使用浏览器登录，显式 `--auth-source env` 时不连接浏览器。
 
 ## 2. 目标与非目标
@@ -79,8 +80,8 @@ clis/weixin/
 迁移来源：
 
 - 从现有 `bycli-plugin-wechat` 工作成果迁入认证、fingerprint、`search_biz`、参数与脱敏实现及其安全测试。
-- 从 `wechat-crawler` 迁入 `wechat-api`、`article-service`、`markdown` 与保存逻辑及相应测试。
-- 不迁入 `bin/`、`cli.js`、`list-command.js`/`save-command.js` 的 envelope 包装、`errors.js` 或 CLI 退出码处理。
+- 通过 crawler public root API 调用 `wechat-api`、分页与安全保存能力；不导入其 `src/*`/`bin/*` 私有路径。
+- 不在 byCLI 中启动 crawler CLI，也不复刻其 envelope 包装、CLI 退出码处理或进程边界。
 
 独立目录 `/Users/lijiahui/Desktop/bycli-plugin-wechat` 仅作为迁移来源保留，不由实施过程自动删除。
 
@@ -366,7 +367,7 @@ fakeid + token + Cookie
 - 所有网络测试使用合成 fixture 和注入 transport，不访问微信生产接口。
 - manifest/build 验证三个命令进入 `cli-manifest.json`，条件 browser 序列化为 `"conditional"`。
 - 全量 typecheck、unit、security、build、docs 与 manifest 测试通过。
-- `package.json` 与 lockfile 不包含 `wechat-article-crawler` 或独立插件依赖。
+- `package.json` 与 lockfile 声明 `@sovovs/wechat-article-crawler` 的兼容范围并验证 public root API；不依赖独立插件。
 - 本地受控浏览器 E2E 可验证真实登录、fingerprint 与搜索，但不进入普通 CI，也不保留真实网络数据。
 
 ## 11. 验收示例
@@ -410,11 +411,11 @@ WECHAT_TOKEN='...' WECHAT_COOKIE='...' \
 
 1. 结束独立插件后续实施，以其已通过复核的认证、参数与脱敏代码作为迁移输入。
 2. 将认证、fingerprint、`search_biz`、参数和脱敏模块迁入 `clis/weixin/_wechat`，转换为现有 JS/JSDoc 风格并保留测试。
-3. 迁入 crawler 的微信 API、分页、Markdown 与保存逻辑，删除 CLI envelope、子进程和退出码假设。
+3. 接入 crawler public root API 的微信 API、分页与保存能力，不 spawn CLI，不携带 envelope、子进程或退出码假设。
 4. 抽取并复用现有 `weixin download` 的正文下载能力，避免双份 DOM 解析。
 5. 注册 `accounts`、`articles`、`save-articles`，锁定参数、条件浏览器与输出列合同。
 6. 补齐共享模块、命令、现有 weixin 回归、manifest、security 和集成测试。
-7. 删除 OpenCLI 对外部 crawler/独立插件的依赖和陈旧文档，完成全量构建与受控 E2E。
+7. 保持 crawler 依赖在 public root API 合同内，清理独立插件陈旧文档，完成全量构建与受控 E2E。
 
 ## 13. 兼容与发布
 

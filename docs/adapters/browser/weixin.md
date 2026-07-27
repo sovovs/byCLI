@@ -33,6 +33,14 @@ bycli weixin save-articles 'Mzg2NjY2NTcyNg==' \
   --limit 20 --max-pages 3 --auth-source browser -f json
 ```
 
+### Implementation boundary
+
+`articles` history retrieval and `save-articles` saving use the published `@sovovs/wechat-article-crawler` public root API (`createWechatApi`, `collectArticles`, `saveArticles`). The adapter imports only that root entry—never private `src/*`/`bin/*` paths—and never starts a `wechat-crawler` subprocess.
+
+Credential acquisition, Browser Bridge login/focus, account search and fingerprint capture remain byCLI responsibilities. byCLI also supplies the browser fallback downloader, Markdown metadata, typed errors and output projection.
+
+The crawler's default secure-save implementation requires Linux and fails closed on non-Linux platforms. Explicit custom filesystem injection is supported only for library integrations that provide their own policy; ordinary byCLI CLI usage does not bypass the Linux requirement.
+
 Command arguments and defaults:
 
 | Command | Arguments |

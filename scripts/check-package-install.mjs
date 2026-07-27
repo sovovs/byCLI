@@ -42,6 +42,8 @@ try {
   }
 
   const core = pack(join(root, 'packages/recorder-core'));
+  const crawlerDirectory = join(root, 'node_modules/@sovovs/wechat-article-crawler');
+  const crawler = pack(crawlerDirectory);
   const main = pack(mainStage);
 
   for (const file of ['dist/index.js', 'dist/index.d.ts', 'README.md', 'LICENSE']) {
@@ -51,15 +53,35 @@ try {
 
   writeFileSync(join(project, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   run('npm', [
-    'install', '--ignore-scripts', '--no-audit', '--no-fund', core.tarball, main.tarball,
+    'install', '--ignore-scripts', '--no-audit', '--no-fund', core.tarball, crawler.tarball, main.tarball,
   ], project);
 
   const mainManifest = JSON.parse(readFileSync(join(
     project, 'node_modules/@sovovs/bycli/package.json',
   ), 'utf8'));
   assert.equal(mainManifest.dependencies?.['@sovovs/bycli-recorder-core'], '^0.1.0');
+  assert.equal(mainManifest.dependencies?.['@sovovs/wechat-article-crawler'], '^1.1.0');
 
   const coreDirectory = join(project, 'node_modules/@sovovs/bycli-recorder-core');
+  const crawlerDirectoryInstalled = join(project, 'node_modules/@sovovs/wechat-article-crawler');
+  const crawlerManifest = JSON.parse(readFileSync(
+    join(crawlerDirectoryInstalled, 'package.json'), 'utf8',
+  ));
+  const crawlerVersion = String(crawlerManifest.version ?? '');
+  const versionParts = crawlerVersion.split('.').map(part => Number.parseInt(part, 10));
+  assert(
+    versionParts.length === 3 && versionParts.every(Number.isSafeInteger)
+      && (versionParts[0] > 1
+        || (versionParts[0] === 1 && (versionParts[1] > 1
+          || (versionParts[1] === 1 && versionParts[2] >= 1)))),
+    `wechat-article-crawler >=1.1.1 is required (found ${crawlerVersion || 'unknown'})`,
+  );
+  const crawlerEntry = join(crawlerDirectoryInstalled, 'src/index.js');
+  const crawlerModule = await import(pathToFileURL(crawlerEntry).href);
+  const crawlerApi = crawlerModule.default ?? crawlerModule;
+  for (const name of ['createWechatApi', 'collectArticles', 'saveArticles']) {
+    assert.equal(typeof crawlerApi[name], 'function', `crawler root API missing ${name}`);
+  }
   const recorderEntry = join(
     project, 'node_modules/@sovovs/bycli/dist/src/browser/analyze.js',
   );

@@ -33,6 +33,9 @@ function collectAdapterFiles(dir: string, opts?: { excludeTests?: boolean }): st
 
 const ALLOWED_BARE_IMPORTS = new Set([
   '@sovovs/bycli',
+  // The crawler's package root is its only supported integration surface;
+  // private src/ and bin/ subpaths must remain rejected by this guard.
+  '@sovovs/wechat-article-crawler',
   ...builtinModules.flatMap((name) => name.startsWith('node:')
     ? [name, name.slice(5)]
     : [name, `node:${name}`]),
@@ -77,6 +80,12 @@ describe('adapter imports use package exports', () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  it('allows only the crawler package root public API', () => {
+    expect(isAllowedImport('@sovovs/wechat-article-crawler')).toBe(true);
+    expect(isAllowedImport('@sovovs/wechat-article-crawler/src/index.js')).toBe(false);
+    expect(isAllowedImport('@sovovs/wechat-article-crawler/bin/wechat-crawler.js')).toBe(false);
   });
 
   it('non-test adapters only import node builtins, relative modules, or bycli public APIs', () => {

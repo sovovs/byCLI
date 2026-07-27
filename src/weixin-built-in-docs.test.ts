@@ -32,21 +32,35 @@ function listProductionJavaScript(dir: string): string[] {
 }
 
 describe('built-in weixin history command release artifacts', () => {
-  it('keeps the production package and built-in adapter free of the legacy crawler runtime', () => {
-    const packageFiles = ['package.json', 'package-lock.json']
-      .map(file => fs.readFileSync(path.join(root, file), 'utf8'))
-      .join('\n');
+  it('uses the published crawler root API without private or subprocess coupling', () => {
+    const packageManifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
     const adapterDir = path.join(root, 'clis/weixin');
     const adapterFiles = listProductionJavaScript(adapterDir);
     const adapterSource = adapterFiles
       .map(file => fs.readFileSync(file, 'utf8'));
 
-    expect(packageFiles).not.toMatch(/wechat-article-crawler|wechat-crawler/);
-    expect(adapterSource.join('\n')).not.toMatch(/wechat-article-crawler|wechat-crawler/);
+    expect(packageManifest.dependencies?.['@sovovs/wechat-article-crawler'])
+      .toBe('^1.1.0');
+    expect(adapterSource.join('\n')).toContain(
+      "import crawler from '@sovovs/wechat-article-crawler';",
+    );
+    expect(adapterSource.join('\n')).not.toMatch(
+      /@sovovs\/wechat-article-crawler\/(?:src|bin)\//,
+    );
     expect(
       adapterFiles.filter((_, index) => containsForbiddenCrawlerProcess(adapterSource[index]!))
         .map(file => path.relative(root, file)),
     ).toEqual([]);
+
+    for (const file of [
+      '_wechat/article-service.js', '_wechat/article-service.test.js',
+      '_wechat/wechat-api.js', '_wechat/wechat-api.test.js',
+      '_wechat/save-service.js', '_wechat/save-service.test.js',
+    ]) {
+      expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be removed`).toBe(false);
+    }
   });
 
   it.each([
@@ -120,7 +134,7 @@ describe('built-in weixin history command release artifacts', () => {
       'WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT',
       '部分失败', '扫码', 'fakeid',
     ]) expect(adapterDoc).toContain(required);
-    expect(adapterDoc).not.toMatch(/plugin install|wechat-crawler|独立 npm/i);
+    expect(adapterDoc).not.toMatch(/plugin install|独立 npm/i);
     expect(oldPlan).toMatch(/Superseded/);
     expect(oldPlan).toMatch(/内置.*weixin/);
   });
