@@ -41,6 +41,8 @@ Implementation helpers may remain private. Public functions are re-exported from
 
 The crawler owns no browser or byCLI concepts. It accepts callbacks such as `fetchArticleHtml`, `buildMarkdown`, and optional test doubles for transport and filesystem behavior. Its errors use crawler-owned codes rather than byCLI error classes.
 
+`saveArticles` accepts an explicit `existingFilePolicy`. Its default is `suffix`, which preserves byCLI's collision-safe `title.md`, `title-2.md` behavior. The legacy crawler CLI passes `overwrite`, preserving its documented behavior for an existing same-title file. This is a generic filesystem policy and introduces no byCLI knowledge into the crawler.
+
 ### byCLI
 
 byCLI retains:
@@ -136,6 +138,7 @@ The integration must not change:
 - Browser-only direct-download fallback.
 - Partial-failure rows and command-level failure classification.
 - The existing `wechat-crawler list/save` CLI contract and JSON envelope.
+- The crawler CLI's documented same-title overwrite behavior; the public API default and byCLI integration continue to use collision suffixes.
 
 The byCLI dependency is `@sovovs/wechat-article-crawler` with a compatible `^1.1.0` range. Public API changes must follow semantic versioning.
 
