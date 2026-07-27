@@ -29,6 +29,8 @@ describe('wechat crawler runtime', () => {
     ['AUTH_REQUIRED', AuthRequiredError],
     ['REMOTE_ERROR', CommandExecutionError],
     ['DOWNLOAD_FAILED', CommandExecutionError],
+    ['CONVERSION_FAILED', CommandExecutionError],
+    ['FILESYSTEM_ERROR', CommandExecutionError],
   ])('maps crawler %s without exposing details', async (code, ExpectedError) => {
     const detailsToken = `private-${code}-token`;
     const crawlerError = new CrawlerError(code, `crawler message for ${code}`, { detailsToken });
