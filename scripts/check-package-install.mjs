@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,11 +77,15 @@ try {
           || (versionParts[1] === 1 && versionParts[2] >= 1)))),
     `wechat-article-crawler >=1.1.1 is required (found ${crawlerVersion || 'unknown'})`,
   );
-  const crawlerEntry = join(crawlerDirectoryInstalled, 'src/index.js');
+  const projectRequire = createRequire(join(project, 'package.json'));
+  const crawlerEntry = projectRequire.resolve('@sovovs/wechat-article-crawler');
   const crawlerModule = await import(pathToFileURL(crawlerEntry).href);
   const crawlerApi = crawlerModule.default ?? crawlerModule;
-  for (const name of ['createWechatApi', 'collectArticles', 'saveArticles']) {
-    assert.equal(typeof crawlerApi[name], 'function', `crawler root API missing ${name}`);
+  for (const name of [
+    'CrawlerError', 'createWechatApi', 'collectArticles',
+    'isTrustedWechatArticleUrl', 'saveArticles',
+  ]) {
+    assert.ok(crawlerApi[name], `crawler root API missing ${name}`);
   }
   const recorderEntry = join(
     project, 'node_modules/@sovovs/bycli/dist/src/browser/analyze.js',
