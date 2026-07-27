@@ -2,10 +2,11 @@ import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs
 import { MAX_WECHAT_HTML_BYTES } from '@sovovs/bycli/download/wechat-article';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
-import { collectArticles, isTrustedWechatArticleUrl } from './_wechat/article-service.js';
-import { saveArticles } from './_wechat/save-service.js';
-import { createWechatApi } from './_wechat/wechat-api.js';
+import {
+  callCrawler, collectArticles, createWechatApi, isTrustedWechatArticleUrl, saveArticles,
+} from './_wechat/crawler-runtime.js';
 import { readAuthSource } from './_wechat/args.js';
+import { wechatArticleToMarkdown } from './_wechat/markdown.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const browserRequired = args => readAuthSource(args) === 'browser';
@@ -165,12 +166,15 @@ export const saveArticlesCommand = cli({
     const authSource = readAuthSource(args);
     const credentials = authSource === 'env'
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
-    const { fetchPage } = createWechatApi(credentials);
-    const { articles } = await collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
     const articleHtmlDownloader = createArticleHtmlDownloader({ authSource, page });
-    const rows = await saveArticles({
-      articles, accountName: String(args.name ?? '').trim(),
-      outputDir: args.output ?? './weixin-articles', fetchArticleHtml: articleHtmlDownloader,
+    const rows = await callCrawler(async () => {
+      const { fetchPage } = createWechatApi(credentials);
+      const { articles } = await collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
+      return saveArticles({
+        articles, accountName: String(args.name ?? '').trim(),
+        outputDir: args.output ?? './weixin-articles', fetchArticleHtml: articleHtmlDownloader,
+        buildMarkdown: wechatArticleToMarkdown, existingFilePolicy: 'suffix',
+      });
     });
     return rows.map(row => ({
       title: row.title, status: row.status, stage: row.stage || null, path: row.saved || null,

@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@sovovs/bycli/registry';
 import * as auth from './_wechat/auth-session.js';
-import * as apiModule from './_wechat/wechat-api.js';
-import * as service from './_wechat/article-service.js';
+import * as runtime from './_wechat/crawler-runtime.js';
 vi.mock('./_wechat/auth-session.js');
-vi.mock('./_wechat/wechat-api.js');
-vi.mock('./_wechat/article-service.js');
+vi.mock('./_wechat/crawler-runtime.js', async importOriginal => {
+  const actual = await importOriginal();
+  return { ...actual, collectArticles: vi.fn(), createWechatApi: vi.fn() };
+});
 await import('./articles.js');
 
 describe('weixin articles command', () => {
@@ -21,17 +22,17 @@ describe('weixin articles command', () => {
   });
   it('orchestrates env collection without browser and maps optional fields to null', async () => {
     auth.readEnvironmentCredentials.mockReturnValue({ token: 't', cookie: 'c' });
-    const fetchPage = vi.fn(); apiModule.createWechatApi.mockReturnValue({ fetchPage });
-    service.collectArticles.mockResolvedValue({ articles: [{ title: 'T', url: 'u' }, { title: 'P', url: 'p', author: 'A', digest: '', publishedAt: null }] });
+    const fetchPage = vi.fn(); runtime.createWechatApi.mockReturnValue({ fetchPage });
+    runtime.collectArticles.mockResolvedValue({ articles: [{ title: 'T', url: 'u' }, { title: 'P', url: 'p', author: 'A', digest: '', publishedAt: null }] });
     await expect(command.func(null, { fakeid: 'f', limit: 3, 'max-pages': 2, 'auth-source': 'env' })).resolves.toEqual([
       { title: 'T', author: null, digest: null, publishedAt: null, url: 'u' }, { title: 'P', author: 'A', digest: null, publishedAt: null, url: 'p' },
     ]);
-    expect(service.collectArticles).toHaveBeenCalledWith({ fakeid: 'f', fetchPage, limit: 3, maxPages: 2 });
+    expect(runtime.collectArticles).toHaveBeenCalledWith({ fakeid: 'f', fetchPage, limit: 3, maxPages: 2 });
     expect(auth.resolveBrowserCredentials).not.toHaveBeenCalled();
   });
   it('throws typed empty result', async () => {
-    auth.resolveBrowserCredentials.mockResolvedValue({ token: 't', cookie: 'c' }); apiModule.createWechatApi.mockReturnValue({ fetchPage: vi.fn() });
-    service.collectArticles.mockResolvedValue({ articles: [] });
+    auth.resolveBrowserCredentials.mockResolvedValue({ token: 't', cookie: 'c' }); runtime.createWechatApi.mockReturnValue({ fetchPage: vi.fn() });
+    runtime.collectArticles.mockResolvedValue({ articles: [] });
     await expect(command.func({}, { fakeid: 'f' })).rejects.toMatchObject({ code: 'EMPTY_RESULT' });
   });
 });
