@@ -173,7 +173,10 @@ export const saveArticlesCommand = cli({
       return saveArticles({
         articles, accountName: String(args.name ?? '').trim(),
         outputDir: args.output ?? './weixin-articles', fetchArticleHtml: articleHtmlDownloader,
-        buildMarkdown: wechatArticleToMarkdown, existingFilePolicy: 'suffix',
+        buildMarkdown: (article, html) => wechatArticleToMarkdown({
+          html, title: article.title, accountName: String(args.name ?? '').trim(), author: article.author,
+          publishedAt: article.publishedAt, digest: article.digest, url: article.url,
+        }), existingFilePolicy: 'suffix',
       });
     });
     return rows.map(row => ({

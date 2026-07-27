@@ -30,6 +30,12 @@ describe('weixin save-articles command', () => {
     ]);
     expect(runtime.saveArticles).toHaveBeenCalledWith(expect.objectContaining({ articles, accountName: 'Acct', outputDir: '/x', fetchArticleHtml: expect.any(Function), buildMarkdown: expect.any(Function), existingFilePolicy: 'suffix' }));
     expect(runtime.collectArticles).toHaveBeenCalledWith({ fakeid: 'f', fetchPage, limit: 2, maxPages: 3 });
+    const markdown = runtime.saveArticles.mock.calls[0][0].buildMarkdown({
+      title: 'Article', author: 'Author', publishedAt: '2024-01-02', digest: 'Digest', url: 'https://mp.weixin.qq.com/s/article',
+    }, '<div id="js_content"><p>body</p></div>');
+    expect(markdown).toContain('body');
+    expect(markdown).toContain('Acct');
+    expect(markdown).toContain('Author');
     expect(auth.resolveBrowserCredentials).not.toHaveBeenCalled();
   });
 
