@@ -67,15 +67,14 @@ clis/weixin/
     ├── auth-session.js        # 浏览器/env 凭证解析与登录等待
     ├── fingerprint.js         # 页面内一次性捕获 fingerprint
     ├── search-biz.js          # search_biz 请求与响应校验
-    ├── wechat-api.js          # 历史文章 API 请求
-    ├── article-service.js     # 分页、去重、limit/max-pages
-    ├── article-download.js    # 正文获取与单篇保存
+    ├── crawler-runtime.js     # crawler public root API 与 byCLI 错误映射
+    ├── article-content.js     # 有界正文获取与 Browser Bridge 回退
     ├── markdown.js            # Markdown 构建与安全文件名
     ├── args.js                # 严格参数读取
     └── redact.js              # 文本与结构化值脱敏
 ```
 
-共享模块使用 JavaScript 与 JSDoc，匹配现有 `clis/` 运行和构建方式。每个命令入口只负责注册元数据、读取参数、编排共享模块及返回静态列对应的行，不复制认证、HTTP 或保存实现。
+共享模块使用 JavaScript 与 JSDoc，匹配现有 `clis/` 运行和构建方式。每个命令入口只负责注册元数据、读取参数、编排共享模块及返回静态列对应的行；历史文章 API、分页和安全保存通过 `crawler-runtime.js` 调用 crawler package public root API，不在 byCLI 复制实现。
 
 迁移来源：
 
