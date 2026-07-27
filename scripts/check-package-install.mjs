@@ -66,7 +66,7 @@ try {
   const crawlerManifest = JSON.parse(readFileSync(
     join(crawlerDirectoryInstalled, 'package.json'), 'utf8',
   ));
-  assert.equal(crawlerManifest.version, '1.1.1');
+  assert.equal(crawlerManifest.version, '1.1.2');
   const projectRequire = createRequire(join(project, 'package.json'));
   const crawlerEntry = projectRequire.resolve('@sovovs/wechat-article-crawler');
   const crawlerModule = await import(pathToFileURL(crawlerEntry).href);
