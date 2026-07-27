@@ -90,6 +90,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@sovovs/bycli-recorder-core": "^0.1.0",
+    "@sovovs/wechat-article-crawler": "^1.1.0",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
