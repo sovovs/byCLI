@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('extension release metadata', () => {
-  it('ships CLI and extension 2.1.12 metadata consistently', () => {
+  it('ships CLI and extension 2.1.13 metadata consistently', () => {
     const cliPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
     const cliLock = JSON.parse(readFileSync(new URL('../../package-lock.json', import.meta.url), 'utf8')) as {
       version: string;
@@ -15,12 +15,12 @@ describe('extension release metadata', () => {
       packages: { '': { version: string } };
     };
 
-    expect(cliPackage.version).toBe('2.1.12');
-    expect(cliLock.version).toBe('2.1.12');
-    expect(cliLock.packages[''].version).toBe('2.1.12');
-    expect(manifest.version).toBe('2.1.12');
-    expect(packageJson.version).toBe('2.1.12');
-    expect(lock.version).toBe('2.1.12');
-    expect(lock.packages[''].version).toBe('2.1.12');
+    expect(cliPackage.version).toBe('2.1.13');
+    expect(cliLock.version).toBe('2.1.13');
+    expect(cliLock.packages[''].version).toBe('2.1.13');
+    expect(manifest.version).toBe('2.1.13');
+    expect(packageJson.version).toBe('2.1.13');
+    expect(lock.version).toBe('2.1.13');
+    expect(lock.packages[''].version).toBe('2.1.13');
   });
 });
