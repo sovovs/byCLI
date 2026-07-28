@@ -46,6 +46,32 @@ if (typeof (globalThis as { Bun?: unknown }).Bun === 'undefined' && !isSupported
   process.exit(EXIT_CODES.CONFIG_ERROR);
 }
 
+// Fast path: passive machine-readable daemon status. Keep this before discovery,
+// hooks, proxy installation, and update checks so stdout/stderr remain API-safe
+// and the only network operation is the loopback daemon status request.
+const daemonStatusArgs = argv.slice(2);
+if (
+  argv[0] === 'daemon'
+  && argv[1] === 'status'
+  && daemonStatusArgs.includes('--json')
+) {
+  const unsupportedArgs = daemonStatusArgs.filter((arg) => arg !== '--json' && arg !== '--verbose');
+  const { daemonStatus } = await import('./commands/daemon.js');
+  await daemonStatus({
+    json: true,
+    verbose: daemonStatusArgs.includes('--verbose'),
+    ...(unsupportedArgs.length > 0 && {
+      usageError: `Unsupported daemon status argument(s): ${unsupportedArgs.join(', ')}`,
+    }),
+  });
+  // console.log() may still be buffered when stdout is piped. An empty queued
+  // write completes only after the preceding JSON line has drained.
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write('', (error) => error ? reject(error) : resolve());
+  });
+  process.exit(process.exitCode ?? EXIT_CODES.SUCCESS);
+}
+
 // Fast path: --version (only when it's the top-level intent, not passed to a subcommand)
 // e.g. `bycli --version` or `bycli -V`, but NOT `bycli gh --version`
 if (argv[0] === '--version' || argv[0] === '-V') {

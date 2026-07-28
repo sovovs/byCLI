@@ -590,6 +590,16 @@ describe('createProgram root help descriptions', () => {
     }
   });
 
+  it('exposes stable JSON options on daemon status', () => {
+    const program = createProgram('', '');
+    const daemon = program.commands.find(cmd => cmd.name() === 'daemon')!;
+    const status = daemon.commands.find(cmd => cmd.name() === 'status')!;
+
+    expect(status.options.map(option => option.long)).toEqual(['--json', '--verbose']);
+    expect(status.helpInformation()).toContain('--json');
+    expect(status.helpInformation()).toContain('--verbose');
+  });
+
   it('renders plugin namespace structured help with positional + option leaves', () => {
     const argv = process.argv;
     try {

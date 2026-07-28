@@ -7,6 +7,21 @@ import {
   requestDaemonShutdown,
   sendCommand,
 } from './daemon-client.js';
+import * as daemonClientModule from './daemon-client.js';
+
+type DetailedProbe = (opts?: { timeout?: number }) => Promise<
+  | { kind: 'status'; status: unknown }
+  | { kind: 'stopped' }
+  | { kind: 'timeout' }
+  | { kind: 'http_error'; statusCode: number }
+  | { kind: 'invalid_response' }
+  | { kind: 'config_error' }
+  | { kind: 'network_error' }
+>;
+
+const probeDaemonStatus = (
+  daemonClientModule as unknown as { probeDaemonStatus?: DetailedProbe }
+).probeDaemonStatus;
 
 describe('daemon-client', () => {
   beforeEach(() => {
@@ -42,6 +57,92 @@ describe('daemon-client', () => {
         headers: expect.objectContaining({ 'X-byCLI': '1' }),
       }),
     );
+  });
+
+  it('exports a detailed passive daemon status probe', () => {
+    expect(probeDaemonStatus).toBeTypeOf('function');
+  });
+
+  it('classifies a valid daemon status response', async () => {
+    if (!probeDaemonStatus) return;
+    const status = {
+      ok: true,
+      pid: 123,
+      uptime: 10,
+      extensionConnected: false,
+      pending: 0,
+      memoryMB: 16,
+      port: 19825,
+    };
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(status),
+    } as Response);
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'status', status });
+  });
+
+  it('classifies a refused loopback connection as stopped', async () => {
+    if (!probeDaemonStatus) return;
+    const error = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNREFUSED' },
+    });
+    vi.mocked(fetch).mockRejectedValue(error);
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'stopped' });
+  });
+
+  it('classifies an aborted status request as timeout', async () => {
+    if (!probeDaemonStatus) return;
+    vi.mocked(fetch).mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'timeout' });
+  });
+
+  it('keeps the timeout active while consuming the response body', async () => {
+    if (!probeDaemonStatus) return;
+    vi.mocked(fetch).mockImplementation(async (_input, init) => ({
+      ok: true,
+      json: () => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+      }),
+    }) as Response);
+
+    await expect(probeDaemonStatus({ timeout: 1 })).resolves.toEqual({ kind: 'timeout' });
+  });
+
+  it('rejects an invalid daemon port without issuing a request', async () => {
+    if (!probeDaemonStatus) return;
+    vi.stubEnv('BYCLI_DAEMON_PORT', '19825-invalid');
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'config_error' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the HTTP status for an unsuccessful response', async () => {
+    if (!probeDaemonStatus) return;
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 503 } as Response);
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'http_error', statusCode: 503 });
+  });
+
+  it('classifies invalid daemon JSON without exposing the payload', async () => {
+    if (!probeDaemonStatus) return;
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.reject(new SyntaxError('secret raw payload')),
+    } as Response);
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'invalid_response' });
+  });
+
+  it('classifies other network failures without exposing error details', async () => {
+    if (!probeDaemonStatus) return;
+    vi.mocked(fetch).mockRejectedValue(new Error('secret network detail'));
+
+    await expect(probeDaemonStatus()).resolves.toEqual({ kind: 'network_error' });
   });
 
   it('fetchDaemonStatus returns null on network failure', async () => {

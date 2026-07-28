@@ -5,14 +5,67 @@
  *   bycli daemon restart — graceful shutdown, then start a fresh daemon
  */
 
-import { fetchDaemonStatus, requestDaemonShutdown } from '../browser/daemon-client.js';
+import { fetchDaemonStatus, probeDaemonStatus, requestDaemonShutdown } from '../browser/daemon-client.js';
+import { resolveDaemonPort } from '../browser/daemon-config.js';
 import { restartDaemon } from '../browser/daemon-lifecycle.js';
+import { loadProfileConfig } from '../browser/profile.js';
 import { formatDuration } from '../download/progress.js';
+import { EXIT_CODES } from '../errors.js';
 import { log } from '../logger.js';
 import { PKG_VERSION } from '../version.js';
 import { formatDaemonVersion, isDaemonStale } from '../browser/daemon-version.js';
+import { buildDaemonStatusErrorReport, buildDaemonStatusReport } from './daemon-status.js';
 
-export async function daemonStatus(): Promise<void> {
+export interface DaemonStatusOptions {
+  json?: boolean;
+  verbose?: boolean;
+  /** Pre-validated fast-path usage failure; keeps --json output machine-readable. */
+  usageError?: string;
+}
+
+function configuredDaemonPort(): number {
+  return resolveDaemonPort().port;
+}
+
+function jsonStatusExitCode(errorCode: string | undefined): number {
+  if (!errorCode) return EXIT_CODES.SUCCESS;
+  if (errorCode === 'daemon_status_timeout') return EXIT_CODES.TEMPFAIL;
+  if (errorCode === 'invalid_daemon_response' || errorCode === 'invalid_daemon_config') {
+    return EXIT_CODES.CONFIG_ERROR;
+  }
+  return EXIT_CODES.GENERIC_ERROR;
+}
+
+export async function daemonStatus(options: DaemonStatusOptions = {}): Promise<void> {
+  if (options.verbose && !options.json) {
+    console.error('Error: --verbose requires --json.');
+    process.exitCode = EXIT_CODES.USAGE_ERROR;
+    return;
+  }
+
+  if (options.json) {
+    if (options.usageError) {
+      const report = buildDaemonStatusErrorReport({
+        cliVersion: PKG_VERSION,
+        port: configuredDaemonPort(),
+      }, 'invalid_arguments', options.usageError);
+      console.log(JSON.stringify(report));
+      process.exitCode = EXIT_CODES.USAGE_ERROR;
+      return;
+    }
+    const probe = await probeDaemonStatus();
+    const profileConfig = loadProfileConfig();
+    const report = buildDaemonStatusReport(probe, {
+      cliVersion: PKG_VERSION,
+      port: configuredDaemonPort(),
+      verbose: options.verbose,
+      profileAliases: profileConfig.aliases,
+    });
+    console.log(JSON.stringify(report));
+    process.exitCode = jsonStatusExitCode(report.error?.code);
+    return;
+  }
+
   const status = await fetchDaemonStatus();
   if (!status) {
     console.log('Daemon: not running');

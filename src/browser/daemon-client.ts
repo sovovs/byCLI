@@ -4,13 +4,11 @@
  * Provides a typed send() function that posts a Command and returns a Result.
  */
 
-import { DEFAULT_DAEMON_PORT } from '../constants.js';
 import { sleep } from '../utils.js';
+import { resolveDaemonPort } from './daemon-config.js';
 import { classifyBrowserError } from './errors.js';
 import { resolveProfileContextId } from './profile.js';
 
-const DAEMON_PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
-const DAEMON_URL = `http://127.0.0.1:${DAEMON_PORT}`;
 const BYCLI_HEADERS = { 'X-byCLI': '1' };
 
 let _idCounter = 0;
@@ -110,30 +108,76 @@ export interface BrowserProfileStatus {
   lastSeenAt?: number;
 }
 
-async function requestDaemon(pathname: string, init?: RequestInit & { timeout?: number }): Promise<Response> {
+export type DaemonStatusProbe =
+  | { kind: 'status'; status: DaemonStatus }
+  | { kind: 'stopped' }
+  | { kind: 'timeout' }
+  | { kind: 'http_error'; statusCode: number }
+  | { kind: 'invalid_response' }
+  | { kind: 'config_error' }
+  | { kind: 'network_error' };
+
+async function consumeDaemonResponse<T>(
+  pathname: string,
+  init: RequestInit & { timeout?: number } | undefined,
+  consume: (response: Response) => Promise<T>,
+  port?: number,
+): Promise<T> {
   const { timeout = 2000, headers, ...rest } = init ?? {};
+  const portResolution = port === undefined ? resolveDaemonPort() : { ok: true as const, port };
+  if (!portResolution.ok) throw new Error('Invalid BYCLI_DAEMON_PORT configuration');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetch(`${DAEMON_URL}${pathname}`, {
+    const response = await fetch(`http://127.0.0.1:${portResolution.port}${pathname}`, {
       ...rest,
       headers: { ...BYCLI_HEADERS, ...headers },
       signal: controller.signal,
     });
+    return await consume(response);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function fetchDaemonStatus(opts?: { timeout?: number; contextId?: string }): Promise<DaemonStatus | null> {
+async function requestDaemon(pathname: string, init?: RequestInit & { timeout?: number }): Promise<Response> {
+  return consumeDaemonResponse(pathname, init, async (response) => response);
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as { code?: unknown; cause?: unknown };
+  if (typeof candidate.code === 'string') return candidate.code;
+  return errorCode(candidate.cause);
+}
+
+export async function probeDaemonStatus(opts?: { timeout?: number; contextId?: string }): Promise<DaemonStatusProbe> {
+  const portResolution = resolveDaemonPort();
+  if (!portResolution.ok) return { kind: 'config_error' };
   try {
     const params = opts?.contextId ? `?contextId=${encodeURIComponent(opts.contextId)}` : '';
-    const res = await requestDaemon(`/status${params}`, { timeout: opts?.timeout ?? 2000 });
-    if (!res.ok) return null;
-    return await res.json() as DaemonStatus;
-  } catch {
+    return await consumeDaemonResponse(`/status${params}`, { timeout: opts?.timeout ?? 2000 }, async (res) => {
+      if (!res.ok) return { kind: 'http_error', statusCode: res.status };
+      try {
+        return { kind: 'status', status: await res.json() as DaemonStatus };
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        return { kind: 'invalid_response' };
+      }
+    }, portResolution.port);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') return { kind: 'timeout' };
+    if (errorCode(error) === 'ECONNREFUSED') return { kind: 'stopped' };
+    return { kind: 'network_error' };
+  }
+}
+
+export async function fetchDaemonStatus(opts?: { timeout?: number; contextId?: string }): Promise<DaemonStatus | null> {
+  const result = await probeDaemonStatus(opts);
+  if (result.kind !== 'status') {
     return null;
   }
+  return result.status;
 }
 
 export type DaemonHealth =

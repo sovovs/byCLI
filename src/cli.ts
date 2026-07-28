@@ -3186,7 +3186,9 @@ cli({
   daemonCmd
     .command('status')
     .description('Show daemon status')
-    .action(async () => { await daemonStatus(); });
+    .option('--json', 'Output stable machine-readable JSON')
+    .option('--verbose', 'Include process and profile diagnostics in JSON output')
+    .action(async (opts: { json?: boolean; verbose?: boolean }) => { await daemonStatus(opts); });
   daemonCmd
     .command('stop')
     .description('Stop the daemon')
