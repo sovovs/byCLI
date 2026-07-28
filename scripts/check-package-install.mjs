@@ -59,14 +59,14 @@ try {
     project, 'node_modules/@sovovs/bycli/package.json',
   ), 'utf8'));
   assert.equal(mainManifest.dependencies?.['@sovovs/bycli-recorder-core'], '^0.1.0');
-  assert.equal(mainManifest.dependencies?.['@sovovs/wechat-article-crawler'], '^1.1.0');
+  assert.equal(mainManifest.dependencies?.['@sovovs/wechat-article-crawler'], '^1.1.3');
 
   const coreDirectory = join(project, 'node_modules/@sovovs/bycli-recorder-core');
   const crawlerDirectoryInstalled = join(project, 'node_modules/@sovovs/wechat-article-crawler');
   const crawlerManifest = JSON.parse(readFileSync(
     join(crawlerDirectoryInstalled, 'package.json'), 'utf8',
   ));
-  assert.equal(crawlerManifest.version, '1.1.2');
+  assert.equal(crawlerManifest.version, '1.1.3');
   const projectRequire = createRequire(join(project, 'package.json'));
   const crawlerEntry = projectRequire.resolve('@sovovs/wechat-article-crawler');
   const crawlerModule = await import(pathToFileURL(crawlerEntry).href);

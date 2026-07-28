@@ -39,7 +39,7 @@ bycli weixin save-articles 'Mzg2NjY2NTcyNg==' \
 
 Credential acquisition, Browser Bridge login/focus, account search and fingerprint capture remain byCLI responsibilities. byCLI also supplies the browser fallback downloader, Markdown metadata, typed errors and output projection.
 
-The crawler's default secure-save implementation requires Linux and fails closed on non-Linux platforms. Explicit custom filesystem injection is supported only for library integrations that provide their own policy; ordinary byCLI CLI usage does not bypass the Linux requirement.
+Article saving requires `@sovovs/wechat-article-crawler` 1.1.3 or newer. Its secure-save implementation supports Linux and macOS; byCLI pins that minimum version so `save-articles` can write through the real Node filesystem on both platforms.
 
 Command arguments and defaults:
 

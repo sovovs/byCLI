@@ -42,7 +42,7 @@ describe('built-in weixin history command release artifacts', () => {
       .map(file => fs.readFileSync(file, 'utf8'));
 
     expect(packageManifest.dependencies?.['@sovovs/wechat-article-crawler'])
-      .toBe('^1.1.0');
+      .toBe('^1.1.3');
     expect(adapterSource.join('\n')).toContain(
       "import crawler from '@sovovs/wechat-article-crawler';",
     );
@@ -132,7 +132,7 @@ describe('built-in weixin history command release artifacts', () => {
     for (const required of [
       'weixin accounts', 'weixin articles', 'weixin save-articles',
       'WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT',
-      '部分失败', '扫码', 'fakeid',
+      '部分失败', '扫码', 'fakeid', 'macOS',
     ]) expect(adapterDoc).toContain(required);
     expect(adapterDoc).not.toMatch(/plugin install|独立 npm/i);
     expect(oldPlan).toMatch(/Superseded/);

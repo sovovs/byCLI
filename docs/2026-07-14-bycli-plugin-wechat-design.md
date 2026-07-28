@@ -26,7 +26,7 @@ bycli weixin save-articles <fakeid>
 - 不再发布或安装 `bycli-plugin-wechat`。
 - 通过 `@sovovs/wechat-article-crawler` 的 public root API 使用微信历史文章、分页和安全保存能力；不导入 private `src/*`/`bin/*` 路径，也不 spawn `wechat-crawler` CLI。
 - 认证、Browser Bridge 交互、byCLI Markdown 元数据与输出仍由 byCLI 负责；crawler 仅提供可编程 API，不承载 byCLI 的 CLI 参数解析、JSON envelope、退出码或进程边界。
-- crawler 默认安全保存要求 Linux；在非 Linux 平台默认 fail-closed。只有显式注入自定义文件系统实现时才作为库集成使用该能力，普通 byCLI CLI 不绕过此平台约束。
+- crawler 1.1.3 起的默认安全保存同时支持 Linux 和 macOS；byCLI 将最低依赖版本固定为 1.1.3，避免回退到 1.1.2 的 Linux-only 写盘限制。
 - 保留已完成的条件浏览器能力：默认使用浏览器登录，显式 `--auth-source env` 时不连接浏览器。
 
 ## 2. 目标与非目标

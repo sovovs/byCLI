@@ -1,6 +1,6 @@
 {
   "name": "@sovovs/bycli",
-  "version": "2.1.13",
+  "version": "2.1.14",
   "publishConfig": {
     "access": "public"
   },
@@ -90,7 +90,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@sovovs/bycli-recorder-core": "^0.1.0",
-    "@sovovs/wechat-article-crawler": "^1.1.0",
+    "@sovovs/wechat-article-crawler": "^1.1.3",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
