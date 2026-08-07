@@ -22,8 +22,21 @@ export function wechatArticleToMarkdown({ html, title, accountName, author, publ
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     .replace(/([\\`*_[\]{}()#+.!|>~-])/g, '\\$1');
+  // A URL must not go through `safe()`: escaping `. _ - ( ) #` and entity-encoding
+  // `&` corrupts the link so it can no longer be copied or followed. Rendered as an
+  // autolink it only needs whitespace and control characters dropped, `<`/`>`
+  // percent-encoded so the autolink cannot be closed early, and an http(s) scheme
+  // allowlist to reject `javascript:` and other hostile schemes.
+  const safeUrl = value => {
+    const raw = [...String(value || '')]
+      .filter(char => char > ' ' && char.codePointAt(0) !== 127)
+      .join('');
+    if (!/^https?:\/\//i.test(raw)) return '';
+    return raw.replace(/</g, '%3C').replace(/>/g, '%3E');
+  };
+  const articleUrl = safeUrl(url);
   const metadata = [accountName && `> 公众号: ${safe(accountName)}`, author && `> 作者: ${safe(author)}`,
     publishedAt && `> 发布时间: ${safe(publishedAt)}`, digest && `> 摘要: ${safe(digest)}`,
-    url && `> 原文链接: ${safe(url)}`].filter(Boolean);
+    articleUrl && `> 原文链接: <${articleUrl}>`].filter(Boolean);
   return [`# ${safe(title || 'Untitled')}`, ...metadata, '', '---', '', markdown, ''].join('\n');
 }

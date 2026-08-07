@@ -47,6 +47,25 @@ describe('downloadArticle', () => {
     expect(convertArticleHtmlToMarkdown('<p>CODEBLOCK-PLACEHOLDER-0</p><pre><code>ok()</code></pre>', { safeFencedCodeBlocks: true }))
       .toContain('CODEBLOCK-PLACEHOLDER-0');
   });
+  it('splits bare-text URLs fused by adjacent inline nodes', () => {
+    const md = convertArticleHtmlToMarkdown(
+      '<p>均已开源：<span>https://github.com/beyonai/ByDC</span><span>https://github.com/beyonai/ByKC</span></p>',
+      { safeFencedCodeBlocks: true },
+    );
+    expect(md).toBe('均已开源：https://github.com/beyonai/ByDC\nhttps://github.com/beyonai/ByKC');
+  });
+  it('keeps a URL carrying another URL in its query intact', () => {
+    expect(convertArticleHtmlToMarkdown('<p>https://a.com/r?next=https://b.com/x</p>', { safeFencedCodeBlocks: true }))
+      .toBe('https://a.com/r?next=https://b.com/x');
+    expect(convertArticleHtmlToMarkdown('<p><img src="https://img.io/p.png?u=https://o.com/a.png" alt="x"></p>', { safeFencedCodeBlocks: true }))
+      .toBe('![x](https://img.io/p.png?u=https://o.com/a.png)');
+  });
+  it('leaves markdown link destinations and spaced prose URLs unbroken', () => {
+    expect(convertArticleHtmlToMarkdown('<p><a href="https://a.com/1">ByDC</a></p>', { safeFencedCodeBlocks: true }))
+      .toBe('[ByDC](https://a.com/1)');
+    expect(convertArticleHtmlToMarkdown('<p>见 https://a.com/1 结束</p>', { safeFencedCodeBlocks: true }))
+      .toBe('见 https://a.com/1 结束');
+  });
   it('returns the saved markdown file path on success', async () => {
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
     tempDirs.push(tempDir);

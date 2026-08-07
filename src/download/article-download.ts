@@ -285,6 +285,16 @@ function convertToMarkdown(
   md = md.replace(/^[ \t]*[-·][ \t]*$/gm, '');
   md = md.replace(/^[ \t]+$/gm, '');
   md = md.replace(/[ \t]+$/gm, '');
+  // Bare-text URLs in adjacent inline nodes (WeChat renders each on its own
+  // visual line but emits no separator) fuse into one unusable string like
+  // `https://a/Xhttps://b/Y`. Split consecutive bare URLs onto their own lines.
+  // A URL whose own query carries another URL (`?next=https://…`, common in
+  // redirect wrappers) must stay intact, so skip breaks that follow a query or
+  // path delimiter. Markdown destinations are already bounded by `()`/`<>`.
+  md = md.replace(
+    /(https?:\/\/[^\s<>()[\]]*?)(?=https?:\/\/)/gi,
+    (match) => (/[=?&/:,;-]$/.test(match) ? match : `${match}\n`),
+  );
   md = md.replace(/\n{3,}/g, '\n\n');
 
   return md;

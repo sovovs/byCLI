@@ -46,6 +46,44 @@ describe('wechatArticleToMarkdown', () => {
     expect(result).not.toContain('\n> injected');
   });
 
+  it('keeps the source URL followable instead of markdown-escaping it', () => {
+    const result = wechatArticleToMarkdown({
+      title: 'Link', url: 'https://mp.weixin.qq.com/s/zJAxgVqEUl_AkpCHjFkXGA',
+      html: '<div id="js_content"><p>body</p></div>',
+    });
+    expect(result).toContain('> 原文链接: <https://mp.weixin.qq.com/s/zJAxgVqEUl_AkpCHjFkXGA>');
+    expect(result).not.toContain('\\.');
+    expect(result).not.toContain('\\_');
+  });
+
+  it('preserves query separators and drops whitespace in the source URL', () => {
+    const result = wechatArticleToMarkdown({
+      title: 'Query', url: '  https://example.com/a?b=1&c=2#frag\n',
+      html: '<div id="js_content"><p>body</p></div>',
+    });
+    expect(result).toContain('> 原文链接: <https://example.com/a?b=1&c=2#frag>');
+    expect(result).not.toContain('&amp;');
+  });
+
+  it('omits the source URL line for non-http(s) schemes', () => {
+    const hostile = wechatArticleToMarkdown({
+      title: 'Bad', url: 'javascript:alert(1)', html: '<div id="js_content"><p>body</p></div>',
+    });
+    expect(hostile).not.toContain('原文链接');
+    expect(hostile).not.toContain('javascript:');
+    const empty = wechatArticleToMarkdown({ title: 'None', html: '<div id="js_content"><p>body</p></div>' });
+    expect(empty).not.toContain('原文链接');
+  });
+
+  it('prevents a hostile URL from closing the autolink early', () => {
+    const result = wechatArticleToMarkdown({
+      title: 'Escape', url: 'https://example.com/a><script>alert(1)</script>',
+      html: '<div id="js_content"><p>body</p></div>',
+    });
+    expect(result).toContain('> 原文链接: <https://example.com/a%3E%3Cscript%3Ealert(1)%3C/script%3E>');
+    expect(result).not.toMatch(/<script\b/i);
+  });
+
   it('preserves literal placeholder-looking text and safely fences embedded backticks', () => {
     const result = wechatArticleToMarkdown({
       title: 'Code',

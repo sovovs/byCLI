@@ -38,7 +38,7 @@ describe('weixin save-articles command', () => {
     expect(markdown).toContain('Author');
     expect(markdown).toContain('2024\\-01\\-02');
     expect(markdown).toContain('Digest');
-    expect(markdown).toContain('https://mp\\.weixin\\.qq\\.com/s/article');
+    expect(markdown).toContain('> 原文链接: <https://mp.weixin.qq.com/s/article>');
     expect(auth.resolveBrowserCredentials).not.toHaveBeenCalled();
   });
 
