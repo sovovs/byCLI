@@ -459,10 +459,17 @@ export async function downloadArticle(
   // Shape: `# Title\n[> meta\n...]\n---\n\n<markdown>` — exactly one blank
   // line separates every section, so we never produce ≥3 consecutive newlines.
   const headerValue = (value: string) => secureMarkdown ? escapeMarkdownText(value) : value;
+  // The source URL must not go through escapeMarkdownText: escaping `. _ - ( ) #`
+  // and entity-encoding `&` leaves a link that can no longer be copied or
+  // followed. safeHttpUrl already allowlists http(s) and percent-encodes `<`/`>`
+  // via URL normalization, so the autolink cannot be closed early; an empty
+  // return means a hostile or malformed URL and the line is dropped entirely.
+  const headerUrl = (value: string) => secureMarkdown ? safeHttpUrl(value) : value;
   const headerLines = [`# ${headerValue(data.title)}`];
   if (data.author) headerLines.push(`> ${labels.author}: ${headerValue(data.author)}`);
   if (data.publishTime) headerLines.push(`> ${labels.publishTime}: ${headerValue(data.publishTime)}`);
-  if (data.sourceUrl) headerLines.push(`> ${labels.sourceUrl}: ${headerValue(data.sourceUrl)}`);
+  const sourceUrl = data.sourceUrl ? headerUrl(data.sourceUrl) : '';
+  if (sourceUrl) headerLines.push(`> ${labels.sourceUrl}: <${sourceUrl}>`);
   const frontmatter = headerLines.join('\n') + '\n\n---\n\n';
   const fullContent = frontmatter + markdown;
   const size = Buffer.byteLength(fullContent, 'utf-8');

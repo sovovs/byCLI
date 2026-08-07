@@ -100,7 +100,56 @@ describe('downloadArticle', () => {
     const md = fs.readFileSync(result.saved, 'utf8');
     expect(md).not.toMatch(/<(?:img|script|b)\b/i);
     expect(md).toContain(String.raw`# &lt;img onerror=alert\(1\)&gt;`);
-    expect(md).toContain(String.raw`https://safe\.example/a\_\(1\)`);
+    // The URL stays followable: escaping it would defeat the whole point of a
+    // source link. Only the surrounding text fields are escaped.
+    expect(md).toContain('> 原文链接: <https://safe.example/a_(1)>');
+    expect(md).not.toContain(String.raw`https://safe\.example`);
+  });
+
+  it('keeps the source URL followable and rejects hostile schemes', async () => {
+    const base = {
+      title: 'T', contentHtml: '<p>x</p>',
+    };
+    const opts = { downloadImages: false, secureMarkdown: true };
+
+    const okDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(okDir);
+    const [ok] = await downloadArticle({
+      ...base, sourceUrl: 'https://mp.weixin.qq.com/s/zJAxgVqEUl_AkpCHjFkXGA',
+    }, { ...opts, output: okDir });
+    const okMd = fs.readFileSync(ok.saved, 'utf8');
+    expect(okMd).toContain('> 原文链接: <https://mp.weixin.qq.com/s/zJAxgVqEUl_AkpCHjFkXGA>');
+    expect(okMd).not.toMatch(/\\\.|\\_/);
+
+    // Query separators must survive: `&` entity-encoded breaks the link.
+    const qDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(qDir);
+    const [q] = await downloadArticle({
+      ...base, sourceUrl: 'https://example.com/a?b=1&c=2#frag',
+    }, { ...opts, output: qDir });
+    const qMd = fs.readFileSync(q.saved, 'utf8');
+    expect(qMd).toContain('> 原文链接: <https://example.com/a?b=1&c=2#frag>');
+    expect(qMd).not.toContain('&amp;');
+
+    // A non-http(s) scheme drops the line rather than emitting a live link.
+    const badDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(badDir);
+    const [bad] = await downloadArticle({
+      ...base, sourceUrl: 'javascript:alert(1)',
+    }, { ...opts, output: badDir });
+    const badMd = fs.readFileSync(bad.saved, 'utf8');
+    expect(badMd).not.toContain('原文链接');
+    expect(badMd).not.toContain('javascript:');
+
+    // A hostile URL cannot close the autolink early and inject markup.
+    const hDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(hDir);
+    const [h] = await downloadArticle({
+      ...base, sourceUrl: 'https://example.com/a><script>alert(1)</script>',
+    }, { ...opts, output: hDir });
+    const hMd = fs.readFileSync(h.saved, 'utf8');
+    expect(hMd).not.toMatch(/<script/i);
+    expect(hMd).toContain('%3E%3Cscript%3E');
   });
 
   it('neutralizes hostile iframe titles and destinations in secure Markdown mode', () => {
