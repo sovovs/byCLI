@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -397,6 +398,85 @@ describe('downloadArticle', () => {
       } finally {
         process.stdout.write = originalWrite;
       }
+    });
+  });
+
+  describe('image filenames', () => {
+    const IMAGE_FILENAME = /^img_[0-9a-f]{8}\.png$/;
+
+    /** Serves a 1x1 PNG for any path, so image downloads succeed offline. */
+    async function withImageServer(
+      run: (origin: string) => Promise<void>,
+    ): Promise<void> {
+      const pixel = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8AAAwAB/AF+s0k4AAAAAElFTkSuQmCC',
+        'base64',
+      );
+      const server = http.createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(pixel);
+      });
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('no port');
+      try {
+        await run(`http://127.0.0.1:${address.port}`);
+      } finally {
+        await new Promise<void>(resolve => server.close(() => resolve()));
+      }
+    }
+
+    async function collectImages(imageCount: number): Promise<{
+      files: string[];
+      markdown: string;
+    }> {
+      let files: string[] = [];
+      let markdown = '';
+      await withImageServer(async origin => {
+        const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-images-'));
+        tempDirs.push(tempDir);
+
+        const imageUrls = Array.from(
+          { length: imageCount },
+          (_v, i) => `${origin}/pic-${i}.png`,
+        );
+        const result = await downloadArticle({
+          title: 'ImageNames',
+          contentHtml: imageUrls.map(url => `<p><img src="${url}"></p>`).join(''),
+          imageUrls,
+        }, {
+          output: tempDir,
+          downloadImages: true,
+        });
+
+        expect(result[0].status).toBe('success');
+        markdown = fs.readFileSync(result[0].saved, 'utf8');
+        files = fs.readdirSync(path.join(path.dirname(result[0].saved), 'images')).sort();
+      });
+      return { files, markdown };
+    }
+
+    it('names downloaded images img_<8 hex>.<ext>', async () => {
+      const { files } = await collectImages(1);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toMatch(IMAGE_FILENAME);
+    });
+
+    it('gives concurrently downloaded images distinct names', async () => {
+      // More than IMAGE_CONCURRENCY so at least one batch boundary is crossed.
+      const { files, markdown } = await collectImages(7);
+      expect(files).toHaveLength(7);
+      for (const file of files) expect(file).toMatch(IMAGE_FILENAME);
+      expect(new Set(files).size).toBe(7);
+
+      // Every file on disk is referenced by the rewritten Markdown.
+      for (const file of files) expect(markdown).toContain(`images/${file}`);
+    });
+
+    it('uses a fresh name on each run', async () => {
+      const first = await collectImages(1);
+      const second = await collectImages(1);
+      expect(first.files[0]).not.toBe(second.files[0]);
     });
   });
 });

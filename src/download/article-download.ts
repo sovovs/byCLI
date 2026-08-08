@@ -6,6 +6,7 @@
  * Flow: ArticleData → TurndownService → image download → frontmatter → .md file
  */
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import TurndownService from 'turndown';
@@ -323,6 +324,32 @@ function defaultDetectImageExt(url: string): string {
   return extMatch ? extMatch[1] : 'jpg';
 }
 
+/** Random 8-char lowercase hex segment used in downloaded image filenames. */
+function randomImageId(): string {
+  return crypto.randomBytes(4).toString('hex');
+}
+
+/**
+ * Build a collision-free `img_<8 hex>.<ext>` filename inside `imgDir`.
+ *
+ * `taken` guards against collisions between images downloaded concurrently in
+ * the same run, since those files do not exist on disk yet when the name is
+ * picked. The on-disk check covers files from earlier runs into the same dir.
+ */
+function buildImageFilename(imgDir: string, ext: string, taken: Set<string>): string {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const filename = `img_${randomImageId()}.${ext}`;
+    if (taken.has(filename)) continue;
+    if (fs.existsSync(path.join(imgDir, filename))) continue;
+    taken.add(filename);
+    return filename;
+  }
+  // Astronomically unlikely; fall back to a longer id rather than overwriting.
+  const filename = `img_${randomImageId()}${randomImageId()}.${ext}`;
+  taken.add(filename);
+  return filename;
+}
+
 async function downloadImages(
   imgUrls: string[],
   imgDir: string,
@@ -333,6 +360,7 @@ async function downloadImages(
   if (imgUrls.length === 0) return urlMap;
 
   const detect = detectExt || defaultDetectImageExt;
+  const takenFilenames = new Set<string>();
 
   // Deduplicate image URLs
   const seen = new Set<string>();
@@ -345,13 +373,12 @@ async function downloadImages(
   for (let i = 0; i < uniqueUrls.length; i += IMAGE_CONCURRENCY) {
     const batch = uniqueUrls.slice(i, i + IMAGE_CONCURRENCY);
     const results = await Promise.all(
-      batch.map(async (rawUrl, j) => {
-        const index = i + j + 1;
+      batch.map(async rawUrl => {
         let imgUrl = rawUrl;
         if (imgUrl.startsWith('//')) imgUrl = `https:${imgUrl}`;
 
         const ext = detect(imgUrl);
-        const filename = `img_${String(index).padStart(3, '0')}.${ext}`;
+        const filename = buildImageFilename(imgDir, ext, takenFilenames);
         const filepath = path.join(imgDir, filename);
 
         try {
