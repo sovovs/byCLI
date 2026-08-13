@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createContext, runInContext, type Context } from 'node:vm';
 import { CliError } from '../errors.js';
 import { BasePage } from './base-page.js';
 import { TargetError } from './target-errors.js';
@@ -56,9 +57,100 @@ class ActionPage extends BasePage {
   async selectTab(): Promise<void> {}
 }
 
+class PersistentContextPage extends BasePage {
+  private readonly context: Context;
+  evaluations = 0;
+
+  constructor(globals: Record<string, unknown> = {}) {
+    super();
+    this.context = createContext(globals);
+  }
+
+  async goto(): Promise<void> {}
+  async evaluate<T = unknown>(js: string): Promise<T>;
+  async evaluate<Args extends unknown[], T>(fn: BrowserEvaluateFunction<Args, T>, ...args: Args): Promise<Awaited<T>>;
+  async evaluate(input: string | BrowserEvaluateFunction<unknown[], unknown>): Promise<unknown> {
+    if (typeof input !== 'string') throw new Error('PersistentContextPage only evaluates strings');
+    this.evaluations += 1;
+    return await runInContext(input, this.context);
+  }
+  async getCookies(): Promise<[]> { return []; }
+  async screenshot(): Promise<string> { return ''; }
+  async tabs(): Promise<unknown[]> { return []; }
+  async selectTab(): Promise<void> {}
+}
+
 const resolveOk = { ok: true, matches_n: 1, match_level: 'exact' };
 
+describe('BasePage.evaluateWithArgs', () => {
+  it('isolates repeated argument names in a persistent page context and returns async results', async () => {
+    const page = new PersistentContextPage();
+
+    await expect(page.evaluateWithArgs('Promise.resolve(value + 1)', { value: 1 })).resolves.toBe(2);
+    await expect(page.evaluateWithArgs('Promise.resolve(value + 1)', { value: 2 })).resolves.toBe(3);
+  });
+
+  it.each([
+    ['statement completion', 'value;', 7],
+    ['declaration and completion', 'const doubled = value * 2; doubled;', 14],
+    ['trailing line comment', 'value; // keep script completion semantics', 7],
+  ])('preserves %s', async (_case, js, expected) => {
+    const page = new PersistentContextPage();
+
+    await expect(page.evaluateWithArgs(js, { value: 7 })).resolves.toBe(expected);
+  });
+
+  it('does not expose argument source to a page that replaces global eval', async () => {
+    const hijackedEval = vi.fn(() => 'hijacked');
+    const page = new PersistentContextPage({ eval: hijackedEval });
+
+    await expect(page.evaluateWithArgs('value;', { value: 'private' })).resolves.toBe('private');
+    expect(hijackedEval).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid argument keys before evaluating page code', async () => {
+    const page = new PersistentContextPage();
+
+    await expect(page.evaluateWithArgs('value', { 'invalid-key': 1 })).rejects.toThrow(
+      'evaluateWithArgs: invalid key "invalid-key"',
+    );
+    expect(page.evaluations).toBe(0);
+  });
+
+  it.each(['await', 'class'])('rejects reserved argument key %s before evaluating page code', async (key) => {
+    const page = new PersistentContextPage();
+
+    await expect(page.evaluateWithArgs('1', { [key]: 1 })).rejects.toThrow(
+      `evaluateWithArgs: invalid key "${key}"`,
+    );
+    expect(page.evaluations).toBe(0);
+  });
+});
+
 describe('BasePage.fetchJson', () => {
+  it('passes an explicit referrer through fetch init without forging a Referer header', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      url: 'https://api.example.com/items',
+      headers: { get: () => 'application/json' },
+      text: async () => '{"items":[]}',
+    }));
+    const page = new PersistentContextPage({ AbortController, clearTimeout, fetch, setTimeout });
+    const referrer = 'https://mp.weixin.qq.com/cgi-bin/appmsgalbum?action=list';
+
+    await expect(page.fetchJson('https://api.example.com/items', {
+      referrer,
+      headers: { 'X-Test': '1' },
+    })).resolves.toEqual({ items: [] });
+
+    expect(fetch).toHaveBeenCalledOnce();
+    const [, init] = fetch.mock.calls[0];
+    expect(init).toMatchObject({ referrer, headers: { Accept: 'application/json', 'X-Test': '1' } });
+    expect(init.headers).not.toHaveProperty('Referer');
+  });
+
   it('passes a narrow browser-context JSON request and parses the response in Node', async () => {
     const page = new TestPage();
     page.result = {
@@ -80,6 +172,7 @@ describe('BasePage.fetchJson', () => {
       request: {
         url: 'https://api.example.com/items',
         method: 'POST',
+        referrer: undefined,
         headers: { 'X-Test': '1' },
         body: { q: 'bycli' },
         hasBody: true,

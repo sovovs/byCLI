@@ -67,6 +67,7 @@ export interface ScreenshotOptions {
 
 export interface FetchJsonOptions {
   method?: string;
+  referrer?: string;
   headers?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;

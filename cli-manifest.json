@@ -27909,6 +27909,90 @@
   },
   {
     "site": "weixin",
+    "name": "collection-detail",
+    "description": "Show one WeChat content collection with its settings and items",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "collectionId",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Collection ID returned by weixin collections"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Maximum number of collection pages to scan"
+      }
+    ],
+    "columns": [
+      "collectionId",
+      "title",
+      "description",
+      "collectionType",
+      "coverUrl",
+      "itemCount",
+      "createdAt",
+      "updatedAt",
+      "settingsJson",
+      "itemsJson"
+    ],
+    "type": "js",
+    "modulePath": "weixin/collection-detail.js",
+    "sourceFile": "weixin/collection-detail.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
+    "name": "collections",
+    "description": "List WeChat official-account content collections",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Maximum number of collections to return"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Maximum number of collection pages to scan"
+      }
+    ],
+    "columns": [
+      "collectionId",
+      "title",
+      "collectionType",
+      "itemCount",
+      "views",
+      "continuousRead",
+      "isUpdating",
+      "isBanned",
+      "isPaid",
+      "createdAt",
+      "updatedAt",
+      "coverUrl"
+    ],
+    "type": "js",
+    "modulePath": "weixin/collections.js",
+    "sourceFile": "weixin/collections.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
     "name": "create-draft",
     "description": "创建微信公众号图文草稿",
     "access": "write",

@@ -1,0 +1,38 @@
+{
+  "base_resp": { "ret": 0, "err_msg": "ok" },
+  "list_resp": {
+    "total": 3,
+    "items": [
+      {
+        "id": "900000000000000001",
+        "title": "Synthetic article collection",
+        "type": 0,
+        "total": 12,
+        "uv": 3456,
+        "continous_read_on": 1,
+        "is_updating": 1,
+        "is_ban": 0,
+        "need_pay": 1,
+        "create_time": 1700000000,
+        "update_time": 1700003600,
+        "cover_url": "https://example.invalid/article.jpg",
+        "url": "https://example.invalid/collections/1"
+      },
+      {
+        "id": 9002,
+        "title": "Synthetic video collection",
+        "type": 5,
+        "total": 2,
+        "uv": 40,
+        "continous_read_on": 0,
+        "is_updating": 0,
+        "is_ban": 1,
+        "need_pay": 0,
+        "create_time": 1700010000,
+        "update_time": 1700017200,
+        "cover_url": "https://example.invalid/video.jpg",
+        "url": "https://example.invalid/collections/2"
+      }
+    ]
+  }
+}

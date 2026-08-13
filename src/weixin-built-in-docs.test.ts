@@ -61,6 +61,10 @@ describe('built-in weixin history command release artifacts', () => {
     ]) {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be removed`).toBe(false);
     }
+
+    for (const file of ['collections.js', 'collection-detail.js']) {
+      expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be published`).toBe(true);
+    }
   });
 
   it.each([
@@ -81,7 +85,7 @@ describe('built-in weixin history command release artifacts', () => {
     `)).toBe(false);
   });
 
-  it('publishes the three conditional commands with stable manifest contracts', () => {
+  it('publishes the history and collection commands with stable manifest contracts', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'cli-manifest.json'), 'utf8')) as Array<Record<string, unknown>>;
     const byName = new Map(
       manifest.filter(entry => entry.site === 'weixin').map(entry => [entry.name, entry]),
@@ -123,6 +127,49 @@ describe('built-in weixin history command release artifacts', () => {
     expect(saveArticles.args.find(arg => arg.name === 'auth-source')).toMatchObject({
       type: 'str', default: 'browser', required: false, choices: ['browser', 'env'],
     });
+
+    expect(byName.get('collections')).toEqual({
+      site: 'weixin',
+      name: 'collections',
+      description: 'List WeChat official-account content collections',
+      access: 'read',
+      domain: 'mp.weixin.qq.com',
+      strategy: 'cookie',
+      browser: true,
+      args: [
+        { name: 'limit', type: 'int', default: 20, required: false, help: 'Maximum number of collections to return' },
+        { name: 'max-pages', type: 'int', default: 5, required: false, help: 'Maximum number of collection pages to scan' },
+      ],
+      columns: [
+        'collectionId', 'title', 'collectionType', 'itemCount', 'views', 'continuousRead',
+        'isUpdating', 'isBanned', 'isPaid', 'createdAt', 'updatedAt', 'coverUrl',
+      ],
+      type: 'js',
+      modulePath: 'weixin/collections.js',
+      sourceFile: 'weixin/collections.js',
+      navigateBefore: false,
+    });
+    expect(byName.get('collection-detail')).toEqual({
+      site: 'weixin',
+      name: 'collection-detail',
+      description: 'Show one WeChat content collection with its settings and items',
+      access: 'read',
+      domain: 'mp.weixin.qq.com',
+      strategy: 'cookie',
+      browser: true,
+      args: [
+        { name: 'collectionId', type: 'str', required: true, positional: true, help: 'Collection ID returned by weixin collections' },
+        { name: 'max-pages', type: 'int', default: 5, required: false, help: 'Maximum number of collection pages to scan' },
+      ],
+      columns: [
+        'collectionId', 'title', 'description', 'collectionType', 'coverUrl', 'itemCount',
+        'createdAt', 'updatedAt', 'settingsJson', 'itemsJson',
+      ],
+      type: 'js',
+      modulePath: 'weixin/collection-detail.js',
+      sourceFile: 'weixin/collection-detail.js',
+      navigateBefore: false,
+    });
   });
 
   it('documents the built-in workflow and retires the obsolete plugin plan without deleting it', () => {
@@ -131,9 +178,21 @@ describe('built-in weixin history command release artifacts', () => {
 
     for (const required of [
       'weixin accounts', 'weixin articles', 'weixin save-articles',
+      'weixin collections', 'weixin collection-detail',
+      'bycli weixin collections --limit 20 --max-pages 5 -f json',
+      "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
+      'collectionId', 'collectionType', 'AUTH_REQUIRED',
+      'settingsJson', 'itemsJson', 'compact JSON strings', 'JSON.parse',
+      'row-shape', 'nested business data',
+      'request URL must include the temporary token',
+      'Referer, output, errors, or committed artifacts',
+      'redacts it',
       'WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT',
       '部分失败', '扫码', 'fakeid', 'macOS',
     ]) expect(adapterDoc).toContain(required);
+    expect(adapterDoc).not.toContain('never expose the session token');
+    expect(adapterDoc.indexOf('bycli weixin collections --limit 20 --max-pages 5 -f json'))
+      .toBeLessThan(adapterDoc.indexOf("bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json"));
     expect(adapterDoc).not.toMatch(/plugin install|独立 npm/i);
     expect(oldPlan).toMatch(/Superseded/);
     expect(oldPlan).toMatch(/内置.*weixin/);

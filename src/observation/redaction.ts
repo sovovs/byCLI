@@ -13,6 +13,7 @@ const SENSITIVE_HEADER_NAMES = new Set([
 
 const SENSITIVE_FIELD_PATTERN = /(password|passwd|pwd|token|secret|authorization|cookie|set-cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?id|csrf|xsrf)/i;
 const SENSITIVE_URL_PARAMS = /([?&])(token|key|secret|fingerprint|password|auth|access_token|api_key|session_id|csrf|xsrf)=[^&]*/gi;
+const ENCODED_SENSITIVE_QUERY_ASSIGNMENT = /(%26(?:token|key|secret|fingerprint|password|auth|access_token|api_key|session_id|csrf|xsrf)(?:%3D|=))(?:(?!%26|["'\s,;}&#]).)+|(\\u0026(?:token|key|secret|fingerprint|password|auth|access_token|api_key|session_id|csrf|xsrf)(?:%3D|=))(?:(?!\\u0026|["'\s,;}&#]).)+/gi;
 
 function hasFingerprintFieldSegment(name: string): boolean {
   return name
@@ -51,7 +52,8 @@ export function redactText(text: string, opts: RedactionOptions = {}): string {
   let out = text
     .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]')
     .replace(/(["'])(password|passwd|pwd|token|secret|fingerprint|api_key|apikey|access_token|session_id)\1\s*:\s*(["'])(.*?)\3/gi, '$1$2$1:$3[REDACTED]$3')
-    .replace(/(token|secret|fingerprint|password|api_key|apikey|access_token|session_id)\s*[=:]\s*['"]?[^'"\s,;}&]+['"]?/gi, '$1=[REDACTED]')
+    .replace(ENCODED_SENSITIVE_QUERY_ASSIGNMENT, (_match, percentPrefix: string | undefined, escapedPrefix: string | undefined) => `${percentPrefix ?? escapedPrefix}[REDACTED]`)
+    .replace(/(token|secret|fingerprint|password|api_key|apikey|access_token|session_id)\s*[=:]\s*(?!['"]?\[REDACTED\](?=\\u0026|%26|['"\s,;}&#]|$))['"]?[^'"\s,;}&]+['"]?/gi, '$1=[REDACTED]')
     .replace(/(cookie[=:]\s*)[^\n;]{3,}/gi, '$1[REDACTED]')
     .replace(/eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '[REDACTED_JWT]');
   if (out.length > max) out = out.slice(0, max) + `\n...[truncated, ${out.length - max} chars omitted]`;

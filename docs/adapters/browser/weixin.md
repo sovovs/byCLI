@@ -11,6 +11,8 @@
 | `bycli weixin accounts` | Search backend public accounts and obtain `fakeid` values |
 | `bycli weixin articles` | List published articles for an explicit `fakeid` |
 | `bycli weixin save-articles` | List and save published articles as Markdown |
+| `bycli weixin collections` | List content collections owned by the logged-in official account |
+| `bycli weixin collection-detail` | Show one collection's settings and ordered content items |
 | `bycli weixin download` | Download one WeChat article as Markdown |
 | `bycli weixin drafts` | List drafts in the Official Accounts backend |
 | `bycli weixin create-draft` | Create an Official Accounts draft |
@@ -33,6 +35,17 @@ bycli weixin save-articles 'Mzg2NjY2NTcyNg==' \
   --limit 20 --max-pages 3 --auth-source browser -f json
 ```
 
+## Collection workflow
+
+`collections` and `collection-detail` are read-only, browser-session-only commands. List the account's collections first, copy a returned `collectionId`, and pass that ID to the detail command:
+
+```bash
+bycli weixin collections --limit 20 --max-pages 5 -f json
+bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json
+```
+
+The list response exposes the readable `collectionType`, but the detail endpoint requires WeChat's numeric type. `collection-detail` resolves that type internally by scanning the collection list for the exact `collectionId`; callers do not need to supply it.
+
 ### Implementation boundary
 
 `articles` history retrieval and `save-articles` saving use the published `@sovovs/wechat-article-crawler` public root API (`createWechatApi`, `collectArticles`, `saveArticles`). The adapter imports only that root entry—never private `src/*`/`bin/*` paths—and never starts a `wechat-crawler` subprocess.
@@ -48,6 +61,8 @@ Command arguments and defaults:
 | `accounts` | required positional `<query>`; `--limit <positive integer>` (default `10`); `--auth-source browser\|env` (default `browser`) |
 | `articles` | required positional `<fakeid>`; optional `--name <nickname>`, `--limit <positive integer>`, `--max-pages <positive integer>`; `--auth-source browser\|env` (default `browser`) |
 | `save-articles` | required positional `<fakeid>`; optional `--name <nickname>`, `--limit <positive integer>`, `--max-pages <positive integer>`; `--output <directory>` (default `./weixin-articles`); `--auth-source browser\|env` (default `browser`) |
+| `collections` | `--limit <positive integer>` (default `20`); `--max-pages <positive integer>` (default `5`) |
+| `collection-detail` | required positional `<collectionId>`; `--max-pages <positive integer>` (default `5`) |
 
 All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. `--name` is display metadata only; it does not choose or validate an account.
 
@@ -73,6 +88,8 @@ Environment credentials are all-or-nothing and are never mixed with a browser se
 
 Tokens, cookies, and fingerprints are temporary credentials. They are kept in command memory only and are redacted from errors, logs, traces, and output. Do not put them in shell history, committed files, fixtures, or shared logs. When credentials expire, the command reports an authentication error: log in again in browser mode or replace the complete environment-variable set. byCLI does not persist, refresh, or bypass expired credentials or WeChat risk controls.
 
+`collections` and `collection-detail` always use the current Browser Bridge session and do not accept environment credentials. WeChat may return HTTP 200 even when that session has expired; byCLI detects the response body and reports `AUTH_REQUIRED`. The request URL must include the temporary token, but byCLI does not copy it into the Referer, output, errors, or committed artifacts, and redacts it from diagnostics.
+
 ## Output and partial failures
 
 `accounts` columns are `nickname`, `fakeid`, and `alias`. Missing aliases are `null`.
@@ -80,6 +97,10 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 `articles` columns are `title`, `author`, `digest`, `publishedAt`, and `url`. Missing optional values are `null`; an empty article list is reported explicitly rather than disguised as an authentication success.
 
 `save-articles` columns are `title`, `status`, `stage`, `path`, `error`, and `url`. Successful rows have `status: "saved"`, an absolute Markdown `path`, and null `stage`/`error`. A per-article download or conversion failure produces `status: "failed"`, a `stage`, and a safe error message. This 部分失败 behavior preserves already-written files and continues with the remaining articles. Output-directory creation, permission, or write failures remain command-level errors.
+
+`collections` columns are `collectionId`, `title`, `collectionType`, `itemCount`, `views`, `continuousRead`, `isUpdating`, `isBanned`, `isPaid`, `createdAt`, `updatedAt`, and `coverUrl`.
+
+`collection-detail` returns exactly one row with columns `collectionId`, `title`, `description`, `collectionType`, `coverUrl`, `itemCount`, `createdAt`, `updatedAt`, `settingsJson`, and `itemsJson`. The last two fields are compact JSON strings that can be decoded with `JSON.parse`; this preserves nested business data, including collection settings and ordered content items, while complying with byCLI's row-shape validator.
 
 In browser authentication mode, `save-articles` tries a direct Node download first and automatically falls back to loading the article through the current Browser Bridge page when WeChat redirects direct traffic to a verification page. Environment authentication remains Node-only so CI and browserless use do not launch Chrome implicitly.
 

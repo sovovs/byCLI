@@ -136,6 +136,15 @@ function parseKeyChord(rawKey: string): { key: string; modifiers: string[] } {
   return key ? { key, modifiers } : { key: rawKey, modifiers: [] };
 }
 
+const EVALUATE_ARG_RESERVED_WORDS = new Set([
+  'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger',
+  'default', 'delete', 'do', 'else', 'enum', 'export', 'extends', 'false',
+  'finally', 'for', 'function', 'if', 'implements', 'import', 'in', 'instanceof',
+  'interface', 'let', 'new', 'null', 'package', 'private', 'protected', 'public',
+  'return', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof',
+  'var', 'void', 'while', 'with', 'yield',
+]);
+
 export abstract class BasePage implements IPage {
   protected _lastUrl: string | null = null;
   /** Cached previous snapshot hashes for incremental diff marking */
@@ -152,7 +161,8 @@ export abstract class BasePage implements IPage {
   /**
    * Safely evaluate JS with pre-serialized arguments.
    * Each key in `args` becomes a `const` declaration with JSON-serialized value,
-   * prepended to the JS code. Prevents injection by design.
+   * scoped to this invocation. Prevents injection and persistent-context lexical
+   * redeclarations by design.
    *
    * Usage:
    *   page.evaluateWithArgs(`(async () => { return sym; })()`, { sym: userInput })
@@ -160,19 +170,20 @@ export abstract class BasePage implements IPage {
   async evaluateWithArgs(js: string, args: Record<string, unknown>): Promise<unknown> {
     const declarations = Object.entries(args)
       .map(([key, value]) => {
-        if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+        if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) || EVALUATE_ARG_RESERVED_WORDS.has(key)) {
           throw new Error(`evaluateWithArgs: invalid key "${key}"`);
         }
         return `const ${key} = ${JSON.stringify(value)};`;
       })
       .join('\n');
-    return this.evaluate(`${declarations}\n${js}`);
+    return this.evaluate(`{\n${declarations}\n${js}\n}`);
   }
 
   async fetchJson(url: string, opts: FetchJsonOptions = {}): Promise<unknown> {
     const request = {
       url,
       method: opts.method ?? 'GET',
+      referrer: opts.referrer,
       headers: opts.headers ?? {},
       body: opts.body,
       hasBody: opts.body !== undefined,
@@ -191,6 +202,7 @@ export abstract class BasePage implements IPage {
             headers,
             signal: ctrl.signal,
           };
+          if (request.referrer !== undefined) init.referrer = request.referrer;
           if (request.hasBody) {
             if (!Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
               headers['Content-Type'] = 'application/json';

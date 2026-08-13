@@ -1,0 +1,55 @@
+{
+  "base_resp": { "ret": 0, "err_msg": "ok" },
+  "edit_resp": {
+    "id": "900000000000000001",
+    "title": "Synthetic article collection",
+    "desc": "Synthetic fixture; no account data.",
+    "type": 0,
+    "cover_url": "https://example.invalid/article.jpg",
+    "novel_cover_url": "https://example.invalid/novel.jpg",
+    "total": 3,
+    "begin": 0,
+    "create_time": 1700000000,
+    "update_time": 1700003600,
+    "continous_read_on": 1,
+    "is_updating": 1,
+    "is_reverse": 0,
+    "is_numbered": 1,
+    "need_pay": 1,
+    "fee": 6.5,
+    "is_ban": 0,
+    "can_modify_title": 1,
+    "send_quota": 4,
+    "subtype": 2,
+    "theme_color": "#07c160",
+    "update_frequence": { "month": 1 },
+    "continue_flag": 0,
+    "appmsg_infos": [
+      {
+        "appmsgid": 70001,
+        "itemidx": 1,
+        "title": "Synthetic first item",
+        "link": "https://example.invalid/items/1",
+        "cover": "https://example.invalid/items/1.jpg",
+        "create_time": 1700000100,
+        "type": 0,
+        "status": 2,
+        "fail_reason": "",
+        "share_page_type": 1,
+        "is_pay_subscribe": 1,
+        "pay_album_id": "pay-synthetic-1",
+        "wecoin_count": 10
+      },
+      {
+        "appmsgid": "70002",
+        "itemidx": 2,
+        "title": "Synthetic second item",
+        "link": "https://example.invalid/items/2",
+        "cover": "https://example.invalid/items/2.jpg",
+        "create_time": 1700000200,
+        "type": 8,
+        "status": 0
+      }
+    ]
+  }
+}
