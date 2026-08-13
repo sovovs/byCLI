@@ -9,7 +9,13 @@
  * page-scoped operations target the correct page without guessing.
  */
 
-import type { BrowserCookie, BrowserDownloadWaitResult, BrowserEvaluateFunction, ScreenshotOptions } from '../types.js';
+import type {
+  BrowserCookie,
+  BrowserDownloadWaitOptions,
+  BrowserDownloadWaitResult,
+  BrowserEvaluateFunction,
+  ScreenshotOptions,
+} from '../types.js';
 import { fetchDaemonStatus, sendCommand, sendCommandFull } from './daemon-client.js';
 import { extensionCapabilityHint, FOCUS_WINDOW_CAPABILITY } from './extension-capabilities.js';
 import { buildEvaluateExpression } from './utils.js';
@@ -310,10 +316,16 @@ export class Page extends BasePage {
     }
   }
 
-  async waitForDownload(pattern: string = '', timeoutMs: number = 30_000): Promise<BrowserDownloadWaitResult> {
+  async waitForDownload(
+    pattern: string = '',
+    timeoutMs: number = 30_000,
+    options?: BrowserDownloadWaitOptions,
+  ): Promise<BrowserDownloadWaitResult> {
     const result = await sendCommand('wait-download', {
       pattern,
       timeoutMs,
+      ...(options?.includeRecent === undefined ? {} : { includeRecent: options.includeRecent }),
+      ...(options?.startedAfterMs === undefined ? {} : { startedAfterMs: options.startedAfterMs }),
       ...this._cmdOpts(),
     });
     return result as BrowserDownloadWaitResult;

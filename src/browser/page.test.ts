@@ -317,6 +317,32 @@ describe('Page download waits', () => {
       pattern: 'receipt',
       timeoutMs: 1234,
     }));
+    expect(sendCommandMock.mock.calls[0]?.[1]).not.toHaveProperty('includeRecent');
+  });
+
+  it('forwards the option to ignore recent downloads', async () => {
+    sendCommandMock.mockResolvedValueOnce({ downloaded: false, elapsedMs: 5 });
+
+    const page = new Page('mercury', undefined, undefined, undefined, 'adapter');
+    await page.waitForDownload('receipt', 1234, { includeRecent: false });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('wait-download', expect.objectContaining({
+      pattern: 'receipt',
+      timeoutMs: 1234,
+      includeRecent: false,
+    }));
+  });
+
+  it('forwards an explicit download start threshold', async () => {
+    sendCommandMock.mockResolvedValueOnce({ downloaded: false, elapsedMs: 5 });
+
+    const page = new Page('mercury', undefined, undefined, undefined, 'adapter');
+    await page.waitForDownload('receipt', 1234, { includeRecent: true, startedAfterMs: 1_786_000_000_000 });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('wait-download', expect.objectContaining({
+      includeRecent: true,
+      startedAfterMs: 1_786_000_000_000,
+    }));
   });
 });
 

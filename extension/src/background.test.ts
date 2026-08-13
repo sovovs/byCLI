@@ -469,7 +469,33 @@ describe('background tab isolation', () => {
         elapsedMs: 12,
       },
     });
-    expect(waitForDownload).toHaveBeenCalledWith('receipt', 1234);
+    expect(waitForDownload).toHaveBeenCalledWith('receipt', 1234, { includeRecent: true });
+
+    await mod.__test__.handleCommand({
+      id: 'new-download',
+      action: 'wait-download',
+      pattern: 'receipt',
+      timeoutMs: 4321,
+      includeRecent: false,
+      session: 'mercury',
+      surface: 'adapter',
+    });
+    expect(waitForDownload).toHaveBeenNthCalledWith(2, 'receipt', 4321, { includeRecent: false });
+
+    await mod.__test__.handleCommand({
+      id: 'click-scoped-download',
+      action: 'wait-download',
+      pattern: 'receipt',
+      timeoutMs: 5000,
+      includeRecent: true,
+      startedAfterMs: 1_786_000_000_000,
+      session: 'mercury',
+      surface: 'adapter',
+    });
+    expect(waitForDownload).toHaveBeenNthCalledWith(3, 'receipt', 5000, {
+      includeRecent: true,
+      startedAfterMs: 1_786_000_000_000,
+    });
   });
 
   it('routes exec frameIndex through the same cross-origin frame ordering as handleFrames', async () => {

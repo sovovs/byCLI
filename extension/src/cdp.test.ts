@@ -289,7 +289,12 @@ function chromeMockForDownloads(initialItems: chrome.downloads.DownloadItem[] = 
         const item = items.get(query.id);
         return item ? [item] : [];
       }
-      return [...items.values()];
+      const startedAfter = typeof query.startedAfter === 'string' ? Date.parse(query.startedAfter) : Number.NaN;
+      return [...items.values()].filter((item) => {
+        if (!Number.isFinite(startedAfter)) return true;
+        const itemStartedAt = typeof item.startTime === 'string' ? Date.parse(item.startTime) : Number.NaN;
+        return Number.isFinite(itemStartedAt) && itemStartedAt > startedAfter;
+      });
     }),
     onCreated: {
       addListener: vi.fn((fn: (item: chrome.downloads.DownloadItem) => void) => { createdListeners.push(fn); }),
@@ -360,6 +365,161 @@ describe('cdp download waits', () => {
     });
     expect(downloads.onCreated.removeListener).toHaveBeenCalledTimes(1);
     expect(downloads.onChanged.removeListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores matching recent downloads when waiting only for a newly created download', async () => {
+    const oldDownload = {
+      id: 7,
+      filename: '/tmp/old-receipt.xls',
+      url: 'https://app.example/download?id=receipt',
+      finalUrl: 'https://cdn.example/receipt.xls',
+      mime: 'application/vnd.ms-excel',
+      state: 'complete',
+      totalBytes: 1234,
+      danger: 'safe',
+      startTime: new Date().toISOString(),
+    } as chrome.downloads.DownloadItem;
+    const mock = chromeMockForDownloads([oldDownload]);
+    vi.stubGlobal('chrome', mock.chrome);
+
+    const mod = await import('./cdp');
+    const promise = mod.waitForDownload('receipt', 1000, { includeRecent: false });
+    let settled = false;
+    void promise.then(() => { settled = true; });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+    expect(mock.downloads.search).not.toHaveBeenCalled();
+
+    mock.emitChanged({
+      id: 7,
+      filename: { current: '/tmp/old-receipt.xls', previous: '/tmp/old-receipt.crdownload' },
+    } as chrome.downloads.DownloadDelta);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(mock.downloads.search).not.toHaveBeenCalled();
+
+    const newDownload = {
+      ...oldDownload,
+      id: 8,
+      filename: '/tmp/new-receipt.crdownload',
+      state: 'in_progress',
+      totalBytes: 0,
+    } as chrome.downloads.DownloadItem;
+    mock.emitCreated(newDownload);
+    mock.setItem({
+      ...newDownload,
+      filename: '/tmp/new-receipt.xls',
+      state: 'complete',
+      totalBytes: 5678,
+    });
+    mock.emitChanged({
+      id: 8,
+      state: { current: 'complete', previous: 'in_progress' },
+    } as chrome.downloads.DownloadDelta);
+
+    await expect(promise).resolves.toMatchObject({
+      downloaded: true,
+      id: 8,
+      filename: '/tmp/new-receipt.xls',
+    });
+  });
+
+  it('accepts only matching recent downloads at or after an explicit start threshold', async () => {
+    const threshold = 1_786_000_000_000;
+    const common = {
+      url: 'https://app.example/download?id=receipt',
+      finalUrl: 'https://cdn.example/receipt.xls',
+      mime: 'application/vnd.ms-excel',
+      state: 'complete',
+      totalBytes: 1234,
+      danger: 'safe',
+    };
+    const mock = chromeMockForDownloads([
+      { ...common, id: 7, filename: '/tmp/old.xls', startTime: new Date(threshold - 1).toISOString() } as chrome.downloads.DownloadItem,
+      { ...common, id: 8, filename: '/tmp/new.xls', startTime: new Date(threshold).toISOString() } as chrome.downloads.DownloadItem,
+    ]);
+    vi.stubGlobal('chrome', mock.chrome);
+
+    const mod = await import('./cdp');
+    const result = await mod.waitForDownload('receipt', 1000, { startedAfterMs: threshold });
+
+    expect(mock.downloads.search).toHaveBeenCalledWith(expect.objectContaining({
+      startedAfter: new Date(threshold - 1).toISOString(),
+    }));
+    expect(result).toMatchObject({ id: 8, filename: '/tmp/new.xls' });
+  });
+
+  it('rechecks an in-progress recent snapshot after its completion event was already missed', async () => {
+    const threshold = 1_786_000_000_000;
+    const inProgress = {
+      id: 9,
+      filename: '/tmp/receipt.crdownload',
+      url: 'https://app.example/download?id=receipt',
+      finalUrl: 'https://cdn.example/receipt.xls',
+      mime: 'application/vnd.ms-excel',
+      state: 'in_progress',
+      totalBytes: 0,
+      danger: 'safe',
+      startTime: new Date(threshold).toISOString(),
+    } as chrome.downloads.DownloadItem;
+    const mock = chromeMockForDownloads([inProgress]);
+    const completed = {
+      ...inProgress,
+      filename: '/tmp/receipt.xls',
+      state: 'complete',
+      totalBytes: 5678,
+    } as chrome.downloads.DownloadItem;
+    mock.downloads.search.mockImplementation(async (query: chrome.downloads.DownloadQuery) => {
+      if (typeof query.id === 'number') return query.id === 9 ? [completed] : [];
+      mock.emitChanged({
+        id: 9,
+        state: { current: 'complete', previous: 'in_progress' },
+      } as chrome.downloads.DownloadDelta);
+      return [inProgress];
+    });
+    vi.stubGlobal('chrome', mock.chrome);
+
+    const mod = await import('./cdp');
+    const result = await mod.waitForDownload('receipt', 50, { startedAfterMs: threshold });
+
+    expect(mock.downloads.search).toHaveBeenCalledWith({ id: 9 });
+    expect(result).toMatchObject({
+      downloaded: true,
+      id: 9,
+      filename: '/tmp/receipt.xls',
+      state: 'complete',
+    });
+  });
+
+  it.each([
+    { label: 'older', startTime: new Date(1_786_000_000_000 - 1).toISOString() },
+    { label: 'missing', startTime: undefined },
+    { label: 'invalid', startTime: 'not-a-date' },
+  ])('does not accept a $label recent download before the explicit threshold', async ({ startTime }) => {
+    vi.useFakeTimers();
+    const threshold = 1_786_000_000_000;
+    vi.setSystemTime(threshold + 10);
+    const mock = chromeMockForDownloads([{
+      id: 7,
+      filename: '/tmp/old-receipt.xls',
+      url: 'https://app.example/download?id=receipt',
+      finalUrl: 'https://cdn.example/receipt.xls',
+      mime: 'application/vnd.ms-excel',
+      state: 'complete',
+      totalBytes: 1234,
+      danger: 'safe',
+      startTime,
+    } as chrome.downloads.DownloadItem]);
+    vi.stubGlobal('chrome', mock.chrome);
+
+    const mod = await import('./cdp');
+    const promise = mod.waitForDownload('receipt', 50, { startedAfterMs: threshold });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(promise).resolves.toMatchObject({ downloaded: false, state: 'interrupted' });
   });
 
   it('waits for a matching in-progress download to complete', async () => {

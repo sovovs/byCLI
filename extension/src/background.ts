@@ -2017,7 +2017,14 @@ async function handleUiCaptureRead(cmd: Command, leaseKey: string): Promise<Resu
 
 async function handleWaitDownload(cmd: Command): Promise<Result> {
   try {
-    const data = await executor.waitForDownload(cmd.pattern ?? '', cmd.timeoutMs ?? 30000);
+    const data = await executor.waitForDownload(
+      cmd.pattern ?? '',
+      cmd.timeoutMs ?? 30000,
+      {
+        includeRecent: cmd.includeRecent ?? true,
+        ...(cmd.startedAfterMs === undefined ? {} : { startedAfterMs: cmd.startedAfterMs }),
+      },
+    );
     return { id: cmd.id, ok: true, data };
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };

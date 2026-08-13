@@ -448,9 +448,23 @@ function downloadResult(item: chrome.downloads.DownloadItem, startedAt: number):
   };
 }
 
-export async function waitForDownload(pattern: string = '', timeoutMs: number = 30000): Promise<DownloadWaitResult> {
+export async function waitForDownload(
+  pattern: string = '',
+  timeoutMs: number = 30000,
+  options: { includeRecent?: boolean; startedAfterMs?: number } = {},
+): Promise<DownloadWaitResult> {
   const startedAt = Date.now();
   const timeout = Math.max(1, timeoutMs);
+  const includeRecent = options.includeRecent ?? true;
+  const explicitStartedAfter = typeof options.startedAfterMs === 'number'
+    && Number.isFinite(options.startedAfterMs)
+    && options.startedAfterMs > 0
+    ? options.startedAfterMs
+    : undefined;
+  const recentStartedAfter = explicitStartedAfter ?? startedAt - Math.max(timeout, 1000);
+  const searchStartedAfter = explicitStartedAfter === undefined
+    ? recentStartedAfter
+    : Math.max(0, recentStartedAfter - 1);
 
   return await new Promise<DownloadWaitResult>((resolve) => {
     let done = false;
@@ -479,7 +493,7 @@ export async function waitForDownload(pattern: string = '', timeoutMs: number = 
     };
     const onChanged = (delta: chrome.downloads.DownloadDelta) => {
       if (!delta.id) return;
-      if (!inProgressIds.has(delta.id) && !delta.filename && !delta.url) return;
+      if (!inProgressIds.has(delta.id)) return;
       if (delta.filename?.current || delta.url?.current) {
         void inspectById(delta.id);
         return;
@@ -500,19 +514,28 @@ export async function waitForDownload(pattern: string = '', timeoutMs: number = 
     chrome.downloads.onCreated.addListener(onCreated);
     chrome.downloads.onChanged.addListener(onChanged);
 
+    if (!includeRecent) return;
     void chrome.downloads.search({
       limit: 50,
       orderBy: ['-startTime'],
-      startedAfter: new Date(startedAt - Math.max(timeout, 1000)).toISOString(),
+      startedAfter: new Date(searchStartedAfter).toISOString(),
     }).then((recent) => {
       if (done) return;
-      const completed = recent.find((item) => item.state === 'complete' && matchesDownloadPattern(item, pattern));
+      const eligible = recent.filter((item) => {
+        if (explicitStartedAfter === undefined) return true;
+        const itemStartedAt = typeof item.startTime === 'string' ? Date.parse(item.startTime) : Number.NaN;
+        return Number.isFinite(itemStartedAt) && itemStartedAt >= explicitStartedAfter;
+      });
+      const completed = eligible.find((item) => item.state === 'complete' && matchesDownloadPattern(item, pattern));
       if (completed) {
         finish(downloadResult(completed, startedAt));
         return;
       }
-      for (const item of recent) {
-        if (item.state === 'in_progress' && matchesDownloadPattern(item, pattern)) inProgressIds.add(item.id);
+      for (const item of eligible) {
+        if (item.state === 'in_progress' && matchesDownloadPattern(item, pattern)) {
+          inProgressIds.add(item.id);
+          void inspectById(item.id);
+        }
       }
     }).catch((err) => {
       finish({

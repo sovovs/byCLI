@@ -28009,6 +28009,63 @@
   },
   {
     "site": "weixin",
+    "name": "download-publish-data",
+    "description": "Match a Weixin published article and download its detail spreadsheet",
+    "access": "write",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Exact article URL or title text"
+      },
+      {
+        "name": "date",
+        "type": "str",
+        "required": false,
+        "help": "Optional publication date in YYYY-MM-DD"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-publish-data",
+        "required": false,
+        "help": "Directory for downloaded spreadsheets"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Maximum published-record pages to scan"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 60,
+        "required": false,
+        "help": "Maximum seconds for capture and download"
+      }
+    ],
+    "columns": [
+      "title",
+      "published_at",
+      "url",
+      "status",
+      "path",
+      "size"
+    ],
+    "type": "js",
+    "modulePath": "weixin/download-publish-data.js",
+    "sourceFile": "weixin/download-publish-data.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
     "name": "drafts",
     "description": "列出微信公众号草稿箱",
     "access": "read",
@@ -28039,6 +28096,63 @@
     "type": "js",
     "modulePath": "weixin/drafts.js",
     "sourceFile": "weixin/drafts.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
+    "name": "published",
+    "description": "List Weixin published records and engagement metrics",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "intercept",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": false,
+        "positional": true,
+        "help": "Optional article title or URL filter"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Maximum articles to return"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Maximum published-record pages to scan"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 30,
+        "required": false,
+        "help": "Maximum seconds for request capture"
+      }
+    ],
+    "columns": [
+      "title",
+      "published_at",
+      "url",
+      "notified",
+      "failed",
+      "reads",
+      "likes",
+      "shares",
+      "recommends",
+      "comments",
+      "underlines",
+      "reprints"
+    ],
+    "type": "js",
+    "modulePath": "weixin/published.js",
+    "sourceFile": "weixin/published.js",
     "navigateBefore": false
   },
   {

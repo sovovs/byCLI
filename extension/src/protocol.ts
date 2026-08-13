@@ -67,6 +67,10 @@ export interface Command {
   pattern?: string;
   /** Download wait timeout in milliseconds */
   timeoutMs?: number;
+  /** Whether wait-download may resolve from matching downloads that started before registration. Defaults to true. */
+  includeRecent?: boolean;
+  /** Earliest accepted download start time as Unix epoch milliseconds. */
+  startedAfterMs?: number;
   /** CDP method name for 'cdp' action (e.g. 'Accessibility.getFullAXTree') */
   cdpMethod?: string;
   /** CDP method params for 'cdp' action */
