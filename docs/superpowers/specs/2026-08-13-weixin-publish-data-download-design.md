@@ -130,7 +130,7 @@
 - 运行新增命令的定向 Vitest 测试。
 - 运行全部 `clis/weixin/**/*.test.js`。
 - 运行 `bycli validate weixin`、类型检查、构建和 `git diff --check`。
-- 使用真实已登录浏览器运行 `bycli browser verify weixin/published` 和 `weixin/download-publish-data`，生成脱敏 verify fixture。
+- 使用真实已登录浏览器运行 `bycli browser verify weixin/published` 并生成脱敏 verify fixture；`weixin/download-publish-data` 使用 `--no-fixture --seed-args` 验证，避免把必填的私有文章 URL 或标题持久化。
 - 肉眼比对至少一篇文章的标题、发布日期和页面指标，并确认下载文件为非零 `.xls`。
 
 ## 非目标
@@ -140,4 +140,3 @@
 - 不获取超过微信单篇内容分析页所提供的 30 天统计窗口。
 - 不修改、删除、发表、置顶或调整文章可见性。
 - 不新增环境变量认证路径；首版只使用真实浏览器登录态。
-
