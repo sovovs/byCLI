@@ -13,6 +13,7 @@
 | `bycli weixin save-articles` | List and save published articles as Markdown |
 | `bycli weixin collections` | List content collections owned by the logged-in official account |
 | `bycli weixin collection-detail` | Show one collection's settings and ordered content items |
+| `bycli weixin download-publish-data` | Save one published article's content analysis as Markdown |
 | `bycli weixin download` | Download one WeChat article as Markdown |
 | `bycli weixin drafts` | List drafts in the Official Accounts backend |
 | `bycli weixin create-draft` | Create an Official Accounts draft |
@@ -101,6 +102,8 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 `collections` columns are `collectionId`, `title`, `collectionType`, `itemCount`, `views`, `continuousRead`, `isUpdating`, `isBanned`, `isPaid`, `createdAt`, `updatedAt`, and `coverUrl`.
 
 `collection-detail` returns exactly one row with columns `collectionId`, `title`, `description`, `collectionType`, `coverUrl`, `itemCount`, `createdAt`, `updatedAt`, `settingsJson`, and `itemsJson`. The last two fields are compact JSON strings that can be decoded with `JSON.parse`; this preserves nested business data, including collection settings and ordered content items, while complying with byCLI's row-shape validator.
+
+`download-publish-data` no longer downloads an XLS export. It opens the authenticated content-analysis page and saves a Markdown report under `--output` (default `./weixin-publish-data`). Successful rows return `title`, `publishedAt`, `url`, `status: "saved"`, `markdownPath`, `size`, and `error: null`; a page-analysis failure returns `status: "failed"` with a safe error message and no report path.
 
 In browser authentication mode, `save-articles` tries a direct Node download first and automatically falls back to loading the article through the current Browser Bridge page when WeChat redirects direct traffic to a verification page. Environment authentication remains Node-only so CI and browserless use do not launch Chrome implicitly.
 
