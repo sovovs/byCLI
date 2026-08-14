@@ -82,14 +82,14 @@ async function setup(overrides = {}) {
 }
 
 describe('downloadPublishData', () => {
-  it('moves a completed spreadsheet into the output directory and reports its size', async () => {
+  it('names a completed spreadsheet after the selected article and reports its size', async () => {
     const context = await setup({ filename: '数据明细.xls', content: 'workbook' });
 
     const result = await downloadPublishData(context.page, context.options);
 
     expect(result).toEqual({
       status: 'downloaded',
-      path: join(context.outputDir, '数据明细.xls'),
+      path: join(context.outputDir, 'Ontology Weekly.xls'),
       size: 8,
     });
     await expect(readFile(result.path, 'utf8')).resolves.toBe('workbook');
@@ -106,8 +106,34 @@ describe('downloadPublishData', () => {
     expect(context.page.click).not.toHaveBeenCalled();
   });
 
+  it('sanitizes unsafe article-title characters for the destination filename', async () => {
+    const context = await setup({
+      filename: 'wechat-export.xls',
+      detail: { title: '数据明细   A/B:C*D?E"F<G>H|I\nJ  ', link: DOWNLOAD_URL },
+    });
+    context.options.title = '  A/B:C*D?E"F<G>H|I\nJ  ';
+
+    const result = await downloadPublishData(context.page, context.options);
+
+    expect(result.path).toBe(join(context.outputDir, 'A_B_C_D_E_F_G_H_I_J.xls'));
+  });
+
+  it('uses a stable fallback when the article title is whitespace only', async () => {
+    const context = await setup({
+      filename: 'wechat-export.xls',
+      detail: { title: '数据明细    ', link: DOWNLOAD_URL },
+    });
+    context.options.title = '   ';
+
+    const result = await downloadPublishData(context.page, context.options);
+
+    expect(result.path).toBe(join(context.outputDir, 'publish-data.xls'));
+  });
+
   it('allocates a numbered filename without overwriting an existing file', async () => {
     const context = await setup({ filename: 'same.xls', content: 'new' });
+    context.options.title = 'same';
+    context.page.evaluate.mockResolvedValue({ title: '数据明细 same', link: DOWNLOAD_URL });
     await writeFile(join(context.outputDir, 'same.xls'), 'old');
 
     const result = await downloadPublishData(context.page, context.options);
@@ -294,8 +320,10 @@ describe('downloadPublishData', () => {
     expect(error.message).toContain('empty');
   });
 
-  it('cleans unsafe filename characters and appends the spreadsheet suffix', async () => {
-    const context = await setup({ filename: 'report:bad?.txt' });
+  it('cleans unsafe article-title characters and appends the spreadsheet suffix', async () => {
+    const context = await setup();
+    context.options.title = 'report:bad?.txt';
+    context.page.evaluate.mockResolvedValue({ title: '数据明细 report:bad?.txt', link: DOWNLOAD_URL });
 
     const result = await downloadPublishData(context.page, context.options);
 

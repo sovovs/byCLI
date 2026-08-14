@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { copyFile, link, mkdir, stat, unlink } from 'node:fs/promises';
-import { basename, extname, resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import { CommandExecutionError, TimeoutError } from '@sovovs/bycli/errors';
 
 function commandError(message) {
@@ -28,12 +28,11 @@ function trustedDownloadLink(link, detailUrl) {
     && candidate.searchParams.get('download') === '1';
 }
 
-function safeFilename(filename, title) {
-  const fallback = `数据明细（${title}）.xls`;
-  const clean = value => basename(value)
+function safeFilename(title) {
+  const clean = String(title ?? '')
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
     .trim();
-  let name = clean(filename || fallback) || clean(fallback) || 'publish-data.xls';
+  let name = clean || 'publish-data';
   if (extname(name).toLowerCase() !== '.xls') name += '.xls';
   return name;
 }
@@ -151,7 +150,7 @@ export async function downloadPublishData(page, options) {
   const target = await publishExclusively(
     downloaded.filename,
     outputDir,
-    safeFilename(downloaded.filename, options.title),
+    safeFilename(options.title),
   );
   try {
     await unlink(downloaded.filename);
