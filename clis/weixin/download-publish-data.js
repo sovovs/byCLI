@@ -3,6 +3,7 @@ import { cli, Strategy } from '@sovovs/bycli/registry';
 import { resolveBrowserCredentials } from './_wechat/auth-session.js';
 import { buildSecretSet, redactText } from './_wechat/redact.js';
 import { collectPublishAnalysis } from './_wechat/publish-analysis.js';
+import { downloadPublishData } from './_wechat/publish-download.js';
 import {
   buildDetailUrl,
   collectPublishedRecords,
@@ -11,7 +12,13 @@ import {
   validatePublishDate,
 } from './_wechat/publish-records.js';
 
-const COLUMNS = ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'size', 'error'];
+const COLUMNS = ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'dataPath', 'size', 'error'];
+
+function sanitizedError(error, secrets, fallback) {
+  const message = error instanceof Error ? error.message : fallback;
+  return redactText(message, secrets)
+    .replace(/https?:\/\/mp\.weixin\.qq\.com\/\S*/giu, '[REDACTED]');
+}
 
 export const downloadPublishDataCommand = cli({
   site: 'weixin',
@@ -48,19 +55,40 @@ export const downloadPublishDataCommand = cli({
     });
     const record = matchPublishedRecord(rows, query, validatedDate);
     const detailUrl = buildDetailUrl(record, token);
+    const outputDir = args.output ?? './weixin-publish-data';
+    const commonOptions = {
+      detailUrl,
+      title: record.title,
+      outputDir,
+      timeoutSeconds,
+    };
+    const secrets = buildSecretSet({ token, cookie });
+
     try {
-      const result = await collectPublishAnalysis(page, {
-        detailUrl, title: record.title, publishedAt: record.publishedAt,
-        outputDir: args.output ?? './weixin-publish-data', timeoutSeconds,
-      });
+      const result = await downloadPublishData(page, commonOptions);
       return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
-        status: result.status, markdownPath: result.path, size: result.size, error: null }];
-    } catch (error) {
-      return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
-        status: 'failed', markdownPath: null, size: null,
-        error: error instanceof Error
-          ? redactText(error.message, buildSecretSet({ token, cookie })).replace(/https?:\/\/mp\.weixin\.qq\.com\/\S*/giu, '[REDACTED]')
-          : 'Analysis collection failed' }];
+        status: 'saved', markdownPath: null, dataPath: result.path,
+        size: result.size, error: null }];
+    } catch (downloadError) {
+      const downloadMessage = sanitizedError(downloadError, secrets, 'Excel download failed');
+      try {
+        const result = await collectPublishAnalysis(page, {
+          ...commonOptions,
+          publishedAt: record.publishedAt,
+        });
+        return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
+          status: 'saved', markdownPath: result.path, dataPath: null,
+          size: result.size, error: downloadMessage }];
+      } catch (analysisError) {
+        const analysisMessage = sanitizedError(
+          analysisError,
+          secrets,
+          'Markdown fallback failed',
+        );
+        return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
+          status: 'failed', markdownPath: null, dataPath: null, size: null,
+          error: `Excel download failed: ${downloadMessage}; Markdown fallback failed: ${analysisMessage}` }];
+      }
     }
   },
 });
