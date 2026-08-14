@@ -1,6 +1,6 @@
 # WeChat (微信公众号)
 
-**Mode**: 🔐 Browser · **Domain**: `mp.weixin.qq.com`
+**Mode**: 🌐 / 🔐 Browser · **Domains**: `weixin.sogou.com`, `mp.weixin.qq.com`
 
 `weixin accounts` searches the logged-in WeChat Official Accounts backend and returns public accounts plus their `fakeid`. Use that `fakeid` with `articles` or `save-articles`.
 
@@ -8,6 +8,7 @@
 
 | Command | Description |
 |---------|-------------|
+| `bycli weixin search` | Search public-account articles through Sogou Weixin |
 | `bycli weixin accounts` | Search backend public accounts and obtain `fakeid` values |
 | `bycli weixin articles` | List published articles for an explicit `fakeid` |
 | `bycli weixin save-articles` | List and save published articles as Markdown |
@@ -19,6 +20,15 @@
 | `bycli weixin create-draft` | Create an Official Accounts draft |
 
 ## Search and history workflow
+
+`search` is a public Sogou Weixin article search and does not require a WeChat Official Accounts login. It returns result links, snippets, and the time text shown by Sogou. Use `download` with an `mp.weixin.qq.com` result URL when you need Markdown content.
+
+```bash
+bycli weixin search "AI" --page 1 --limit 5 -f json
+bycli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
+```
+
+Sogou may require a browser verification. Complete it in Chrome and retry; byCLI does not bypass verification or rate limits.
 
 `accounts` and `articles` are intentionally separate: inspect all account matches, choose the correct `fakeid`, and then list its articles before saving them. A similar account name is never selected automatically.
 
