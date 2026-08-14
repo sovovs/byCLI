@@ -18,7 +18,7 @@
 
 - [ ] Write a failing test that uses `wechat-export.xls` as the download but expects `Ontology Weekly.xls` as the saved path.
 - [ ] Write a failing test with title `  A/B:C*D?E"F<G>H|I\\nJ  ` and expect `A_B_C_D_E_F_G_H_I_nJ.xls`.
-- [ ] Write a failing test with JavaScript title literal `'\u0000/\\:*?"<>|'` and expect the fallback `publish-data.xls`.
+- [ ] Write a failing test with a whitespace-only title and expect the fallback `publish-data.xls`.
 - [ ] Run `npm exec vitest run --project adapter clis/weixin/_wechat/publish-download.test.js`; expect those tests to fail because the current code uses WeChat's filename.
 - [ ] Change `safeFilename` to accept only `title`, sanitize reserved characters and controls, use `publish-data` when empty, and append `.xls`.
 - [ ] Pass `safeFilename(options.title)` to `publishExclusively`.
