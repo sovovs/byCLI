@@ -4,8 +4,6 @@ import { copyFile, link, mkdir, stat, unlink } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { CommandExecutionError, TimeoutError } from '@sovovs/bycli/errors';
 
-const DOWNLOAD_SELECTOR = 'a.target_part[href*="download=1"]';
-
 function commandError(message) {
   return new CommandExecutionError(`WeChat publish-data download ${message}`);
 }
@@ -111,12 +109,12 @@ export async function downloadPublishData(page, options) {
     throw commandError('rejected a download link without a publish date');
   }
 
-  const clickedAfterMs = Date.now();
-  await page.click(DOWNLOAD_SELECTOR);
+  const startedAfterMs = Date.now();
+  await page.goto(detail.link, { waitUntil: 'none' });
   const downloaded = await page.waitForDownload(
     `&msgid=${encodeURIComponent(msgid)}&publish_date=${encodeURIComponent(publishDate)}&`,
     options.timeoutSeconds * 1000,
-    { includeRecent: true, startedAfterMs: clickedAfterMs },
+    { includeRecent: true, startedAfterMs },
   );
 
   if (!downloaded || downloaded.downloaded !== true) {

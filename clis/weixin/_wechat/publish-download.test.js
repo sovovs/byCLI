@@ -19,7 +19,6 @@ const actualFs = await vi.importActual('node:fs/promises');
 
 const DETAIL_URL = 'https://mp.weixin.qq.com/misc/appmsganalysis?action=detailpage&msgid=1001&publish_date=2026-08-07';
 const DOWNLOAD_URL = `${DETAIL_URL}&download=1`;
-const SELECTOR = 'a.target_part[href*="download=1"]';
 const temporaryDirectories = [];
 
 afterEach(async () => {
@@ -95,13 +94,16 @@ describe('downloadPublishData', () => {
     });
     await expect(readFile(result.path, 'utf8')).resolves.toBe('workbook');
     await expect(readFile(context.source)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(context.page.goto).toHaveBeenCalledWith(DETAIL_URL);
+    expect(context.page.goto.mock.calls).toEqual([
+      [DETAIL_URL],
+      [DOWNLOAD_URL, { waitUntil: 'none' }],
+    ]);
     expect(context.page.waitForDownload).toHaveBeenCalledWith(
       '&msgid=1001&publish_date=2026-08-07&',
       12_000,
       expect.objectContaining({ includeRecent: true, startedAfterMs: expect.any(Number) }),
     );
-    expect(context.page.click).toHaveBeenCalledWith(SELECTOR);
+    expect(context.page.click).not.toHaveBeenCalled();
   });
 
   it('allocates a numbered filename without overwriting an existing file', async () => {
@@ -150,13 +152,14 @@ describe('downloadPublishData', () => {
     expect(pattern).not.toMatch(/token|lang/);
   });
 
-  it('rejects a trusted-looking detail link without publish_date before clicking', async () => {
+  it('rejects a trusted-looking detail link without publish_date before download navigation', async () => {
     const link = 'https://mp.weixin.qq.com/misc/appmsganalysis?action=detailpage&msgid=1001&download=1';
     const context = await setup({ detail: { title: 'Ontology Weekly', link } });
     context.options.detailUrl = 'https://mp.weixin.qq.com/misc/appmsganalysis?action=detailpage&msgid=1001';
 
     await expect(downloadPublishData(context.page, context.options)).rejects.toBeInstanceOf(CommandExecutionError);
     expect(context.page.click).not.toHaveBeenCalled();
+    expect(context.page.goto.mock.calls).toEqual([[context.options.detailUrl]]);
     expect(context.page.waitForDownload).not.toHaveBeenCalled();
   });
 
@@ -169,6 +172,7 @@ describe('downloadPublishData', () => {
     const context = await setup({ detail: { title: 'Ontology Weekly', link } });
 
     await expect(downloadPublishData(context.page, context.options)).rejects.toBeInstanceOf(CommandExecutionError);
+    expect(context.page.goto.mock.calls).toEqual([[DETAIL_URL]]);
     expect(context.page.waitForDownload).not.toHaveBeenCalled();
   });
 
@@ -178,27 +182,29 @@ describe('downloadPublishData', () => {
     await expect(downloadPublishData(context.page, context.options)).rejects.toBeInstanceOf(CommandExecutionError);
   });
 
-  it('waits for the click to complete before waiting for a download scoped to click time', async () => {
+  it('waits for download navigation to complete before observing a download scoped to navigation time', async () => {
     const context = await setup();
-    let resolveClick;
-    context.page.click.mockImplementation(() => new Promise(resolve => {
-      context.events.push('click');
-      resolveClick = resolve;
-    }));
+    let resolveNavigation;
+    context.page.goto.mockImplementation((url, options) => {
+      if (url === DETAIL_URL) return Promise.resolve();
+      context.events.push('navigate-download');
+      expect(url).toBe(DOWNLOAD_URL);
+      expect(options).toEqual({ waitUntil: 'none' });
+      return new Promise(resolve => { resolveNavigation = resolve; });
+    });
     const before = Date.now();
 
     const promise = downloadPublishData(context.page, context.options);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(context.page.click).toHaveBeenCalledWith(SELECTOR);
+    await vi.waitFor(() => expect(context.page.goto).toHaveBeenCalledTimes(2));
     expect(context.page.waitForDownload).not.toHaveBeenCalled();
 
-    resolveClick({ matches_n: 1, match_level: 'exact' });
+    resolveNavigation();
     const result = await promise;
     const after = Date.now();
 
     expect(result.status).toBe('downloaded');
-    expect(context.events).toEqual(['click', 'wait']);
+    expect(context.events).toEqual(['navigate-download', 'wait']);
+    expect(context.page.click).not.toHaveBeenCalled();
     const waitOptions = context.page.waitForDownload.mock.calls[0][2];
     expect(waitOptions).toEqual({ includeRecent: true, startedAfterMs: expect.any(Number) });
     expect(waitOptions.startedAfterMs).toBeGreaterThanOrEqual(before);
