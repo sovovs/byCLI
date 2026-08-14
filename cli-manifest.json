@@ -28141,6 +28141,7 @@
       "url",
       "status",
       "markdownPath",
+      "dataPath",
       "size",
       "error"
     ],
