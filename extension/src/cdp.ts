@@ -139,10 +139,10 @@ export type DownloadWaitResult = {
 
 const networkCaptures = new Map<number, NetworkCaptureState>();
 
-// 采集只录制 DevTools Network 面板「Fetch/XHR」过滤器对应的请求,
-// 排除 Document/Stylesheet/Script/Image/Font/Media 等静态资源(js/css/html…)。
+// 采集录制 DevTools 的 Fetch/XHR，以及导航产生的 Document 响应。
+// Document 往往包含服务端嵌入的初始分析数据；其余静态资源仍排除。
 // CDP 在 requestWillBeSent / responseReceived 的 `type` 字段给出 ResourceType。
-const CAPTURE_RESOURCE_TYPES = new Set(['XHR', 'Fetch']);
+const CAPTURE_RESOURCE_TYPES = new Set(['XHR', 'Fetch', 'Document']);
 function isApiResourceType(type: unknown): boolean {
   return typeof type === 'string' && CAPTURE_RESOURCE_TYPES.has(type);
 }

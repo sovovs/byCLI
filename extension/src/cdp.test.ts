@@ -566,7 +566,7 @@ describe('network capture · Fetch/XHR filter + WebSocket frames', () => {
     for (const fn of listeners) await fn({ tabId }, method, params);
   }
 
-  it('records only Fetch/XHR; drops Script/Document/Image by resourceType', async () => {
+  it('records Fetch/XHR and Document responses; drops Script and Image resources', async () => {
     const { chrome, debuggerEventListeners } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
     const mod = await import('./cdp');
@@ -585,7 +585,7 @@ describe('network capture · Fetch/XHR filter + WebSocket frames', () => {
 
     const entries = await mod.readNetworkCapture(1);
     const urls = entries.map((e) => e.url).sort();
-    expect(urls).toEqual(['https://x.com/api/a', 'https://x.com/api/b']);
+    expect(urls).toEqual(['https://x.com/', 'https://x.com/api/a', 'https://x.com/api/b']);
     expect(entries.every((e) => e.kind === 'cdp')).toBe(true);
   });
 
