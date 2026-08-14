@@ -28094,7 +28094,7 @@
   {
     "site": "weixin",
     "name": "download-publish-data",
-    "description": "Match a Weixin published article and download its detail spreadsheet",
+    "description": "Match a Weixin published article and save its content analysis as Markdown",
     "access": "write",
     "domain": "mp.weixin.qq.com",
     "strategy": "intercept",
@@ -28118,7 +28118,7 @@
         "type": "str",
         "default": "./weixin-publish-data",
         "required": false,
-        "help": "Directory for downloaded spreadsheets"
+        "help": "Directory for generated Markdown reports"
       },
       {
         "name": "max-pages",
@@ -28132,16 +28132,17 @@
         "type": "int",
         "default": 60,
         "required": false,
-        "help": "Maximum seconds for capture and download"
+        "help": "Maximum seconds for page capture"
       }
     ],
     "columns": [
       "title",
-      "published_at",
+      "publishedAt",
       "url",
       "status",
-      "path",
-      "size"
+      "markdownPath",
+      "size",
+      "error"
     ],
     "type": "js",
     "modulePath": "weixin/download-publish-data.js",

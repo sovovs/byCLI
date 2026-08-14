@@ -2,11 +2,11 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { getRegistry } from '@sovovs/bycli/registry';
 import * as auth from './_wechat/auth-session.js';
-import * as publishDownload from './_wechat/publish-download.js';
+import * as publishAnalysis from './_wechat/publish-analysis.js';
 import * as publishRecords from './_wechat/publish-records.js';
 
 vi.mock('./_wechat/auth-session.js');
-vi.mock('./_wechat/publish-download.js');
+vi.mock('./_wechat/publish-analysis.js');
 vi.mock('./_wechat/publish-records.js', async importOriginal => ({
   ...await importOriginal(),
   collectPublishedRecords: vi.fn(),
@@ -39,9 +39,9 @@ function arrangeSuccess(overrides = {}) {
   publishRecords.collectPublishedRecords.mockResolvedValue(records);
   publishRecords.matchPublishedRecord.mockReturnValue(matched);
   publishRecords.buildDetailUrl.mockReturnValue('https://mp.weixin.qq.com/misc/appmsganalysis?private=1');
-  publishDownload.downloadPublishData.mockResolvedValue({
-    status: 'downloaded',
-    path: '/tmp/data.xls',
+  publishAnalysis.collectPublishAnalysis.mockResolvedValue({
+    status: 'saved',
+    path: '/tmp/data.md',
     size: 1234,
   });
   return { records, matched };
@@ -57,22 +57,22 @@ describe('weixin download-publish-data command', () => {
       name: 'download-publish-data',
       access: 'write',
       domain: 'mp.weixin.qq.com',
-      description: 'Match a Weixin published article and download its detail spreadsheet',
+      description: 'Match a Weixin published article and save its content analysis as Markdown',
       strategy: 'intercept',
       browser: true,
       navigateBefore: false,
-      columns: ['title', 'published_at', 'url', 'status', 'path', 'size'],
+      columns: ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'size', 'error'],
     });
     expect(command.args).toEqual([
       { name: 'query', positional: true, required: true, help: 'Exact article URL or title text' },
       { name: 'date', help: 'Optional publication date in YYYY-MM-DD' },
-      { name: 'output', default: './weixin-publish-data', help: 'Directory for downloaded spreadsheets' },
+      { name: 'output', default: './weixin-publish-data', help: 'Directory for generated Markdown reports' },
       { name: 'max-pages', type: 'int', default: 5, help: 'Maximum published-record pages to scan' },
-      { name: 'timeout', type: 'int', default: 60, help: 'Maximum seconds for capture and download' },
+      { name: 'timeout', type: 'int', default: 60, help: 'Maximum seconds for page capture' },
     ]);
   });
 
-  it('trims the query, orchestrates collection and download, and returns only public fields', async () => {
+  it('trims the query, collects analysis, and returns only public fields', async () => {
     const { records, matched } = arrangeSuccess();
     const page = {};
 
@@ -84,11 +84,12 @@ describe('weixin download-publish-data command', () => {
       timeout: 12,
     })).resolves.toEqual([{
       title: 'Ontology Weekly',
-      published_at: '2026-08-07',
+      publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
-      status: 'downloaded',
-      path: '/tmp/data.xls',
+      status: 'saved',
+      markdownPath: '/tmp/data.md',
       size: 1234,
+      error: null,
     }]);
 
     expect(auth.resolveBrowserCredentials).toHaveBeenCalledWith(page);
@@ -104,9 +105,10 @@ describe('weixin download-publish-data command', () => {
       '2026-08-07',
     );
     expect(publishRecords.buildDetailUrl).toHaveBeenCalledWith(matched, 'token-1');
-    expect(publishDownload.downloadPublishData).toHaveBeenCalledWith(page, {
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith(page, {
       detailUrl: 'https://mp.weixin.qq.com/misc/appmsganalysis?private=1',
       title: 'Ontology Weekly',
+      publishedAt: '2026-08-07',
       outputDir: '/exports',
       timeoutSeconds: 12,
     });
@@ -119,7 +121,7 @@ describe('weixin download-publish-data command', () => {
     expect(output[0]).not.toHaveProperty('msgid');
     expect(output[0]).not.toHaveProperty('itemIdx');
     expect(output[0]).not.toHaveProperty('publishDate');
-    expect(output[0]).not.toHaveProperty('publishedAt');
+    expect(output[0]).toHaveProperty('publishedAt', '2026-08-07');
   });
 
   it('uses command defaults and forwards an omitted date', async () => {
@@ -138,7 +140,7 @@ describe('weixin download-publish-data command', () => {
       'Ontology Weekly',
       undefined,
     );
-    expect(publishDownload.downloadPublishData).toHaveBeenCalledWith({}, expect.objectContaining({
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, expect.objectContaining({
       outputDir: './weixin-publish-data',
       timeoutSeconds: 60,
     }));
@@ -149,7 +151,7 @@ describe('weixin download-publish-data command', () => {
 
     await command.func({}, { query: 'Ontology Weekly', output: '' });
 
-    expect(publishDownload.downloadPublishData).toHaveBeenCalledWith({}, expect.objectContaining({
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, expect.objectContaining({
       outputDir: '',
     }));
   });
@@ -212,7 +214,6 @@ describe('weixin download-publish-data command', () => {
     ['authentication', () => auth.resolveBrowserCredentials, new ArgumentError('auth failed')],
     ['collection', () => publishRecords.collectPublishedRecords, new CommandExecutionError('collect failed')],
     ['matching', () => publishRecords.matchPublishedRecord, new ArgumentError('match failed')],
-    ['download', () => publishDownload.downloadPublishData, new CommandExecutionError('download failed')],
   ])('naturally propagates %s errors', async (_label, getMock, error) => {
     arrangeSuccess();
     getMock().mockRejectedValue?.(error);
