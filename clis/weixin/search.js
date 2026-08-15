@@ -11,14 +11,14 @@ function normalizePositiveInteger(value, name, defaultValue, maxValue) {
   const text = String(value).trim();
   if (!/^\d+$/.test(text)) {
     throw new ArgumentError(
-      `weixin search --${name} must be a positive integer`,
+      `weixin sougousearch --${name} must be a positive integer`,
       `Pass --${name} as a whole number${maxValue ? ` from 1 to ${maxValue}` : ' greater than 0'}.`,
     );
   }
   const parsed = Number(text);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || (maxValue && parsed > maxValue)) {
     throw new ArgumentError(
-      `weixin search --${name} is out of range`,
+      `weixin sougousearch --${name} is out of range`,
       `Pass --${name} as a whole number${maxValue ? ` from 1 to ${maxValue}` : ' greater than 0'}.`,
     );
   }
@@ -69,9 +69,11 @@ function buildExtractSearchResultsEvaluate() {
     const extracted = cards.map((item) => {
       const linkEl = item.querySelector('h3 a[href]');
       const summaryEl = item.querySelector('p.txt-info');
+      const accountEl = item.querySelector('.s-p .all-time-y2');
       const timeEl = item.querySelector('.s-p .s2');
       return {
         title: clean(linkEl && linkEl.textContent),
+        account: clean(accountEl && accountEl.textContent),
         url: absolutize(linkEl && linkEl.getAttribute('href')),
         summary: clean(summaryEl && summaryEl.textContent),
         publish_time: clean(timeEl && timeEl.textContent),
@@ -90,7 +92,7 @@ function buildExtractSearchResultsEvaluate() {
 
 export const weixinSearchCommand = cli({
   site: 'weixin',
-  name: 'search',
+  name: 'sougousearch',
   access: 'read',
   description: '使用搜狗微信搜索公众号文章；如需导出正文 Markdown，请使用 weixin download 处理公众号文章链接',
   domain: SOGOU_WEIXIN_DOMAIN,
@@ -101,7 +103,7 @@ export const weixinSearchCommand = cli({
     { name: 'page', type: 'int', default: 1, help: '结果页码，从 1 开始' },
     { name: 'limit', type: 'int', default: 10, help: '返回条数，最大 10' },
   ],
-  columns: ['rank', 'page', 'title', 'url', 'summary', 'publish_time'],
+  columns: ['rank', 'page', 'title', 'account', 'url', 'summary', 'publish_time'],
   func: async (page, kwargs) => {
     const query = String(kwargs.query ?? '').trim();
     if (!query) {
@@ -119,11 +121,11 @@ export const weixinSearchCommand = cli({
       payload = await page.evaluate(buildExtractSearchResultsEvaluate());
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new CommandExecutionError('weixin search failed while loading Sogou results', detail);
+      throw new CommandExecutionError('weixin sougousearch failed while loading Sogou results', detail);
     }
 
     if (!payload || typeof payload !== 'object' || !Array.isArray(payload.rows)) {
-      throw new CommandExecutionError('weixin search returned an unreadable browser payload', 'Sogou Weixin may have changed its result page structure.');
+      throw new CommandExecutionError('weixin sougousearch returned an unreadable browser payload', 'Sogou Weixin may have changed its result page structure.');
     }
     if (payload.blocked) {
       throw new CommandExecutionError('Sogou Weixin blocked this search request', 'Open weixin.sogou.com in Chrome and complete any verification before retrying.');
@@ -134,16 +136,17 @@ export const weixinSearchCommand = cli({
 
     const rows = payload.rows;
     if (rows.length === 0 && payload.empty) {
-      throw new EmptyResultError('weixin search', 'Try a different keyword or a different page number.');
+      throw new EmptyResultError('weixin sougousearch', 'Try a different keyword or a different page number.');
     }
     if (rows.length === 0) {
-      throw new CommandExecutionError('weixin search did not expose article result cards', 'Sogou Weixin may have changed its selectors or returned a transient shell page.');
+      throw new CommandExecutionError('weixin sougousearch did not expose article result cards', 'Sogou Weixin may have changed its selectors or returned a transient shell page.');
     }
 
     return rows.slice(0, limit).map((row, index) => ({
       rank: (pageNo - 1) * 10 + index + 1,
       page: pageNo,
       title: row.title,
+      account: row.account,
       url: row.url,
       summary: row.summary,
       publish_time: row.publish_time,

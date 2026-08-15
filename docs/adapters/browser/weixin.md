@@ -8,7 +8,7 @@
 
 | Command | Description |
 |---------|-------------|
-| `bycli weixin search` | Search public-account articles through Sogou Weixin |
+| `bycli weixin sougousearch` | Search public-account articles through Sogou Weixin |
 | `bycli weixin accounts` | Search backend public accounts and obtain `fakeid` values |
 | `bycli weixin articles` | List published articles for an explicit `fakeid` |
 | `bycli weixin save-articles` | List and save published articles as Markdown |
@@ -21,10 +21,10 @@
 
 ## Search and history workflow
 
-`search` is a public Sogou Weixin article search and does not require a WeChat Official Accounts login. It returns result links, snippets, and the time text shown by Sogou. Use `download` with an `mp.weixin.qq.com` result URL when you need Markdown content.
+`sougousearch` is a public Sogou Weixin article search and does not require a WeChat Official Accounts login. It returns article titles, public-account names (`account`), result links, snippets, and the time text shown by Sogou. Use `download` with an `mp.weixin.qq.com` result URL when you need Markdown content.
 
 ```bash
-bycli weixin search "AI" --page 1 --limit 5 -f json
+bycli weixin sougousearch "AI" --page 1 --limit 5 -f json
 bycli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 ```
 
