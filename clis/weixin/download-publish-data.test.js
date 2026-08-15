@@ -64,16 +64,16 @@ describe('weixin download-publish-data command', () => {
       name: 'download-publish-data',
       access: 'write',
       domain: 'mp.weixin.qq.com',
-      description: 'Match a Weixin published article and save its content analysis as Markdown',
+      description: 'Match a Weixin published article and save its Excel data and Markdown analysis',
       strategy: 'intercept',
       browser: true,
       navigateBefore: false,
-      columns: ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'dataPath', 'size', 'error'],
+      columns: ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error'],
     });
     expect(command.args).toEqual([
       { name: 'query', positional: true, required: true, help: 'Exact article URL or title text' },
       { name: 'date', help: 'Optional publication date in YYYY-MM-DD' },
-      { name: 'output', default: './weixin-publish-data', help: 'Directory for generated Markdown reports' },
+      { name: 'output', default: './weixin-publish-data', help: 'Directory for generated Excel data and Markdown reports' },
       { name: 'max-pages', type: 'int', default: 5, help: 'Maximum published-record pages to scan' },
       { name: 'timeout', type: 'int', default: 60, help: 'Maximum seconds for page capture' },
     ]);
@@ -93,10 +93,11 @@ describe('weixin download-publish-data command', () => {
       title: 'Ontology Weekly',
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
-      status: 'saved',
-      markdownPath: null,
+      status: 'downloaded',
+      markdownPath: '/tmp/data.md',
+      markdownSize: 1234,
       dataPath: '/tmp/data.xls',
-      size: 25088,
+      dataSize: 25088,
       error: null,
     }]);
 
@@ -119,7 +120,12 @@ describe('weixin download-publish-data command', () => {
       outputDir: '/exports',
       timeoutSeconds: 12,
     });
-    expect(publishAnalysis.collectPublishAnalysis).not.toHaveBeenCalled();
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith(page, {
+      detailUrl: 'https://mp.weixin.qq.com/misc/appmsganalysis?private=1',
+      title: 'Ontology Weekly', publishedAt: '2026-08-07', outputDir: '/exports', timeoutSeconds: 12,
+    });
+    expect(publishDownload.downloadPublishData.mock.invocationCallOrder[0])
+      .toBeLessThan(publishAnalysis.collectPublishAnalysis.mock.invocationCallOrder[0]);
 
     const output = await command.func(page, {
       query: 'Ontology Weekly', 'max-pages': 3, timeout: 12,
@@ -152,7 +158,9 @@ describe('weixin download-publish-data command', () => {
       outputDir: './weixin-publish-data',
       timeoutSeconds: 60,
     }));
-    expect(publishAnalysis.collectPublishAnalysis).not.toHaveBeenCalled();
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, expect.objectContaining({
+      outputDir: './weixin-publish-data', timeoutSeconds: 60, publishedAt: '2026-08-07',
+    }));
   });
 
   it('preserves an explicitly empty output directory value', async () => {
@@ -163,10 +171,12 @@ describe('weixin download-publish-data command', () => {
     expect(publishDownload.downloadPublishData).toHaveBeenCalledWith({}, expect.objectContaining({
       outputDir: '',
     }));
-    expect(publishAnalysis.collectPublishAnalysis).not.toHaveBeenCalled();
+    expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, expect.objectContaining({
+      outputDir: '',
+    }));
   });
 
-  it('falls back to Markdown when Excel download fails and keeps the redacted download error', async () => {
+  it('returns partial success when Excel fails but Markdown succeeds', async () => {
     arrangeSuccess();
     publishDownload.downloadPublishData.mockRejectedValue(
       new CommandExecutionError('download failed token=token-1'),
@@ -178,10 +188,11 @@ describe('weixin download-publish-data command', () => {
       title: 'Ontology Weekly',
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
-      status: 'saved',
+      status: 'partial',
       markdownPath: '/tmp/data.md',
+      markdownSize: 1234,
       dataPath: null,
-      size: 1234,
+      dataSize: null,
       error: expect.stringContaining('download failed'),
     });
     expect(result.error).not.toContain('token-1');
@@ -194,6 +205,23 @@ describe('weixin download-publish-data command', () => {
     });
     expect(publishDownload.downloadPublishData.mock.invocationCallOrder[0])
       .toBeLessThan(publishAnalysis.collectPublishAnalysis.mock.invocationCallOrder[0]);
+  });
+
+  it('returns partial success when Markdown fails but Excel succeeds', async () => {
+    arrangeSuccess();
+    publishAnalysis.collectPublishAnalysis.mockRejectedValue(
+      new CommandExecutionError('analysis failed secret-cookie'),
+    );
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toEqual({
+      title: 'Ontology Weekly', publishedAt: '2026-08-07',
+      url: 'https://mp.weixin.qq.com/s/ontology-weekly', status: 'partial',
+      markdownPath: null, markdownSize: null, dataPath: '/tmp/data.xls', dataSize: 25088,
+      error: expect.stringContaining('Markdown analysis failed'),
+    });
+    expect(result.error).not.toContain('secret-cookie');
   });
 
   it('returns a redacted failure when Excel download and Markdown fallback both fail', async () => {
@@ -210,11 +238,12 @@ describe('weixin download-publish-data command', () => {
     expect(result).toMatchObject({
       status: 'failed',
       markdownPath: null,
+      markdownSize: null,
       dataPath: null,
-      size: null,
+      dataSize: null,
     });
     expect(result.error).toContain('Excel download failed');
-    expect(result.error).toContain('Markdown fallback failed');
+    expect(result.error).toContain('Markdown analysis failed');
     expect(result.error).not.toMatch(/token-1|secret-cookie|https?:\/\/mp\.weixin\.qq\.com/iu);
   });
 

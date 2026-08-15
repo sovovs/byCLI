@@ -2,8 +2,9 @@ import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs
 import { MAX_WECHAT_HTML_BYTES } from '@sovovs/bycli/download/wechat-article';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
+import { createArticleIndexFetcher } from './_wechat/article-index.js';
 import {
-  callCrawler, collectArticles, createWechatApi, isTrustedWechatArticleUrl, saveArticles,
+  callCrawler, collectArticles, isTrustedWechatArticleUrl, saveArticles,
 } from './_wechat/crawler-runtime.js';
 import { readAuthSource } from './_wechat/args.js';
 import { wechatArticleToMarkdown } from './_wechat/markdown.js';
@@ -167,8 +168,8 @@ export const saveArticlesCommand = cli({
     const credentials = authSource === 'env'
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
     const articleHtmlDownloader = createArticleHtmlDownloader({ authSource, page });
+    const fetchPage = createArticleIndexFetcher({ page, source: authSource, credentials });
     const rows = await callCrawler(async () => {
-      const { fetchPage } = createWechatApi(credentials);
       const { articles } = await collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
       return saveArticles({
         articles, accountName: String(args.name ?? '').trim(),

@@ -1,4 +1,4 @@
-import { AuthRequiredError, BrowserConnectError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, BrowserConnectError, CommandExecutionError } from '@sovovs/bycli/errors';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const LOGIN_URL = `https://${DOMAIN}/`;
@@ -40,6 +40,20 @@ export function isLoggedInPreflight(state) {
     const url = new URL(state.url);
     return url.origin === `https://${DOMAIN}`
       && url.pathname.startsWith('/cgi-bin/')
+      && Boolean(url.searchParams.get('token')?.trim());
+  } catch {
+    return false;
+  }
+}
+
+/** @param {PreflightState} state @returns {boolean} */
+export function isLoggedInMiniProgramPreflight(state) {
+  if (state.url === null || state.hasLoginUi) return false;
+
+  try {
+    const url = new URL(state.url);
+    return url.origin === `https://${DOMAIN}`
+      && url.pathname.startsWith('/wxamp/')
       && Boolean(url.searchParams.get('token')?.trim());
   } catch {
     return false;
@@ -100,6 +114,12 @@ export async function resolveBrowserCredentials(page, options = {}) {
     state = await readPreflight(page);
 
     if (!isLoggedInPreflight(state)) {
+      if (isLoggedInMiniProgramPreflight(state)) {
+        throw new CommandExecutionError(
+          'The connected WeChat session is authenticated as a Mini Program account',
+          'Switch to a WeChat Official Account in the same browser profile before running bycli weixin commands.',
+        );
+      }
       if (!page.focusWindow) {
         throw new BrowserConnectError(
           'The connected browser cannot be focused for WeChat login',

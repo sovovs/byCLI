@@ -28084,7 +28084,9 @@
       "publish_time",
       "status",
       "size",
-      "saved"
+      "saved",
+      "source_url",
+      "resolved_url"
     ],
     "type": "js",
     "modulePath": "weixin/download.js",
@@ -28094,7 +28096,7 @@
   {
     "site": "weixin",
     "name": "download-publish-data",
-    "description": "Match a Weixin published article and save its content analysis as Markdown",
+    "description": "Match a Weixin published article and save its Excel data and Markdown analysis",
     "access": "write",
     "domain": "mp.weixin.qq.com",
     "strategy": "intercept",
@@ -28118,7 +28120,7 @@
         "type": "str",
         "default": "./weixin-publish-data",
         "required": false,
-        "help": "Directory for generated Markdown reports"
+        "help": "Directory for generated Excel data and Markdown reports"
       },
       {
         "name": "max-pages",
@@ -28141,8 +28143,9 @@
       "url",
       "status",
       "markdownPath",
+      "markdownSize",
       "dataPath",
-      "size",
+      "dataSize",
       "error"
     ],
     "type": "js",
