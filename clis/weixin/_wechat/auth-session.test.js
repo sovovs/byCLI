@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthRequiredError } from '@sovovs/bycli/errors';
 import {
+  isLoggedInMiniProgramPreflight,
   isLoggedInPreflight,
   readEnvironmentCredentials,
   resolveBrowserCredentials,
@@ -74,6 +75,17 @@ describe('isLoggedInPreflight', () => {
     'https://mp.weixin.qq.com:8443/cgi-bin/home?token=123',
   ])('rejects a backend URL outside the standard HTTPS origin: %s', url => {
     expect(isLoggedInPreflight({ url, hasLoginUi: false })).toBe(false);
+  });
+});
+
+describe('isLoggedInMiniProgramPreflight', () => {
+  it('recognizes an authenticated Mini Program backend without accepting it as an Official Account', () => {
+    const state = {
+      url: 'https://mp.weixin.qq.com/wxamp/home/guide?lang=zh_CN&token=456',
+      hasLoginUi: false,
+    };
+    expect(isLoggedInMiniProgramPreflight(state)).toBe(true);
+    expect(isLoggedInPreflight(state)).toBe(false);
   });
 });
 
@@ -168,5 +180,21 @@ describe('resolveBrowserCredentials', () => {
     });
     expect(page.goto).toHaveBeenNthCalledWith(1, 'https://mp.weixin.qq.com/');
     expect(page.focusWindow).not.toHaveBeenCalled();
+  });
+
+  it('reports an authenticated Mini Program account without asking the user to scan again', async () => {
+    const miniProgram = {
+      url: 'https://mp.weixin.qq.com/wxamp/home/guide?lang=zh_CN&token=456',
+      hasLoginUi: false,
+    };
+    const page = makePage({ states: [miniProgram, miniProgram] });
+
+    await expect(resolveBrowserCredentials(page, { now: () => 0 })).rejects.toMatchObject({
+      name: 'CommandExecutionError', code: 'COMMAND_EXEC',
+      message: expect.stringContaining('Mini Program'),
+      hint: expect.stringContaining('Official Account'),
+    });
+    expect(page.focusWindow).not.toHaveBeenCalled();
+    expect(page.getCookies).not.toHaveBeenCalled();
   });
 });

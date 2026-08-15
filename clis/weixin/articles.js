@@ -1,7 +1,8 @@
 import { ArgumentError, EmptyResultError } from '@sovovs/bycli/errors';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
-import { callCrawler, collectArticles, createWechatApi } from './_wechat/crawler-runtime.js';
+import { createArticleIndexFetcher } from './_wechat/article-index.js';
+import { callCrawler, collectArticles } from './_wechat/crawler-runtime.js';
 import { readAuthSource } from './_wechat/args.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
@@ -23,10 +24,10 @@ export const articlesCommand = cli({
     const authSource = readAuthSource(args);
     const credentials = authSource === 'env'
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
-    const { articles } = await callCrawler(async () => {
-      const { fetchPage } = createWechatApi(credentials);
-      return collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
-    });
+    const fetchPage = createArticleIndexFetcher({ page, source: authSource, credentials });
+    const { articles } = await callCrawler(() => collectArticles({
+      fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'],
+    }));
     if (articles.length === 0) throw new EmptyResultError('weixin articles', `No published articles were found for ${fakeid}.`);
     return articles.map(article => ({
       title: article.title, author: article.author || null, digest: article.digest || null,

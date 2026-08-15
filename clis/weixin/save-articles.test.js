@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@sovovs/bycli/registry';
 import { AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import * as auth from './_wechat/auth-session.js';
+import * as articleIndex from './_wechat/article-index.js';
 import * as runtime from './_wechat/crawler-runtime.js';
 vi.mock('./_wechat/auth-session.js');
+vi.mock('./_wechat/article-index.js');
 vi.mock('./_wechat/crawler-runtime.js', async importOriginal => {
   const actual = await importOriginal();
-  return { ...actual, collectArticles: vi.fn(), createWechatApi: vi.fn(), saveArticles: vi.fn() };
+  return { ...actual, collectArticles: vi.fn(), saveArticles: vi.fn() };
 });
 const { fetchArticleHtml, fetchArticleHtmlInBrowser, createArticleHtmlDownloader } = await import('./save-articles.js');
 
@@ -22,7 +24,7 @@ describe('weixin save-articles command', () => {
     expect(() => command.requiresBrowser({ 'auth-source': 'invalid' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
   });
   it('collects then saves and normalizes partial save rows', async () => {
-    auth.readEnvironmentCredentials.mockReturnValue({ token: 't', cookie: 'c' }); const fetchPage = vi.fn(); runtime.createWechatApi.mockReturnValue({ fetchPage });
+    auth.readEnvironmentCredentials.mockReturnValue({ token: 't', cookie: 'c' }); const fetchPage = vi.fn(); articleIndex.createArticleIndexFetcher.mockReturnValue(fetchPage);
     const articles = [{ title: 'A', url: 'u' }, { title: 'B', url: 'v' }]; runtime.collectArticles.mockResolvedValue({ articles });
     runtime.saveArticles.mockResolvedValue([{ title: 'A', status: 'saved', stage: null, saved: '/x/a.md', error: '', url: 'u' }, { title: 'B', status: 'failed', stage: 'download', saved: '', error: 'article download failed', url: 'v' }]);
     await expect(command.func(null, { fakeid: 'f', name: 'Acct', output: '/x', limit: 2, 'max-pages': 3, 'auth-source': 'env' })).resolves.toEqual([
@@ -30,6 +32,9 @@ describe('weixin save-articles command', () => {
     ]);
     expect(runtime.saveArticles).toHaveBeenCalledWith(expect.objectContaining({ articles, accountName: 'Acct', outputDir: '/x', fetchArticleHtml: expect.any(Function), buildMarkdown: expect.any(Function), existingFilePolicy: 'suffix' }));
     expect(runtime.collectArticles).toHaveBeenCalledWith({ fakeid: 'f', fetchPage, limit: 2, maxPages: 3 });
+    expect(articleIndex.createArticleIndexFetcher).toHaveBeenCalledWith({
+      page: null, source: 'env', credentials: { token: 't', cookie: 'c' },
+    });
     const markdown = runtime.saveArticles.mock.calls[0][0].buildMarkdown({
       title: 'Article', author: 'Author', publishedAt: '2024-01-02', digest: 'Digest', url: 'https://mp.weixin.qq.com/s/article',
     }, '<div id="js_content"><p>body</p></div>');
@@ -45,7 +50,7 @@ describe('weixin save-articles command', () => {
   it('wires Node-first browser fallback into browser-authenticated saves', async () => {
     auth.resolveBrowserCredentials.mockResolvedValue({ token: 't', cookie: 'c' });
     const fetchPage = vi.fn();
-    runtime.createWechatApi.mockReturnValue({ fetchPage });
+    articleIndex.createArticleIndexFetcher.mockReturnValue(fetchPage);
     const article = { title: 'A', url: 'https://mp.weixin.qq.com/s/article' };
     runtime.collectArticles.mockResolvedValue({ articles: [article] });
     const page = {

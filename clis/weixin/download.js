@@ -8,7 +8,7 @@
  */
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { downloadArticle } from '@sovovs/bycli/download/article-download';
-import { AuthRequiredError } from '@sovovs/bycli/errors';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { buildExtractWechatArticleContentJs } from './_wechat/article-content.js';
 export { extractWechatArticleContent } from './_wechat/article-content.js';
 // ============================================================
@@ -48,6 +48,66 @@ export function normalizeWechatUrl(raw) {
         // Ignore parse errors
     }
     return s;
+}
+
+function isStrictHttpsUrl(raw, hostname, pathname) {
+    try {
+        const url = new URL(raw);
+        return url.protocol === 'https:' && url.hostname === hostname
+            && url.port === '' && url.username === '' && url.password === ''
+            && pathname(url.pathname);
+    }
+    catch {
+        return false;
+    }
+}
+
+export function isTrustedWechatArticleUrl(raw) {
+    return isStrictHttpsUrl(raw, 'mp.weixin.qq.com', path => path === '/s' || path.startsWith('/s/'));
+}
+
+export function isTrustedSogouRedirectUrl(raw) {
+    return isStrictHttpsUrl(raw, 'weixin.sogou.com', path => path === '/link');
+}
+
+export async function resolveWechatDownloadUrl(page, rawUrl) {
+    const sourceUrl = normalizeWechatUrl(rawUrl);
+    if (isTrustedWechatArticleUrl(sourceUrl)) {
+        return { sourceUrl, resolvedUrl: sourceUrl, alreadyNavigated: false };
+    }
+    if (!isTrustedSogouRedirectUrl(sourceUrl)) {
+        throw new ArgumentError(
+            'A trusted WeChat article or Sogou Weixin result URL is required.',
+            'Pass an https://mp.weixin.qq.com/s/... or https://weixin.sogou.com/link?... URL.',
+        );
+    }
+    try {
+        await page.goto(sourceUrl);
+        await page.wait(2);
+        const result = await page.evaluate(`(() => ({
+          finalUrl: window.location.href,
+          pageText: document.body ? document.body.innerText : '',
+          html: document.documentElement ? document.documentElement.innerHTML : '',
+        }))()`);
+        const text = `${result?.pageText || ''} ${result?.html || ''}`;
+        if (/验证码|安全验证|异常访问|访问过于频繁|请输入验证码/.test(text)) {
+            throw new AuthRequiredError(
+                'weixin.sogou.com',
+                'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
+            );
+        }
+        if (!isTrustedWechatArticleUrl(result?.finalUrl)) {
+            throw new CommandExecutionError(
+                'Sogou Weixin did not resolve to a trusted WeChat article URL',
+                'Open the search result in a browser and confirm it redirects to mp.weixin.qq.com/s/... before retrying.',
+            );
+        }
+        return { sourceUrl, resolvedUrl: new URL(result.finalUrl).href, alreadyNavigated: true };
+    }
+    catch (error) {
+        if (error instanceof AuthRequiredError || error instanceof CommandExecutionError) throw error;
+        throw new CommandExecutionError('Failed to resolve the Sogou Weixin result URL');
+    }
 }
 /**
  * Format a WeChat article timestamp as a UTC+8 datetime string.
@@ -183,15 +243,12 @@ cli({
         { name: 'output', default: './weixin-articles', help: 'Output directory' },
         { name: 'download-images', type: 'boolean', default: true, help: 'Download images locally' },
     ],
-    columns: ['title', 'author', 'publish_time', 'status', 'size', 'saved'],
+    columns: ['title', 'author', 'publish_time', 'status', 'size', 'saved', 'source_url', 'resolved_url'],
     func: async (page, kwargs) => {
-        const rawUrl = kwargs.url;
-        const url = normalizeWechatUrl(rawUrl);
-        if (!url.startsWith('https://mp.weixin.qq.com/')) {
-            return [{ title: 'Error', author: '-', publish_time: '-', status: 'invalid URL', size: '-', saved: '-' }];
-        }
-        // Navigate and wait for content to load
-        await page.goto(url);
+        const { sourceUrl, resolvedUrl, alreadyNavigated } = await resolveWechatDownloadUrl(page, kwargs.url);
+        // Navigate and wait for content to load. Sogou resolution already lands on the article.
+        if (!alreadyNavigated)
+            await page.goto(resolvedUrl);
         await page.wait(5);
         // Extract article data in browser context
         const data = await page.evaluate(`
@@ -255,11 +312,11 @@ cli({
                 'WeChat article page requires environment verification. Complete it in the open browser tab and run the command again.',
             );
         }
-        return downloadArticle({
+        const rows = await downloadArticle({
             title: data?.title || '',
             author: data?.author,
             publishTime: data?.publishTime,
-            sourceUrl: url,
+            sourceUrl: resolvedUrl,
             contentHtml: data?.contentHtml || '',
             codeBlocks: data?.codeBlocks,
             imageUrls: data?.imageUrls,
@@ -274,5 +331,6 @@ cli({
             },
             secureMarkdown: true,
         });
+        return rows.map(row => ({ ...row, source_url: sourceUrl, resolved_url: resolvedUrl }));
     },
 });

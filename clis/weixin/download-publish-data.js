@@ -12,7 +12,10 @@ import {
   validatePublishDate,
 } from './_wechat/publish-records.js';
 
-const COLUMNS = ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'dataPath', 'size', 'error'];
+const COLUMNS = [
+  'title', 'publishedAt', 'url', 'status',
+  'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
+];
 
 function sanitizedError(error, secrets, fallback) {
   const message = error instanceof Error ? error.message : fallback;
@@ -25,14 +28,14 @@ export const downloadPublishDataCommand = cli({
   name: 'download-publish-data',
   access: 'write',
   domain: 'mp.weixin.qq.com',
-  description: 'Match a Weixin published article and save its content analysis as Markdown',
+  description: 'Match a Weixin published article and save its Excel data and Markdown analysis',
   strategy: Strategy.INTERCEPT,
   browser: true,
   navigateBefore: false,
   args: [
     { name: 'query', positional: true, required: true, help: 'Exact article URL or title text' },
     { name: 'date', help: 'Optional publication date in YYYY-MM-DD' },
-    { name: 'output', default: './weixin-publish-data', help: 'Directory for generated Markdown reports' },
+    { name: 'output', default: './weixin-publish-data', help: 'Directory for generated Excel data and Markdown reports' },
     { name: 'max-pages', type: 'int', default: 5, help: 'Maximum published-record pages to scan' },
     { name: 'timeout', type: 'int', default: 60, help: 'Maximum seconds for page capture' },
   ],
@@ -64,31 +67,35 @@ export const downloadPublishDataCommand = cli({
     };
     const secrets = buildSecretSet({ token, cookie });
 
+    let dataResult = null;
+    let markdownResult = null;
+    const errors = [];
     try {
-      const result = await downloadPublishData(page, commonOptions);
-      return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
-        status: 'saved', markdownPath: null, dataPath: result.path,
-        size: result.size, error: null }];
-    } catch (downloadError) {
-      const downloadMessage = sanitizedError(downloadError, secrets, 'Excel download failed');
-      try {
-        const result = await collectPublishAnalysis(page, {
-          ...commonOptions,
-          publishedAt: record.publishedAt,
-        });
-        return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
-          status: 'saved', markdownPath: result.path, dataPath: null,
-          size: result.size, error: downloadMessage }];
-      } catch (analysisError) {
-        const analysisMessage = sanitizedError(
-          analysisError,
-          secrets,
-          'Markdown fallback failed',
-        );
-        return [{ title: record.title, publishedAt: record.publishedAt, url: record.url,
-          status: 'failed', markdownPath: null, dataPath: null, size: null,
-          error: `Excel download failed: ${downloadMessage}; Markdown fallback failed: ${analysisMessage}` }];
-      }
+      dataResult = await downloadPublishData(page, commonOptions);
+    } catch (error) {
+      errors.push(`Excel download failed: ${sanitizedError(error, secrets, 'Excel download failed')}`);
     }
+    try {
+      markdownResult = await collectPublishAnalysis(page, {
+        ...commonOptions,
+        publishedAt: record.publishedAt,
+      });
+    } catch (error) {
+      errors.push(`Markdown analysis failed: ${sanitizedError(error, secrets, 'Markdown analysis failed')}`);
+    }
+
+    const status = dataResult && markdownResult ? 'downloaded'
+      : dataResult || markdownResult ? 'partial' : 'failed';
+    return [{
+      title: record.title,
+      publishedAt: record.publishedAt,
+      url: record.url,
+      status,
+      markdownPath: markdownResult?.path ?? null,
+      markdownSize: markdownResult?.size ?? null,
+      dataPath: dataResult?.path ?? null,
+      dataSize: dataResult?.size ?? null,
+      error: errors.length > 0 ? errors.join('; ') : null,
+    }];
   },
 });
