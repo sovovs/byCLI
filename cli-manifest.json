@@ -28309,7 +28309,7 @@
   },
   {
     "site": "weixin",
-    "name": "search",
+    "name": "sougousearch",
     "description": "使用搜狗微信搜索公众号文章；如需导出正文 Markdown，请使用 weixin download 处理公众号文章链接",
     "access": "read",
     "domain": "weixin.sogou.com",
@@ -28342,6 +28342,7 @@
       "rank",
       "page",
       "title",
+      "account",
       "url",
       "summary",
       "publish_time"
