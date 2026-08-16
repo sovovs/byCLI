@@ -9,6 +9,8 @@ import {
   searchSogouArticlePage,
 } from './sogou-search.js';
 
+const CST_OFFSET_MS = 8 * 60 * 60 * 1000;
+
 export function isExactAccountName(actual, expected) {
   const normalizedActual = String(actual ?? '').trim().toLowerCase();
   const normalizedExpected = String(expected ?? '').trim().toLowerCase();
@@ -29,6 +31,62 @@ function comparableTimestamp(raw) {
   return value >= 1_000_000_000_000 ? Math.floor(value / 1000) : value;
 }
 
+function validCstEpochSeconds(year, month, day, hour, minute, second) {
+  const epochMs = Date.UTC(year, month - 1, day, hour, minute, second) - CST_OFFSET_MS;
+  const check = new Date(epochMs + CST_OFFSET_MS);
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1
+      || check.getUTCDate() !== day || check.getUTCHours() !== hour
+      || check.getUTCMinutes() !== minute || check.getUTCSeconds() !== second) return null;
+  return Math.floor(epochMs / 1000);
+}
+
+export function normalizeSogouPublishTimestamp({
+  publishTimestamp,
+  publishTime,
+  scanStartedAt,
+}) {
+  const raw = comparableTimestamp(publishTimestamp);
+  if (raw !== null) return Math.floor(raw);
+  const startMs = Number(scanStartedAt);
+  if (!Number.isFinite(startMs)) return null;
+  const text = String(publishTime ?? '').trim();
+
+  const relative = text.match(/^(\d+)(分钟|小时|天)前$/);
+  if (relative) {
+    const amount = Number(relative[1]);
+    const secondsPerUnit = { 分钟: 60, 小时: 3600, 天: 86400 }[relative[2]];
+    if (!Number.isSafeInteger(amount)) return null;
+    const timestamp = Math.floor(startMs / 1000) - amount * secondsPerUnit;
+    return Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : null;
+  }
+
+  const dayWord = text.match(/^(昨天|前天)(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (dayWord) {
+    const cstNow = new Date(startMs + CST_OFFSET_MS);
+    const dayOffset = dayWord[1] === '昨天' ? 1 : 2;
+    const clock = dayWord[2] === undefined
+      ? [cstNow.getUTCHours(), cstNow.getUTCMinutes(), cstNow.getUTCSeconds()]
+      : [Number(dayWord[2]), Number(dayWord[3]), Number(dayWord[4] ?? 0)];
+    const prior = new Date(Date.UTC(
+      cstNow.getUTCFullYear(), cstNow.getUTCMonth(), cstNow.getUTCDate() - dayOffset,
+    ));
+    return validCstEpochSeconds(
+      prior.getUTCFullYear(), prior.getUTCMonth() + 1, prior.getUTCDate(), ...clock,
+    );
+  }
+
+  const absolute = text.match(
+    /^(\d{4})(?:-(\d{1,2})-(\d{1,2})|\/(\d{1,2})\/(\d{1,2})|年(\d{1,2})月(\d{1,2})日)(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+  );
+  if (!absolute) return null;
+  const month = Number(absolute[2] ?? absolute[4] ?? absolute[6]);
+  const day = Number(absolute[3] ?? absolute[5] ?? absolute[7]);
+  return validCstEpochSeconds(
+    Number(absolute[1]), month, day,
+    Number(absolute[8] ?? 0), Number(absolute[9] ?? 0), Number(absolute[10] ?? 0),
+  );
+}
+
 function safeResolutionError(error) {
   const message = error instanceof Error ? error.message : 'Sogou article link resolution failed';
   return redactText(message, []) || 'Sogou article link resolution failed';
@@ -42,6 +100,7 @@ export async function collectSogouAccountArticles({
   searchPage = searchSogouArticlePage,
   resolveUrl = resolveWechatArticleUrl,
   resolutionPolicy = 'atomic',
+  scanStartedAt = Date.now(),
 }) {
   const normalizedName = String(accountName ?? '').trim();
   if (!normalizedName) {
@@ -86,21 +145,33 @@ export async function collectSogouAccountArticles({
       const sourceKey = normalizedUrl(item.url);
       if (seenSogouUrls.has(sourceKey)) continue;
       seenSogouUrls.add(sourceKey);
-      candidates.push({ ...item, firstSeen, sourceKey });
+      candidates.push({
+        ...item,
+        firstSeen,
+        sourceKey,
+        normalizedTimestamp: normalizeSogouPublishTimestamp({
+          publishTimestamp: item.publishTimestamp,
+          publishTime: item.publishTime,
+          scanStartedAt,
+        }),
+      });
       firstSeen += 1;
     }
   }
 
   if (candidates.length === 0) {
+    const coverageHint = coverage === 'max-pages-reached'
+      ? `Scanned ${pagesScanned} pages and reached the page cap; later pages may still contain a match.`
+      : `Sogou search exhausted after ${pagesScanned} pages.`;
     throw new EmptyResultError(
       'weixin Sogou account fallback',
-      `No Sogou articles matched the exact official-account name "${normalizedName}"; similarly named accounts were excluded.`,
+      `No Sogou articles matched the exact official-account name "${normalizedName}"; similarly named accounts were excluded. ${coverageHint}`,
     );
   }
 
   candidates.sort((left, right) => {
-    const leftTime = comparableTimestamp(left.publishTimestamp);
-    const rightTime = comparableTimestamp(right.publishTimestamp);
+    const leftTime = left.normalizedTimestamp;
+    const rightTime = right.normalizedTimestamp;
     if (leftTime !== null && rightTime !== null && leftTime !== rightTime) return rightTime - leftTime;
     if (leftTime !== null && rightTime === null) return -1;
     if (leftTime === null && rightTime !== null) return 1;
