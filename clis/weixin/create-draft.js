@@ -1,7 +1,7 @@
 import * as nodeFs from 'node:fs';
 import * as nodePath from 'node:path';
 import { cli, Strategy } from '@sovovs/bycli/registry';
-import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
 const WEIXIN_HOME = 'https://mp.weixin.qq.com/';
@@ -66,13 +66,19 @@ async function navigateToEditor(page) {
     await page.wait(3);
     const token = await getToken(page);
     if (!token) {
-        throw new CommandExecutionError('Could not extract session token. Please log in to mp.weixin.qq.com');
+        throw new AuthRequiredError(
+            WEIXIN_DOMAIN,
+            'Could not extract session token. Please log in to mp.weixin.qq.com',
+        );
     }
     await page.goto(`https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=77&token=${token}&lang=zh_CN`);
     await page.wait(4);
     const hasTitle = await page.evaluate('!!document.querySelector("textarea#title")');
     if (!hasTitle) {
-        throw new CommandExecutionError('Article editor did not load. Session may have expired');
+        throw new AuthRequiredError(
+            WEIXIN_DOMAIN,
+            'Article editor did not load. Session may have expired',
+        );
     }
 }
 

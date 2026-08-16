@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { AuthRequiredError } from '@sovovs/bycli/errors';
 import { getRegistry } from '@sovovs/bycli/registry';
 
 getRegistry().delete('weixin/create-draft');
@@ -51,6 +52,33 @@ describe('weixin create-draft command', () => {
     });
 
     afterAll(() => getRegistry().delete('weixin/create-draft'));
+
+    it.each([
+        [
+            'the backend session token is missing',
+            [undefined],
+            'Could not extract session token',
+        ],
+        [
+            'the article editor reports an expired session',
+            ['123456', false],
+            'Article editor did not load',
+        ],
+    ])('requires authentication when %s', async (_condition, evaluations, message) => {
+        const page = scriptedPage(evaluations);
+
+        const error = await command.func(page, {
+            title: 'title',
+            content: 'body',
+        }).catch((caught) => caught);
+
+        expect(error).toBeInstanceOf(AuthRequiredError);
+        expect(error).toMatchObject({
+            code: 'AUTH_REQUIRED',
+            domain: 'mp.weixin.qq.com',
+            message: expect.stringContaining(message),
+        });
+    });
 
     it.each([
         [{ title: '   ', content: 'body' }, 'title'],
