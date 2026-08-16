@@ -27900,7 +27900,9 @@
       "author",
       "digest",
       "publishedAt",
-      "url"
+      "url",
+      "source",
+      "coverage"
     ],
     "type": "js",
     "modulePath": "weixin/articles.js",
@@ -28303,7 +28305,9 @@
       "stage",
       "path",
       "error",
-      "url"
+      "url",
+      "source",
+      "coverage"
     ],
     "type": "js",
     "modulePath": "weixin/save-articles.js",

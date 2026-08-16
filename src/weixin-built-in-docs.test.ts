@@ -108,7 +108,7 @@ describe('built-in weixin history command release artifacts', () => {
     const articles = byName.get('articles') as { args: Array<Record<string, unknown>> };
     expect(articles).toMatchObject({
       browser: 'conditional',
-      columns: ['title', 'author', 'digest', 'publishedAt', 'url'],
+      columns: ['title', 'author', 'digest', 'publishedAt', 'url', 'source', 'coverage'],
     });
     expect(articles.args.find(arg => arg.name === 'fakeid')).toMatchObject({
       type: 'str', positional: true, required: true,
@@ -119,7 +119,7 @@ describe('built-in weixin history command release artifacts', () => {
     const saveArticles = byName.get('save-articles') as { args: Array<Record<string, unknown>> };
     expect(saveArticles).toMatchObject({
       browser: 'conditional',
-      columns: ['title', 'status', 'stage', 'path', 'error', 'url'],
+      columns: ['title', 'status', 'stage', 'path', 'error', 'url', 'source', 'coverage'],
     });
     expect(saveArticles.args.find(arg => arg.name === 'output')).toMatchObject({
       type: 'str', default: './weixin-articles', required: false,
