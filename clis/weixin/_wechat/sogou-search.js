@@ -4,6 +4,8 @@ import {
 
 const SOGOU_WEIXIN_DOMAIN = 'weixin.sogou.com';
 export const DEFAULT_SOGOU_MAX_PAGES = 50;
+const MAX_SOGOU_SHELL_ATTEMPTS = 2;
+const SOGOU_SHELL_RETRY_DELAY_SECONDS = 2;
 
 export function normalizePositiveInteger(value, name, defaultValue, maxValue) {
   if (value === undefined || value === null) return defaultValue;
@@ -88,6 +90,21 @@ function fingerprintRows(rows) {
   return rows.map(row => `${row.title}\u0000${row.url}`).join('\u0001');
 }
 
+async function loadSogouPayload(page, searchUrl, delayBeforeSeconds = 0) {
+  try {
+    if (delayBeforeSeconds > 0) await page.wait(delayBeforeSeconds);
+    await page.goto(searchUrl);
+    await page.wait(2);
+    return await page.evaluate(buildExtractSogouSearchResultsEvaluate());
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CommandExecutionError(
+      'weixin sougousearch failed while loading Sogou results',
+      detail,
+    );
+  }
+}
+
 export async function searchSogouArticlePage(page, { query, pageNo }) {
   const normalizedQuery = String(query ?? '').trim();
   if (!normalizedQuery) {
@@ -98,46 +115,44 @@ export async function searchSogouArticlePage(page, { query, pageNo }) {
   }
   const normalizedPage = normalizePositiveInteger(pageNo, 'page', 1);
   const searchUrl = buildSogouSearchUrl(normalizedQuery, normalizedPage);
-  let payload;
-  try {
-    await page.goto(searchUrl);
-    await page.wait(2);
-    payload = await page.evaluate(buildExtractSogouSearchResultsEvaluate());
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new CommandExecutionError('weixin sougousearch failed while loading Sogou results', detail);
-  }
-  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.rows)) {
-    throw new CommandExecutionError(
-      'weixin sougousearch returned an unreadable browser payload',
-      'Sogou Weixin may have changed its result page structure.',
+  for (let attempt = 1; attempt <= MAX_SOGOU_SHELL_ATTEMPTS; attempt += 1) {
+    const payload = await loadSogouPayload(
+      page,
+      searchUrl,
+      attempt > 1 ? SOGOU_SHELL_RETRY_DELAY_SECONDS : 0,
     );
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.rows)) {
+      throw new CommandExecutionError(
+        'weixin sougousearch returned an unreadable browser payload',
+        'Sogou Weixin may have changed its result page structure.',
+      );
+    }
+    if (payload.blocked) {
+      throw new AuthRequiredError(
+        SOGOU_WEIXIN_DOMAIN,
+        'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
+      );
+    }
+    if (payload.invalidCount > 0) {
+      throw new CommandExecutionError(
+        'Sogou Weixin returned article cards without required title or URL',
+        'The result page structure may have changed; refusing to return a partial result set.',
+      );
+    }
+    if (payload.rows.length === 0 && payload.empty) {
+      return { state: 'empty', page: normalizedPage, fingerprint: '', rows: [] };
+    }
+    if (payload.rows.length > 0) {
+      return {
+        state: 'results',
+        page: normalizedPage,
+        fingerprint: fingerprintRows(payload.rows),
+        rows: payload.rows,
+      };
+    }
   }
-  if (payload.blocked) {
-    throw new AuthRequiredError(
-      SOGOU_WEIXIN_DOMAIN,
-      'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
-    );
-  }
-  if (payload.invalidCount > 0) {
-    throw new CommandExecutionError(
-      'Sogou Weixin returned article cards without required title or URL',
-      'The result page structure may have changed; refusing to return a partial result set.',
-    );
-  }
-  if (payload.rows.length === 0 && payload.empty) {
-    return { state: 'empty', page: normalizedPage, fingerprint: '', rows: [] };
-  }
-  if (payload.rows.length === 0) {
-    throw new CommandExecutionError(
-      'weixin sougousearch did not expose article result cards',
-      'Sogou Weixin may have changed its selectors or returned a transient shell page.',
-    );
-  }
-  return {
-    state: 'results',
-    page: normalizedPage,
-    fingerprint: fingerprintRows(payload.rows),
-    rows: payload.rows,
-  };
+  throw new CommandExecutionError(
+    'weixin sougousearch did not expose article result cards',
+    'Sogou Weixin returned a transient shell page on both bounded attempts.',
+  );
 }

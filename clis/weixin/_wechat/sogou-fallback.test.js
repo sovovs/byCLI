@@ -82,6 +82,32 @@ describe('exact-account Sogou fallback collector', () => {
     })).rejects.toBeInstanceOf(CommandExecutionError);
   });
 
+  it('counts a recovered shell retry as one logical page and continues scanning', async () => {
+    const shell = { blocked: false, empty: false, invalidCount: 0, rows: [] };
+    const recovered = {
+      blocked: false, empty: false, invalidCount: 0,
+      rows: [row('Recovered', 'Example', 'https://weixin.sogou.com/link?url=recovered', 10)],
+    };
+    const exhausted = { blocked: false, empty: true, invalidCount: 0, rows: [] };
+    const page = {
+      goto: vi.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn()
+        .mockResolvedValueOnce(shell)
+        .mockResolvedValueOnce(recovered)
+        .mockResolvedValueOnce(exhausted),
+    };
+
+    const result = await collectSogouAccountArticles({
+      page, accountName: 'Example', maxPages: 3, resolveUrl: directResolver,
+    });
+
+    expect(result).toMatchObject({ coverage: 'search-exhausted', pagesScanned: 2 });
+    expect(result.articles).toEqual([expect.objectContaining({ title: 'Recovered' })]);
+    expect(page.goto.mock.calls.map(([url]) => new URL(url).searchParams.get('page')))
+      .toEqual(['1', '1', '2']);
+  });
+
   it('deduplicates Sogou links and resolved WeChat URLs before filling the limit', async () => {
     const first = row('First', 'Example', 'https://weixin.sogou.com/link?url=first', 30);
     const duplicateSource = { ...first, title: 'First duplicate' };
