@@ -69,6 +69,7 @@ function routePart(value) {
 
 function decodePublishInfo(value) {
   const decoded = parseJson(value, 'publish_info');
+  if (Array.isArray(decoded.appmsg_info)) return decoded;
   if (!Object.prototype.hasOwnProperty.call(decoded, 'publish_info')) return decoded;
   const nested = decoded.publish_info;
   if (typeof nested === 'string') return parseJson(nested, 'nested publish_info');
@@ -86,7 +87,7 @@ function parseEntry(info, article) {
   if (msgid === null || itemIdx === null) {
     throw commandError('returned an article without a detail route');
   }
-  const publishedAt = dateInShanghai(info?.sent_info?.time);
+  const publishedAt = dateInShanghai(info?.sent_info?.time ?? info?.publish_info?.create_time);
   return {
     title,
     publishedAt,
@@ -249,6 +250,18 @@ function normalizeArticleUrl(value) {
   return url.href;
 }
 
+export function validatePublishedQuery(value) {
+  const text = normalizeTitle(value);
+  if (!text) throw new ArgumentError('query must not be empty');
+  const parsed = parseAbsoluteUrl(text);
+  if (!parsed) return text;
+  const trustedPath = parsed.pathname === '/s' || parsed.pathname.startsWith('/s/');
+  if (!normalizeArticleUrl(text) || !trustedPath) {
+    throw new ArgumentError('query URL must be a trusted WeChat article URL');
+  }
+  return text;
+}
+
 function ambiguityError(matches) {
   const choices = matches.slice(0, 5)
     .map(record => `${record.publishedAt ?? record.publishDate} ${record.title} ${record.url}`)
@@ -280,8 +293,6 @@ export function matchPublishedRecord(records, query, date) {
   } else {
     const exact = uniqueMatch(candidates.filter(record => normalizeTitle(record.title) === text));
     if (exact) return exact;
-    const substring = uniqueMatch(candidates.filter(record => normalizeTitle(record.title).includes(text)));
-    if (substring) return substring;
   }
 
   throw new EmptyResultError(

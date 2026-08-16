@@ -1,4 +1,7 @@
-import { ArgumentError } from '@sovovs/bycli/errors';
+import { constants } from 'node:fs';
+import { access, stat } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
+import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { resolveBrowserCredentials } from './_wechat/auth-session.js';
 import { buildSecretSet, redactText } from './_wechat/redact.js';
@@ -10,6 +13,7 @@ import {
   matchPublishedRecord,
   positiveSafeInteger,
   validatePublishDate,
+  validatePublishedQuery,
 } from './_wechat/publish-records.js';
 
 const COLUMNS = [
@@ -21,6 +25,33 @@ function sanitizedError(error, secrets, fallback) {
   const message = error instanceof Error ? error.message : fallback;
   return redactText(message, secrets)
     .replace(/https?:\/\/mp\.weixin\.qq\.com\/\S*/giu, '[REDACTED]');
+}
+
+async function validateArtifact(result, { label, expectedStatus, expectedExtension }) {
+  if (!result || result.status !== expectedStatus) {
+    throw new CommandExecutionError(`${label} returned an invalid status`);
+  }
+  if (typeof result.path !== 'string' || !result.path.trim()) {
+    throw new CommandExecutionError(`${label} returned no output path`);
+  }
+  if (!Number.isSafeInteger(result.size) || result.size <= 0) {
+    throw new CommandExecutionError(`${label} returned an invalid size`);
+  }
+  const path = resolve(result.path);
+  if (extname(path).toLowerCase() !== expectedExtension) {
+    throw new CommandExecutionError(`${label} returned an unexpected file type`);
+  }
+  let info;
+  try {
+    await access(path, constants.R_OK);
+    info = await stat(path);
+  } catch {
+    throw new CommandExecutionError(`${label} returned an unreadable file`);
+  }
+  if (!info.isFile() || info.size <= 0 || info.size !== result.size) {
+    throw new CommandExecutionError(`${label} returned an unreadable or mismatched file`);
+  }
+  return { ...result, path, size: info.size };
 }
 
 export const downloadPublishDataCommand = cli({
@@ -43,6 +74,7 @@ export const downloadPublishDataCommand = cli({
   func: async (page, args) => {
     const query = String(args.query ?? '').trim();
     if (!query) throw new ArgumentError('query required');
+    const validatedQuery = validatePublishedQuery(query);
 
     const timeoutSeconds = positiveSafeInteger(args.timeout, 'timeout', 60);
     const maxPages = positiveSafeInteger(args['max-pages'], 'max-pages', 5);
@@ -56,7 +88,7 @@ export const downloadPublishDataCommand = cli({
       maxPages,
       timeout: timeoutSeconds,
     });
-    const record = matchPublishedRecord(rows, query, validatedDate);
+    const record = matchPublishedRecord(rows, validatedQuery, validatedDate);
     const detailUrl = buildDetailUrl(record, token);
     const outputDir = args.output ?? './weixin-publish-data';
     const commonOptions = {
@@ -71,14 +103,24 @@ export const downloadPublishDataCommand = cli({
     let markdownResult = null;
     const errors = [];
     try {
-      dataResult = await downloadPublishData(page, commonOptions);
+      const result = await downloadPublishData(page, commonOptions);
+      dataResult = await validateArtifact(result, {
+        label: 'Excel artifact',
+        expectedStatus: 'downloaded',
+        expectedExtension: '.xls',
+      });
     } catch (error) {
       errors.push(`Excel download failed: ${sanitizedError(error, secrets, 'Excel download failed')}`);
     }
     try {
-      markdownResult = await collectPublishAnalysis(page, {
+      const result = await collectPublishAnalysis(page, {
         ...commonOptions,
         publishedAt: record.publishedAt,
+      });
+      markdownResult = await validateArtifact(result, {
+        label: 'Markdown artifact',
+        expectedStatus: 'saved',
+        expectedExtension: '.md',
       });
     } catch (error) {
       errors.push(`Markdown analysis failed: ${sanitizedError(error, secrets, 'Markdown analysis failed')}`);

@@ -141,6 +141,39 @@ describe('parsePublishResponse', () => {
     });
   });
 
+  it('keeps a top-level article list when publish_info is metadata in the current response shape', () => {
+    const liveShape = {
+      msgid: 2247483660,
+      appmsg_info: [{
+        appmsgid: 2247483660,
+        itemidx: 1,
+        title: 'Current response article',
+        content_url: 'https://mp.weixin.qq.com/s/current-response',
+        read_num: 0,
+      }],
+      publish_info: {
+        msgid: 2247483660,
+        create_time: 1786842556,
+        publish_status: 200,
+      },
+    };
+    const result = parsePublishResponse({
+      base_resp: { ret: 0 },
+      publish_page: JSON.stringify({
+        total_count: 1,
+        publish_list: [{ publish_info: JSON.stringify(liveShape) }],
+      }),
+    });
+
+    expect(result.entries).toEqual([expect.objectContaining({
+      title: 'Current response article',
+      publishedAt: '2026-08-16',
+      msgid: '2247483660',
+      itemIdx: '1',
+      reads: 0,
+    })]);
+  });
+
   it('skips deleted and incomplete articles but rejects an incomplete detail route', () => {
     const response = info => ({
       base_resp: { ret: 0 },
@@ -379,16 +412,16 @@ describe('matchPublishedRecord', () => {
     )).toBe(records[0]);
   });
 
-  it('prefers an exact normalized title over substring matches', () => {
+  it('matches an exact normalized title', () => {
     expect(matchPublishedRecord(records, '  Ontology   Weekly ')).toBe(records[0]);
   });
 
-  it('returns a unique title substring', () => {
-    expect(matchPublishedRecord(records, 'Special')).toBe(records[1]);
+  it('does not match a unique title substring', () => {
+    expect(() => matchPublishedRecord(records, 'Special')).toThrow(EmptyResultError);
   });
 
   it('filters by an exact publish date before matching', () => {
-    expect(matchPublishedRecord(records, 'Ontology', '2026-08-08')).toBe(records[1]);
+    expect(matchPublishedRecord(records, 'Ontology Weekly Special', '2026-08-08')).toBe(records[1]);
   });
 
   it('does not treat an untrusted URL-like query as a title', () => {
@@ -406,9 +439,18 @@ describe('matchPublishedRecord', () => {
 
   it('throws typed errors for no match and ambiguity', () => {
     expect(() => matchPublishedRecord(records, 'Missing')).toThrow(EmptyResultError);
-    expect(() => matchPublishedRecord(records, 'Ontology')).toThrow(ArgumentError);
+    const duplicates = [
+      records[0],
+      record({
+        url: 'https://mp.weixin.qq.com/s/ontology-weekly-copy',
+        msgid: '1004',
+        publishedAt: '2026-08-09',
+        publishDate: '2026-08-09',
+      }),
+    ];
+    expect(() => matchPublishedRecord(duplicates, 'Ontology Weekly')).toThrow(ArgumentError);
     try {
-      matchPublishedRecord(records, 'Ontology');
+      matchPublishedRecord(duplicates, 'Ontology Weekly');
     } catch (error) {
       expect(error.message).toContain('2026-08-07 Ontology Weekly');
       expect(error.message).toContain('complete URL or --date');

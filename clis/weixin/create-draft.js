@@ -1,8 +1,61 @@
+import * as nodeFs from 'node:fs';
+import * as nodePath from 'node:path';
 import { cli, Strategy } from '@sovovs/bycli/registry';
-import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
 const WEIXIN_HOME = 'https://mp.weixin.qq.com/';
+const MAX_TITLE_LENGTH = 64;
+const MAX_AUTHOR_LENGTH = 8;
+const SUPPORTED_COVER_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+
+function codePointLength(value) {
+    return [...value].length;
+}
+
+function requiredText(value, name) {
+    const text = String(value ?? '').trim();
+    if (!text) throw new ArgumentError(`${name} must not be empty`);
+    return text;
+}
+
+function validateCoverImage(value) {
+    if (value === undefined || value === null) return null;
+    const coverPath = nodePath.resolve(requiredText(value, 'cover-image'));
+    const extension = nodePath.extname(coverPath).toLowerCase();
+    if (!SUPPORTED_COVER_EXTENSIONS.has(extension)) {
+        throw new ArgumentError('cover-image must be a jpg, jpeg, png, gif, or webp file');
+    }
+    const info = nodeFs.statSync(coverPath, { throwIfNoEntry: false });
+    if (!info?.isFile() || info.size <= 0) {
+        throw new ArgumentError(`cover-image must be a readable non-empty file: ${coverPath}`);
+    }
+    try {
+        nodeFs.accessSync(coverPath, nodeFs.constants.R_OK);
+    } catch {
+        throw new ArgumentError(`cover-image must be readable: ${coverPath}`);
+    }
+    return coverPath;
+}
+
+function normalizeCreateDraftArgs(kwargs) {
+    const title = requiredText(kwargs.title, 'title');
+    requiredText(kwargs.content, 'content');
+    if (codePointLength(title) > MAX_TITLE_LENGTH) {
+        throw new ArgumentError(`title must be at most ${MAX_TITLE_LENGTH} characters`);
+    }
+    const author = kwargs.author == null ? null : requiredText(kwargs.author, 'author');
+    if (author && codePointLength(author) > MAX_AUTHOR_LENGTH) {
+        throw new ArgumentError(`author must be at most ${MAX_AUTHOR_LENGTH} characters`);
+    }
+    return {
+        title,
+        content: String(kwargs.content),
+        author,
+        summary: kwargs.summary == null ? null : String(kwargs.summary).trim(),
+        coverImage: validateCoverImage(kwargs['cover-image']),
+    };
+}
 
 async function getToken(page) {
     return page.evaluate(`(window.location.href.match(/token=(\\d+)/)||[])[1]`);
@@ -27,15 +80,18 @@ async function fillField(page, selector, value) {
     return page.evaluate(`(() => {
         var el = document.querySelector('${selector}');
         if (!el) return { ok: false, reason: 'not found: ${selector}' };
+        var expected = ${JSON.stringify(value)};
         el.focus();
         var proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         var setter = Object.getOwnPropertyDescriptor(proto, 'value');
-        if (setter && setter.set) setter.set.call(el, ${JSON.stringify(value)});
-        else el.value = ${JSON.stringify(value)};
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${JSON.stringify(value)} }));
+        if (setter && setter.set) setter.set.call(el, expected);
+        else el.value = expected;
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, data: expected }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         el.blur();
-        return { ok: true };
+        return el.value === expected
+            ? { ok: true, value: el.value }
+            : { ok: false, reason: 'value mismatch', value: el.value };
     })()`);
 }
 
@@ -49,8 +105,19 @@ async function fillContent(page, text) {
         document.execCommand('selectAll', false, null);
         document.execCommand('insertText', false, ${JSON.stringify(text)});
         editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
-        return { ok: true };
+        var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
+        var expected = normalize(${JSON.stringify(text)});
+        var actual = normalize(editor.innerText ?? editor.textContent ?? '');
+        return actual === expected
+            ? { ok: true, value: actual }
+            : { ok: false, reason: 'value mismatch', value: actual };
     })()`);
+}
+
+function requirePageResult(result, label) {
+    if (!result?.ok) {
+        throw new CommandExecutionError(`Failed to fill ${label}: ${result?.reason ?? 'unverified page state'}`);
+    }
 }
 
 async function uploadContentImage(page, imagePath) {
@@ -76,15 +143,20 @@ async function uploadContentImage(page, imagePath) {
     await page.wait(1);
 
     await page.setFileInput([absPath], 'input[type="file"][name="file"]');
-    await page.wait(8);
 
-    const cdnCount = await page.evaluate(`(() => {
-        var editor = document.querySelector('#ueditor_0');
-        return editor ? editor.querySelectorAll('img[src*="mmbiz"]').length : 0;
-    })()`);
-    if (cdnCount === 0) {
-        throw new CommandExecutionError('Image did not upload to WeChat CDN');
+    for (let attempt = 0; attempt < 15; attempt++) {
+        await page.wait(1);
+        const cdnCount = await page.evaluate(`(() => {
+            var editors = document.querySelectorAll('#ueditor_0, div[contenteditable="true"]');
+            var count = 0;
+            editors.forEach(function(editor) {
+                count += editor.querySelectorAll('img[src*="mmbiz"], img[data-src*="mmbiz"]').length;
+            });
+            return count;
+        })()`);
+        if (cdnCount > 0) return;
     }
+    throw new CommandExecutionError('Image did not upload to WeChat CDN');
 }
 
 async function selectCoverFromContent(page) {
@@ -134,18 +206,23 @@ async function selectCoverFromContent(page) {
             if (btns[i].textContent.trim() === '确认' && btns[i].offsetHeight > 0 && !btns[i].disabled) { btns[i].click(); return; }
         }
     })()`);
-    await page.wait(2);
-    const hasCover = await page.evaluate(`(() => {
-        var area = document.querySelector('#js_cover_area');
-        if (!area) return false;
-        var found = false;
-        area.querySelectorAll('*').forEach(function(el) {
-            var bg = window.getComputedStyle(el).backgroundImage;
-            if (bg && bg.includes('mmbiz')) found = true;
-        });
-        return found;
-    })()`);
-    return hasCover;
+    for (let attempt = 0; attempt < 15; attempt++) {
+        await page.wait(1);
+        const hasCover = await page.evaluate(`(() => {
+            var areas = document.querySelectorAll('#js_cover_area, #js_cover_description_area, #appmsgItem');
+            var found = false;
+            areas.forEach(function(area) {
+                if (area.querySelector('img[src*="mmbiz"], img[data-src*="mmbiz"]')) found = true;
+                [area].concat(Array.from(area.querySelectorAll('*'))).forEach(function(el) {
+                    var bg = window.getComputedStyle(el).backgroundImage;
+                    if (bg && bg.includes('mmbiz')) found = true;
+                });
+            });
+            return found;
+        })()`);
+        if (hasCover) return true;
+    }
+    return false;
 }
 
 async function clickSaveDraft(page) {
@@ -167,7 +244,7 @@ async function clickSaveDraft(page) {
         })()`);
         if (saved) return true;
     }
-    return false;
+    throw new CommandExecutionError('Draft save could not be confirmed');
 }
 
 export const createDraftCommand = cli({
@@ -190,37 +267,39 @@ export const createDraftCommand = cli({
     columns: ['status', 'detail'],
 
     func: async (page, kwargs) => {
+        const args = normalizeCreateDraftArgs(kwargs);
         await navigateToEditor(page);
 
-        const titleResult = await fillField(page, 'textarea#title', kwargs.title);
-        if (!titleResult?.ok) throw new CommandExecutionError('Failed to fill title');
+        const titleResult = await fillField(page, 'textarea#title', args.title);
+        requirePageResult(titleResult, 'title');
 
-        if (kwargs.author) {
-            const authorResult = await fillField(page, 'input#author', kwargs.author);
-            if (!authorResult?.ok) throw new CommandExecutionError('Failed to fill author');
+        if (args.author) {
+            const authorResult = await fillField(page, 'input#author', args.author);
+            requirePageResult(authorResult, 'author');
         }
 
-        const contentResult = await fillContent(page, kwargs.content);
-        if (!contentResult?.ok) throw new CommandExecutionError('Failed to fill content');
+        const contentResult = await fillContent(page, args.content);
+        requirePageResult(contentResult, 'content');
 
-        if (kwargs['cover-image']) {
-            await uploadContentImage(page, kwargs['cover-image']);
+        if (args.coverImage) {
+            await uploadContentImage(page, args.coverImage);
             const coverSet = await selectCoverFromContent(page);
             if (!coverSet) {
-                // Non-fatal: draft can be saved without cover
+                throw new CommandExecutionError('Failed to set the requested cover image');
             }
         }
 
-        if (kwargs.summary) {
-            await fillField(page, 'textarea#js_description', kwargs.summary);
+        if (args.summary) {
+            const summaryResult = await fillField(page, 'textarea#js_description', args.summary);
+            requirePageResult(summaryResult, 'summary');
         }
 
         await page.wait(1);
-        const success = await clickSaveDraft(page);
+        await clickSaveDraft(page);
 
         return [{
-            status: success ? 'draft saved' : 'save attempted, check browser to confirm',
-            detail: `"${kwargs.title}"${kwargs.author ? ` by ${kwargs.author}` : ''}${kwargs['cover-image'] ? ' (with cover)' : ''}`,
+            status: 'draft saved',
+            detail: `"${args.title}"${args.author ? ` by ${args.author}` : ''}${args.coverImage ? ' (with cover)' : ''}`,
         }];
     },
 });
