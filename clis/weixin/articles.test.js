@@ -69,7 +69,7 @@ describe('weixin articles command', () => {
       url: 'https://mp.weixin.qq.com/s/s', source: 'sogou', coverage: 'search-exhausted',
     }]);
     expect(sogouFallback.collectSogouAccountArticles).toHaveBeenCalledWith({
-      page: {}, accountName: 'Exact Account', limit: 2, maxPages: 4,
+      page: {}, accountName: 'Exact Account', limit: 2, maxPages: 4, freshPage: true,
     });
   });
 

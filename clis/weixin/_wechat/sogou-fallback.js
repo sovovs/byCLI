@@ -4,6 +4,7 @@ import {
 import { resolveWechatArticleUrl } from './article-link.js';
 import { redactText } from './redact.js';
 import {
+  buildSogouSearchUrl,
   DEFAULT_SOGOU_MAX_PAGES,
   normalizePositiveInteger,
   searchSogouArticlePage,
@@ -92,6 +93,32 @@ function safeResolutionError(error) {
   return redactText(message, []) || 'Sogou article link resolution failed';
 }
 
+async function replaceWithFreshSogouPage(page, accountName) {
+  if (typeof page?.closeWindow !== 'function'
+      || typeof page?.newTab !== 'function'
+      || typeof page?.setActivePage !== 'function') {
+    throw new CommandExecutionError(
+      'weixin Sogou fallback cannot create an isolated browser page',
+      'Update byCLI and Browser Bridge, then retry the command.',
+    );
+  }
+  const searchUrl = buildSogouSearchUrl(accountName, 1);
+  let createdPage;
+  try {
+    await page.closeWindow();
+    createdPage = await page.newTab(searchUrl);
+    if (!createdPage) throw new Error('Browser Bridge returned no page identity');
+    page.setActivePage(createdPage);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CommandExecutionError(
+      'weixin Sogou fallback failed to create an isolated browser page',
+      detail,
+    );
+  }
+  return searchUrl;
+}
+
 export async function collectSogouAccountArticles({
   page,
   accountName,
@@ -101,6 +128,7 @@ export async function collectSogouAccountArticles({
   resolveUrl = resolveWechatArticleUrl,
   resolutionPolicy = 'atomic',
   scanStartedAt = Date.now(),
+  freshPage = false,
 }) {
   const normalizedName = String(accountName ?? '').trim();
   if (!normalizedName) {
@@ -125,12 +153,21 @@ export async function collectSogouAccountArticles({
   let pagesScanned = 0;
   let coverage = 'max-pages-reached';
   let firstSeen = 0;
+  const preloadedFirstPageUrl = freshPage
+    ? await replaceWithFreshSogouPage(page, normalizedName)
+    : undefined;
 
   for (let pageNo = 1; pageNo <= pageLimit; pageNo += 1) {
-    const result = await searchPage(page, { query: normalizedName, pageNo });
+    const result = await searchPage(page, {
+      query: normalizedName,
+      pageNo,
+      preloadedUrl: pageNo === 1 ? preloadedFirstPageUrl : undefined,
+    });
     pagesScanned += 1;
     if (result.state === 'empty') {
-      coverage = 'search-exhausted';
+      coverage = result.reason === 'result-cap'
+        ? 'result-cap-reached'
+        : 'search-exhausted';
       break;
     }
     if (seenFingerprints.has(result.fingerprint)) {
@@ -160,9 +197,14 @@ export async function collectSogouAccountArticles({
   }
 
   if (candidates.length === 0) {
-    const coverageHint = coverage === 'max-pages-reached'
-      ? `Scanned ${pagesScanned} pages and reached the page cap; later pages may still contain a match.`
-      : `Sogou search exhausted after ${pagesScanned} pages.`;
+    let coverageHint;
+    if (coverage === 'max-pages-reached') {
+      coverageHint = `Scanned ${pagesScanned} pages and reached the page cap; later pages may still contain a match.`;
+    } else if (coverage === 'result-cap-reached') {
+      coverageHint = 'Sogou stopped anonymous browsing at its 100-result visibility cap; hidden results may still contain a match.';
+    } else {
+      coverageHint = `Sogou search exhausted after ${pagesScanned} pages.`;
+    }
     throw new EmptyResultError(
       'weixin Sogou account fallback',
       `No Sogou articles matched the exact official-account name "${normalizedName}"; similarly named accounts were excluded. ${coverageHint}`,

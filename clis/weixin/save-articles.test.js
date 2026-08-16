@@ -124,7 +124,8 @@ describe('weixin save-articles command', () => {
       },
     ]);
     expect(sogouFallback.collectSogouAccountArticles).toHaveBeenCalledWith({
-      page: {}, accountName: 'Exact Account', limit: 2, maxPages: 4, resolutionPolicy: 'rows',
+      page: {}, accountName: 'Exact Account', limit: 2, maxPages: 4,
+      resolutionPolicy: 'rows', freshPage: true,
     });
     expect(runtime.saveArticles).toHaveBeenCalledWith(expect.objectContaining({
       articles: [expect.objectContaining({ title: 'Good' })],

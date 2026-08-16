@@ -4,6 +4,8 @@ import {
 
 const SOGOU_WEIXIN_DOMAIN = 'weixin.sogou.com';
 export const DEFAULT_SOGOU_MAX_PAGES = 50;
+const MAX_SOGOU_SHELL_ATTEMPTS = 2;
+const SOGOU_SHELL_RETRY_DELAY_SECONDS = 2;
 
 export function normalizePositiveInteger(value, name, defaultValue, maxValue) {
   if (value === undefined || value === null) return defaultValue;
@@ -52,9 +54,11 @@ export function buildExtractSogouSearchResultsEvaluate() {
       }
     };
 
-    const bodyText = clean(document.body && document.body.innerText);
+    const bodyText = clean(document.body && (document.body.innerText || document.body.textContent));
     const blocked = /验证码|安全验证|异常访问|访问过于频繁|请输入验证码/.test(bodyText);
-    const empty = /没有找到相关的微信文章|未找到相关|暂无相关|没有找到/.test(bodyText)
+    const resultCap = /当前只显示\s*100\s*条结果/.test(bodyText);
+    const empty = resultCap
+      || /没有找到相关的微信文章|未找到相关|暂无相关|没有找到/.test(bodyText)
       || Boolean(document.querySelector('.no-result, .no_result, .s-noresult'));
     const cards = Array.from(document.querySelectorAll('.news-list li'));
     const extracted = cards.map((item) => {
@@ -78,6 +82,7 @@ export function buildExtractSogouSearchResultsEvaluate() {
     return {
       blocked,
       empty,
+      resultCap,
       invalidCount: extracted.length - rows.length,
       rows,
     };
@@ -88,7 +93,28 @@ function fingerprintRows(rows) {
   return rows.map(row => `${row.title}\u0000${row.url}`).join('\u0001');
 }
 
-export async function searchSogouArticlePage(page, { query, pageNo }) {
+function buildSogouRetryUrl(searchUrl, retryNo) {
+  const retryUrl = new URL(searchUrl);
+  retryUrl.searchParams.set('_bycli_retry', String(retryNo));
+  return retryUrl.toString();
+}
+
+async function loadSogouPayload(page, searchUrl, delayBeforeSeconds = 0, navigate = true) {
+  try {
+    if (delayBeforeSeconds > 0) await page.wait(delayBeforeSeconds);
+    if (navigate) await page.goto(searchUrl);
+    await page.wait(2);
+    return await page.evaluate(buildExtractSogouSearchResultsEvaluate());
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CommandExecutionError(
+      'weixin sougousearch failed while loading Sogou results',
+      detail,
+    );
+  }
+}
+
+export async function searchSogouArticlePage(page, { query, pageNo, preloadedUrl }) {
   const normalizedQuery = String(query ?? '').trim();
   if (!normalizedQuery) {
     throw new ArgumentError(
@@ -98,46 +124,55 @@ export async function searchSogouArticlePage(page, { query, pageNo }) {
   }
   const normalizedPage = normalizePositiveInteger(pageNo, 'page', 1);
   const searchUrl = buildSogouSearchUrl(normalizedQuery, normalizedPage);
-  let payload;
-  try {
-    await page.goto(searchUrl);
-    await page.wait(2);
-    payload = await page.evaluate(buildExtractSogouSearchResultsEvaluate());
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new CommandExecutionError('weixin sougousearch failed while loading Sogou results', detail);
-  }
-  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.rows)) {
-    throw new CommandExecutionError(
-      'weixin sougousearch returned an unreadable browser payload',
-      'Sogou Weixin may have changed its result page structure.',
+  for (let attempt = 1; attempt <= MAX_SOGOU_SHELL_ATTEMPTS; attempt += 1) {
+    const usePreloadedPage = attempt === 1 && preloadedUrl === searchUrl;
+    const navigationUrl = attempt === 1
+      ? searchUrl
+      : buildSogouRetryUrl(searchUrl, attempt - 1);
+    const payload = await loadSogouPayload(
+      page,
+      navigationUrl,
+      attempt > 1 ? SOGOU_SHELL_RETRY_DELAY_SECONDS : 0,
+      !usePreloadedPage,
     );
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.rows)) {
+      throw new CommandExecutionError(
+        'weixin sougousearch returned an unreadable browser payload',
+        'Sogou Weixin may have changed its result page structure.',
+      );
+    }
+    if (payload.blocked) {
+      throw new AuthRequiredError(
+        SOGOU_WEIXIN_DOMAIN,
+        'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
+      );
+    }
+    if (payload.invalidCount > 0) {
+      throw new CommandExecutionError(
+        'Sogou Weixin returned article cards without required title or URL',
+        'The result page structure may have changed; refusing to return a partial result set.',
+      );
+    }
+    if (payload.rows.length === 0 && payload.empty) {
+      return {
+        state: 'empty',
+        reason: payload.resultCap ? 'result-cap' : 'no-results',
+        page: normalizedPage,
+        fingerprint: '',
+        rows: [],
+      };
+    }
+    if (payload.rows.length > 0) {
+      return {
+        state: 'results',
+        page: normalizedPage,
+        fingerprint: fingerprintRows(payload.rows),
+        rows: payload.rows,
+      };
+    }
   }
-  if (payload.blocked) {
-    throw new AuthRequiredError(
-      SOGOU_WEIXIN_DOMAIN,
-      'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
-    );
-  }
-  if (payload.invalidCount > 0) {
-    throw new CommandExecutionError(
-      'Sogou Weixin returned article cards without required title or URL',
-      'The result page structure may have changed; refusing to return a partial result set.',
-    );
-  }
-  if (payload.rows.length === 0 && payload.empty) {
-    return { state: 'empty', page: normalizedPage, fingerprint: '', rows: [] };
-  }
-  if (payload.rows.length === 0) {
-    throw new CommandExecutionError(
-      'weixin sougousearch did not expose article result cards',
-      'Sogou Weixin may have changed its selectors or returned a transient shell page.',
-    );
-  }
-  return {
-    state: 'results',
-    page: normalizedPage,
-    fingerprint: fingerprintRows(payload.rows),
-    rows: payload.rows,
-  };
+  throw new CommandExecutionError(
+    'weixin sougousearch did not expose article result cards',
+    'Sogou Weixin returned a transient shell page on both bounded attempts.',
+  );
 }
