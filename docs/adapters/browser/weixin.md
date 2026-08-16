@@ -32,6 +32,10 @@ Sogou may require a browser verification. Complete it in Chrome and retry; byCLI
 
 `accounts` and `articles` are intentionally separate: inspect all account matches, choose the correct `fakeid`, and then list its articles before saving them. A similar account name is never selected automatically.
 
+With browser authentication and a non-empty `--name`, `articles` and `save-articles` automatically use a bounded Sogou Weixin fallback only when the authenticated article index returns `COMMAND_EXEC` or `EMPTY_RESULT`. Authentication, login, CAPTCHA, environment-verification, argument, interruption, and unknown failures never trigger it. Environment authentication remains browserless and never switches to Sogou.
+
+Fallback matching trims the displayed Sogou account name and compares it to `--name` case-insensitively; substring, alias, punctuation, and fuzzy matches are excluded. The scan is sequential, defaults to at most 50 Sogou pages, and reuses an explicit `--max-pages`. It collects the full bounded result set, deduplicates and sorts it newest first, and only then applies `--limit`. Sogou coverage is not guaranteed to equal the official account's complete publishing history.
+
 ```bash
 # 1. Search backend accounts; limit defaults to 10
 bycli weixin accounts "前端之神" --limit 10 --auth-source browser -f json
@@ -75,7 +79,7 @@ Command arguments and defaults:
 | `collections` | `--limit <positive integer>` (default `20`); `--max-pages <positive integer>` (default `5`) |
 | `collection-detail` | required positional `<collectionId>`; `--max-pages <positive integer>` (default `5`) |
 
-All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. `--name` is display metadata only; it does not choose or validate an account.
+All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. On the authenticated primary path, `--name` remains display metadata. At an eligible browser fallback boundary it becomes mandatory and is the exact account-name filter; it never changes or invents the selected `fakeid`.
 
 ## Login and authentication
 
@@ -105,9 +109,9 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 
 `accounts` columns are `nickname`, `fakeid`, and `alias`. Missing aliases are `null`.
 
-`articles` columns are `title`, `author`, `digest`, `publishedAt`, and `url`. Missing optional values are `null`; an empty article list is reported explicitly rather than disguised as an authentication success.
+`articles` columns are `title`, `author`, `digest`, `publishedAt`, `url`, `source`, and `coverage`. Missing optional values are `null`; an empty article list is reported explicitly rather than disguised as an authentication success. Primary rows use `source: "wechat"` and `coverage: null`. Fallback rows use `source: "sogou"` and `coverage: "search-exhausted"` or `"max-pages-reached"`. The fallback index is atomic: any selected link that cannot resolve to a trusted WeChat article URL fails the command instead of silently truncating the index.
 
-`save-articles` columns are `title`, `status`, `stage`, `path`, `error`, and `url`. Successful rows have `status: "saved"`, an absolute Markdown `path`, and null `stage`/`error`. A per-article download or conversion failure produces `status: "failed"`, a `stage`, and a safe error message. This 部分失败 behavior preserves already-written files and continues with the remaining articles. Output-directory creation, permission, or write failures remain command-level errors.
+`save-articles` columns are `title`, `status`, `stage`, `path`, `error`, `url`, `source`, and `coverage`. Successful rows have `status: "saved"`, an absolute Markdown `path`, and null `stage`/`error`. A per-article resolution, download, or conversion failure produces `status: "failed"`, a `stage`, and a safe error message. This 部分失败 behavior preserves already-written files and continues with the remaining articles. Authentication and verification errors remain command-level stops. Output-directory creation, permission, or write failures also remain command-level errors.
 
 `collections` columns are `collectionId`, `title`, `collectionType`, `itemCount`, `views`, `continuousRead`, `isUpdating`, `isBanned`, `isPaid`, `createdAt`, `updatedAt`, and `coverUrl`.
 

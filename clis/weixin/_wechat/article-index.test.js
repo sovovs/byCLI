@@ -134,6 +134,34 @@ describe('createArticleIndexFetcher', () => {
     expect(json).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['环境异常，完成验证后即可继续访问'],
+    ['https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha'],
+    ['secitptpage/verify.html'],
+    ['<div id="js_verify">去验证</div>'],
+  ])('classifies a WeChat verification response as authentication required: %s', async marker => {
+    const failure = new CommandExecutionError('Response was not JSON', marker);
+    const page = { fetchJson: vi.fn().mockRejectedValue(failure) };
+    const fetchPage = createArticleIndexFetcher({ page, source: 'browser', credentials });
+
+    await expect(fetchPage({ fakeid: 'fake-id' })).rejects.toMatchObject({
+      name: 'AuthRequiredError', code: 'AUTH_REQUIRED', domain: 'mp.weixin.qq.com',
+    });
+  });
+
+  it('keeps an unrelated non-JSON response as a command failure', async () => {
+    const failure = new CommandExecutionError(
+      'Response was not JSON',
+      'The upstream service returned an ordinary HTML error page.',
+    );
+    const page = { fetchJson: vi.fn().mockRejectedValue(failure) };
+    const fetchPage = createArticleIndexFetcher({ page, source: 'browser', credentials });
+
+    await expect(fetchPage({ fakeid: 'fake-id' })).rejects.toMatchObject({
+      name: 'CommandExecutionError', code: 'COMMAND_EXEC',
+    });
+  });
+
   it('preserves typed authentication errors from the response mapper', async () => {
     const page = { fetchJson: vi.fn().mockResolvedValue(fixture('articles-auth-expired')) };
     const fetchPage = createArticleIndexFetcher({ page, source: 'browser', credentials });

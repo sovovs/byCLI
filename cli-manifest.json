@@ -27869,7 +27869,7 @@
         "name": "name",
         "type": "str",
         "required": false,
-        "help": "Optional official-account name for display context"
+        "help": "Official-account name; exact case-insensitive match required for browser Sogou fallback"
       },
       {
         "name": "limit",
@@ -27900,7 +27900,9 @@
       "author",
       "digest",
       "publishedAt",
-      "url"
+      "url",
+      "source",
+      "coverage"
     ],
     "type": "js",
     "modulePath": "weixin/articles.js",
@@ -28264,7 +28266,7 @@
         "name": "name",
         "type": "str",
         "required": false,
-        "help": "Official-account name used in Markdown metadata"
+        "help": "Official-account name; exact case-insensitive match required for browser Sogou fallback"
       },
       {
         "name": "output",
@@ -28303,7 +28305,9 @@
       "stage",
       "path",
       "error",
-      "url"
+      "url",
+      "source",
+      "coverage"
     ],
     "type": "js",
     "modulePath": "weixin/save-articles.js",

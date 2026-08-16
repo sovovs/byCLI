@@ -105,6 +105,14 @@ function buildReferer(token) {
   return `https://${DOMAIN}/cgi-bin/appmsg?${params}`;
 }
 
+function isWechatVerificationResponse(message, hint) {
+  const text = `${message}\n${hint ?? ''}`;
+  return /mp\/wappoc_appmsgcaptcha/i.test(text)
+    || /secitptpage\/verify\.html/i.test(text)
+    || /id=["']js_verify["']/i.test(text)
+    || (/环境异常/.test(text) && /(完成验证后即可继续访问|去验证)/.test(text));
+}
+
 function transportError(error, credentials) {
   const secrets = buildSecretSet(credentials);
   const message = error instanceof Error ? error.message : String(error);
@@ -114,6 +122,12 @@ function transportError(error, credentials) {
   const redactedHint = hint ? redactText(hint, secrets) : undefined;
   if (error instanceof AuthRequiredError && error.domain === DOMAIN
     && redactedMessage === message && redactedHint === hint) return error;
+  if (isWechatVerificationResponse(redactedMessage, redactedHint)) {
+    return new AuthRequiredError(
+      DOMAIN,
+      'WeChat article index requires environment verification. Complete it in the open browser tab and run the command again.',
+    );
+  }
   return new CommandExecutionError(
     `WeChat appmsgpublish request failed: ${redactedMessage}`,
     redactedHint,

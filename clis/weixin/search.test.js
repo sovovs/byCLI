@@ -33,8 +33,8 @@ describe('weixin sougousearch adapter', () => {
       empty: false,
       invalidCount: 0,
       rows: [
-        { title: 'First result', account: 'Test Account', url: 'https://mp.weixin.qq.com/s/first', summary: 'Summary', publish_time: '1小时前' },
-        { title: 'Second result', url: 'https://mp.weixin.qq.com/s/second', summary: '', publish_time: '昨天' },
+        { title: 'First result', account: 'Test Account', url: 'https://mp.weixin.qq.com/s/first', summary: 'Summary', publishTime: '1小时前', publishTimestamp: null },
+        { title: 'Second result', url: 'https://mp.weixin.qq.com/s/second', summary: '', publishTime: '昨天', publishTimestamp: null },
       ],
     });
 
@@ -60,7 +60,7 @@ describe('weixin sougousearch adapter', () => {
     const blockedPage = makePage({ blocked: true, empty: false, invalidCount: 0, rows: [] });
     const emptyPage = makePage({ blocked: false, empty: true, invalidCount: 0, rows: [] });
 
-    await expect(command.func(blockedPage, { query: 'AI' })).rejects.toMatchObject({ name: 'CommandExecutionError' });
+    await expect(command.func(blockedPage, { query: 'AI' })).rejects.toMatchObject({ name: 'AuthRequiredError', code: 'AUTH_REQUIRED' });
     await expect(command.func(emptyPage, { query: 'AI' })).rejects.toMatchObject({ name: 'EmptyResultError' });
   });
 });

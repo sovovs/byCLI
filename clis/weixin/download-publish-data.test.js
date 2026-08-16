@@ -1,4 +1,7 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { getRegistry } from '@sovovs/bycli/registry';
 import * as auth from './_wechat/auth-session.js';
@@ -20,6 +23,9 @@ getRegistry().delete('weixin/download-publish-data');
 await import('./download-publish-data.js');
 
 const command = getRegistry().get('weixin/download-publish-data');
+let temporaryDirectory;
+let dataPath;
+let markdownPath;
 
 function privateRecord(overrides = {}) {
   return {
@@ -43,19 +49,27 @@ function arrangeSuccess(overrides = {}) {
   publishRecords.buildDetailUrl.mockReturnValue('https://mp.weixin.qq.com/misc/appmsganalysis?private=1');
   publishDownload.downloadPublishData.mockResolvedValue({
     status: 'downloaded',
-    path: '/tmp/data.xls',
+    path: dataPath,
     size: 25088,
   });
   publishAnalysis.collectPublishAnalysis.mockResolvedValue({
     status: 'saved',
-    path: '/tmp/data.md',
+    path: markdownPath,
     size: 1234,
   });
   return { records, matched };
 }
 
 describe('weixin download-publish-data command', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'bycli-publish-command-'));
+    dataPath = join(temporaryDirectory, 'data.xls');
+    markdownPath = join(temporaryDirectory, 'data.md');
+    await writeFile(dataPath, Buffer.alloc(25088, 1));
+    await writeFile(markdownPath, Buffer.alloc(1234, 1));
+  });
+  afterEach(async () => rm(temporaryDirectory, { recursive: true, force: true }));
   afterAll(() => getRegistry().delete('weixin/download-publish-data'));
 
   it('registers stable metadata, arguments, and public columns', () => {
@@ -94,9 +108,9 @@ describe('weixin download-publish-data command', () => {
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
       status: 'downloaded',
-      markdownPath: '/tmp/data.md',
+      markdownPath,
       markdownSize: 1234,
-      dataPath: '/tmp/data.xls',
+      dataPath,
       dataSize: 25088,
       error: null,
     }]);
@@ -189,7 +203,7 @@ describe('weixin download-publish-data command', () => {
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
       status: 'partial',
-      markdownPath: '/tmp/data.md',
+      markdownPath,
       markdownSize: 1234,
       dataPath: null,
       dataSize: null,
@@ -218,10 +232,91 @@ describe('weixin download-publish-data command', () => {
     expect(result).toEqual({
       title: 'Ontology Weekly', publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly', status: 'partial',
-      markdownPath: null, markdownSize: null, dataPath: '/tmp/data.xls', dataSize: 25088,
+      markdownPath: null, markdownSize: null, dataPath, dataSize: 25088,
       error: expect.stringContaining('Markdown analysis failed'),
     });
     expect(result.error).not.toContain('secret-cookie');
+  });
+
+  it.each([
+    ['wrong status', async () => ({ status: 'saved', path: dataPath, size: 25088 })],
+    ['empty path', async () => ({ status: 'downloaded', path: '', size: 25088 })],
+    ['zero size', async () => ({ status: 'downloaded', path: dataPath, size: 0 })],
+    ['unsafe size', async () => ({ status: 'downloaded', path: dataPath, size: Number.MAX_SAFE_INTEGER + 1 })],
+    ['missing file', async () => ({ status: 'downloaded', path: join(temporaryDirectory, 'missing.xls'), size: 10 })],
+    ['directory path', async () => {
+      const directory = join(temporaryDirectory, 'directory.xls');
+      await mkdir(directory);
+      return { status: 'downloaded', path: directory, size: 10 };
+    }],
+    ['size mismatch', async () => ({ status: 'downloaded', path: dataPath, size: 1 })],
+    ['wrong extension', async () => ({ status: 'downloaded', path: markdownPath, size: 1234 })],
+  ])('treats an invalid Excel artifact as partial: %s', async (_label, invalidResult) => {
+    arrangeSuccess();
+    publishDownload.downloadPublishData.mockResolvedValue(await invalidResult());
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({
+      status: 'partial',
+      markdownPath,
+      markdownSize: 1234,
+      dataPath: null,
+      dataSize: null,
+      error: expect.stringContaining('Excel download failed'),
+    });
+  });
+
+  it.each([
+    ['wrong status', async () => ({ status: 'downloaded', path: markdownPath, size: 1234 })],
+    ['empty path', async () => ({ status: 'saved', path: '', size: 1234 })],
+    ['zero size', async () => ({ status: 'saved', path: markdownPath, size: 0 })],
+    ['unsafe size', async () => ({ status: 'saved', path: markdownPath, size: Number.MAX_SAFE_INTEGER + 1 })],
+    ['missing file', async () => ({ status: 'saved', path: join(temporaryDirectory, 'missing.md'), size: 10 })],
+    ['directory path', async () => {
+      const directory = join(temporaryDirectory, 'directory.md');
+      await mkdir(directory);
+      return { status: 'saved', path: directory, size: 10 };
+    }],
+    ['size mismatch', async () => ({ status: 'saved', path: markdownPath, size: 1 })],
+    ['wrong extension', async () => ({ status: 'saved', path: dataPath, size: 25088 })],
+  ])('treats an invalid Markdown artifact as partial: %s', async (_label, invalidResult) => {
+    arrangeSuccess();
+    publishAnalysis.collectPublishAnalysis.mockResolvedValue(await invalidResult());
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({
+      status: 'partial',
+      markdownPath: null,
+      markdownSize: null,
+      dataPath,
+      dataSize: 25088,
+      error: expect.stringContaining('Markdown analysis failed'),
+    });
+  });
+
+  it('returns failed when both helpers return invalid artifact contracts', async () => {
+    arrangeSuccess();
+    publishDownload.downloadPublishData.mockResolvedValue({
+      status: 'downloaded', path: 'https://mp.weixin.qq.com/private?token=token-1', size: 10,
+    });
+    publishAnalysis.collectPublishAnalysis.mockResolvedValue({
+      status: 'saved', path: '', size: 0,
+    });
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      markdownPath: null,
+      markdownSize: null,
+      dataPath: null,
+      dataSize: null,
+    });
+    expect(result.error).toContain('Excel download failed');
+    expect(result.error).toContain('Markdown analysis failed');
+    expect(result.error).not.toMatch(/token-1|secret-cookie|https?:\/\/mp\.weixin\.qq\.com/iu);
   });
 
   it('returns a redacted failure when Excel download and Markdown fallback both fail', async () => {
@@ -253,6 +348,21 @@ describe('weixin download-publish-data command', () => {
       message: expect.stringContaining('query required'),
     });
     expect(auth.resolveBrowserCredentials).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'http://mp.weixin.qq.com/s/article',
+    'https://evil.example/s/article',
+    'https://user:pass@mp.weixin.qq.com/s/article',
+    'https://mp.weixin.qq.com:444/s/article',
+    'https://mp.weixin.qq.com/cgi-bin/home',
+  ])('rejects an untrusted absolute query URL before authentication: %s', async query => {
+    await expect(command.func({}, { query })).rejects.toMatchObject({
+      code: 'ARGUMENT',
+      message: expect.stringContaining('trusted WeChat article URL'),
+    });
+    expect(auth.resolveBrowserCredentials).not.toHaveBeenCalled();
+    expect(publishRecords.collectPublishedRecords).not.toHaveBeenCalled();
   });
 
   it.each([

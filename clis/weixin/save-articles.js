@@ -1,13 +1,21 @@
-import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
+import {
+  ArgumentError, AuthRequiredError, CommandExecutionError, EmptyResultError,
+} from '@sovovs/bycli/errors';
 import { MAX_WECHAT_HTML_BYTES } from '@sovovs/bycli/download/wechat-article';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
+import {
+  combineArticleFallbackErrors,
+  isEligibleArticleFallbackError,
+  withMissingFallbackName,
+} from './_wechat/article-fallback-policy.js';
 import { createArticleIndexFetcher } from './_wechat/article-index.js';
 import {
   callCrawler, collectArticles, isTrustedWechatArticleUrl, saveArticles,
 } from './_wechat/crawler-runtime.js';
 import { readAuthSource } from './_wechat/args.js';
 import { wechatArticleToMarkdown } from './_wechat/markdown.js';
+import { collectSogouAccountArticles } from './_wechat/sogou-fallback.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const browserRequired = args => readAuthSource(args) === 'browser';
@@ -156,11 +164,11 @@ export const saveArticlesCommand = cli({
   description: 'Download WeChat official-account articles as Markdown files',
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
-    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name', help: 'Official-account name used in Markdown metadata' },
+    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name', help: 'Official-account name; exact case-insensitive match required for browser Sogou fallback' },
     { name: 'output', default: './weixin-articles', help: 'Directory for saved Markdown files' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to save' },
     { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' }, { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
-  columns: ['title', 'status', 'stage', 'path', 'error', 'url'],
+  columns: ['title', 'status', 'stage', 'path', 'error', 'url', 'source', 'coverage'],
   func: async (page, args) => {
     const fakeid = String(args.fakeid ?? '').trim();
     if (!fakeid) throw new ArgumentError('fakeid is required');
@@ -169,20 +177,55 @@ export const saveArticlesCommand = cli({
       ? readEnvironmentCredentials(false) : await resolveBrowserCredentials(page);
     const articleHtmlDownloader = createArticleHtmlDownloader({ authSource, page });
     const fetchPage = createArticleIndexFetcher({ page, source: authSource, credentials });
-    const rows = await callCrawler(async () => {
-      const { articles } = await collectArticles({ fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'] });
-      return saveArticles({
+    let articles;
+    let resolutionFailures = [];
+    let source = 'wechat';
+    let coverage = null;
+    try {
+      const result = await callCrawler(() => collectArticles({
+        fakeid, fetchPage, limit: args.limit, maxPages: args['max-pages'],
+      }));
+      articles = result.articles;
+      if (articles.length === 0) {
+        throw new EmptyResultError('weixin save-articles', `No published articles were found for ${fakeid}.`);
+      }
+    } catch (primaryError) {
+      if (authSource !== 'browser' || !isEligibleArticleFallbackError(primaryError)) throw primaryError;
+      const accountName = String(args.name ?? '').trim();
+      if (!accountName) throw withMissingFallbackName('weixin save-articles', primaryError);
+      try {
+        const fallback = await collectSogouAccountArticles({
+          page, accountName, limit: args.limit, maxPages: args['max-pages'],
+          resolutionPolicy: 'rows',
+        });
+        articles = fallback.articles;
+        resolutionFailures = fallback.resolutionFailures;
+        source = fallback.source;
+        coverage = fallback.coverage;
+      } catch (fallbackError) {
+        throw combineArticleFallbackErrors({
+          operation: 'weixin save-articles', primaryError, fallbackError, credentials,
+        });
+      }
+    }
+
+    const savedRows = articles.length === 0 ? [] : await callCrawler(() => saveArticles({
         articles, accountName: String(args.name ?? '').trim(),
         outputDir: args.output ?? './weixin-articles', fetchArticleHtml: articleHtmlDownloader,
         buildMarkdown: (article, html) => wechatArticleToMarkdown({
           html, title: article.title, accountName: String(args.name ?? '').trim(), author: article.author,
           publishedAt: article.publishedAt, digest: article.digest, url: article.url,
         }), existingFilePolicy: 'suffix',
-      });
-    });
-    return rows.map(row => ({
+      }));
+    const orderedRows = source === 'sogou'
+      ? [
+        ...savedRows.map((row, index) => ({ ...row, order: articles[index]?.order ?? index })),
+        ...resolutionFailures,
+      ].sort((left, right) => left.order - right.order)
+      : savedRows;
+    return orderedRows.map(row => ({
       title: row.title, status: row.status, stage: row.stage || null, path: row.saved || null,
-      error: row.error || null, url: row.url,
+      error: row.error || null, url: row.url, source, coverage,
     }));
   },
 });
