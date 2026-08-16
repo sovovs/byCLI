@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRegistry } from '@sovovs/bycli/registry';
-import { AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, CommandExecutionError, EmptyResultError } from '@sovovs/bycli/errors';
 import * as auth from './_wechat/auth-session.js';
 import * as articleIndex from './_wechat/article-index.js';
 import * as runtime from './_wechat/crawler-runtime.js';
@@ -22,6 +22,8 @@ describe('weixin articles command', () => {
     expect(command.args.map(a => [a.name, a.positional, a.required, a.default])).toEqual([
       ['fakeid', true, true, undefined], ['name', undefined, undefined, undefined], ['limit', undefined, undefined, undefined], ['max-pages', undefined, undefined, undefined], ['auth-source', undefined, undefined, 'browser'],
     ]);
+    expect(command.args.find(arg => arg.name === 'name').help)
+      .toBe('Official-account name; exact case-insensitive match required for browser Sogou fallback');
     expect(command.args.find(arg => arg.name === 'auth-source').choices).toEqual(['browser', 'env']);
     expect(() => command.requiresBrowser({ 'auth-source': 'invalid' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
   });
@@ -69,6 +71,35 @@ describe('weixin articles command', () => {
     expect(sogouFallback.collectSogouAccountArticles).toHaveBeenCalledWith({
       page: {}, accountName: 'Exact Account', limit: 2, maxPages: 4,
     });
+  });
+
+  it('does not fall back when article collection reports an authentication gate', async () => {
+    auth.resolveBrowserCredentials.mockResolvedValue({ token: 't', cookie: 'c' });
+    articleIndex.createArticleIndexFetcher.mockReturnValue(vi.fn());
+    runtime.collectArticles.mockRejectedValue(new AuthRequiredError('mp.weixin.qq.com'));
+
+    await expect(command.func({}, {
+      fakeid: 'f', name: 'Exact Account', 'auth-source': 'browser',
+    })).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    expect(sogouFallback.collectSogouAccountArticles).not.toHaveBeenCalled();
+  });
+
+  it('keeps primary-empty plus fallback-empty as EMPTY_RESULT with both contexts', async () => {
+    auth.resolveBrowserCredentials.mockResolvedValue({ token: 't', cookie: 'c' });
+    articleIndex.createArticleIndexFetcher.mockReturnValue(vi.fn());
+    runtime.collectArticles.mockResolvedValue({ articles: [] });
+    sogouFallback.collectSogouAccountArticles.mockRejectedValue(
+      new EmptyResultError('fallback', 'Scanned 2 pages and reached the page cap.'),
+    );
+
+    const error = await command.func({}, {
+      fakeid: 'f', name: 'Exact Account', 'auth-source': 'browser',
+    }).catch(value => value);
+
+    expect(error).toMatchObject({ code: 'EMPTY_RESULT' });
+    expect(error.hint).toContain('Primary (EMPTY_RESULT)');
+    expect(error.hint).toContain('fallback (EMPTY_RESULT)');
+    expect(error.hint).toContain('Scanned 2 pages');
   });
 
   it('does not fall back for environment auth, authentication errors, or unknown failures', async () => {

@@ -1,38 +1,18 @@
-import { ArgumentError, AuthRequiredError, CommandExecutionError, EmptyResultError } from '@sovovs/bycli/errors';
+import { ArgumentError, EmptyResultError } from '@sovovs/bycli/errors';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { readEnvironmentCredentials, resolveBrowserCredentials } from './_wechat/auth-session.js';
+import {
+  combineArticleFallbackErrors,
+  isEligibleArticleFallbackError,
+  withMissingFallbackName,
+} from './_wechat/article-fallback-policy.js';
 import { createArticleIndexFetcher } from './_wechat/article-index.js';
 import { callCrawler, collectArticles } from './_wechat/crawler-runtime.js';
 import { readAuthSource } from './_wechat/args.js';
-import { buildSecretSet, redactText } from './_wechat/redact.js';
 import { collectSogouAccountArticles } from './_wechat/sogou-fallback.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 const browserRequired = args => readAuthSource(args) === 'browser';
-
-function isEligibleFallbackError(error) {
-  return error instanceof CommandExecutionError || error instanceof EmptyResultError;
-}
-
-function missingFallbackNameError(error) {
-  const hint = `${error.hint ? `${error.hint} ` : ''}Sogou fallback requires the exact official-account name in --name.`;
-  if (error instanceof EmptyResultError) return new EmptyResultError('weixin articles', hint);
-  return new CommandExecutionError(error.message, hint);
-}
-
-function combinedFallbackError(primaryError, fallbackError, credentials) {
-  if (fallbackError instanceof AuthRequiredError) return fallbackError;
-  const secrets = buildSecretSet(credentials);
-  const primary = redactText(primaryError.message, secrets);
-  const fallback = redactText(
-    fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-    secrets,
-  );
-  return new CommandExecutionError(
-    'Weixin article index and Sogou fallback both failed',
-    `Primary (${primaryError.code}): ${primary}; fallback (${fallbackError?.code ?? 'UNKNOWN'}): ${fallback}`,
-  );
-}
 
 export const articlesCommand = cli({
   site: 'weixin', name: 'articles', access: 'read', domain: DOMAIN,
@@ -40,7 +20,7 @@ export const articlesCommand = cli({
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
     { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' },
-    { name: 'name', help: 'Optional official-account name for display context' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to return' }, { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' },
+    { name: 'name', help: 'Official-account name; exact case-insensitive match required for browser Sogou fallback' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to return' }, { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' },
     { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
   columns: ['title', 'author', 'digest', 'publishedAt', 'url', 'source', 'coverage'],
@@ -63,9 +43,9 @@ export const articlesCommand = cli({
         throw new EmptyResultError('weixin articles', `No published articles were found for ${fakeid}.`);
       }
     } catch (primaryError) {
-      if (authSource !== 'browser' || !isEligibleFallbackError(primaryError)) throw primaryError;
+      if (authSource !== 'browser' || !isEligibleArticleFallbackError(primaryError)) throw primaryError;
       const accountName = String(args.name ?? '').trim();
-      if (!accountName) throw missingFallbackNameError(primaryError);
+      if (!accountName) throw withMissingFallbackName('weixin articles', primaryError);
       try {
         const fallback = await collectSogouAccountArticles({
           page, accountName, limit: args.limit, maxPages: args['max-pages'],
@@ -74,7 +54,9 @@ export const articlesCommand = cli({
         source = fallback.source;
         coverage = fallback.coverage;
       } catch (fallbackError) {
-        throw combinedFallbackError(primaryError, fallbackError, credentials);
+        throw combineArticleFallbackErrors({
+          operation: 'weixin articles', primaryError, fallbackError, credentials,
+        });
       }
     }
     return articles.map(article => ({
