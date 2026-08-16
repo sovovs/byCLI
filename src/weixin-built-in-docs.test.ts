@@ -113,6 +113,8 @@ describe('built-in weixin history command release artifacts', () => {
     expect(articles.args.find(arg => arg.name === 'fakeid')).toMatchObject({
       type: 'str', positional: true, required: true,
     });
+    expect(articles.args.find(arg => arg.name === 'name')?.help)
+      .toBe('Official-account name; exact case-insensitive match required for browser Sogou fallback');
     expect(articles.args.find(arg => arg.name === 'auth-source')).toMatchObject({
       type: 'str', default: 'browser', required: false, choices: ['browser', 'env'],
     });
@@ -124,6 +126,8 @@ describe('built-in weixin history command release artifacts', () => {
     expect(saveArticles.args.find(arg => arg.name === 'output')).toMatchObject({
       type: 'str', default: './weixin-articles', required: false,
     });
+    expect(saveArticles.args.find(arg => arg.name === 'name')?.help)
+      .toBe('Official-account name; exact case-insensitive match required for browser Sogou fallback');
     expect(saveArticles.args.find(arg => arg.name === 'auth-source')).toMatchObject({
       type: 'str', default: 'browser', required: false, choices: ['browser', 'env'],
     });
