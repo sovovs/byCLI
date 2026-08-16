@@ -5,6 +5,7 @@ import {
   isExactAccountName,
   normalizeSogouPublishTimestamp,
 } from './sogou-fallback.js';
+import { buildSogouSearchUrl } from './sogou-search.js';
 
 function row(title, account, url, publishTimestamp, publishTime = `${publishTimestamp}`) {
   return { title, account, url, summary: `${title} summary`, publishTime, publishTimestamp };
@@ -14,8 +15,8 @@ function resultPage(page, rows, fingerprint = `page-${page}`) {
   return { state: 'results', page, rows, fingerprint };
 }
 
-function emptyPage(page) {
-  return { state: 'empty', page, rows: [], fingerprint: '' };
+function emptyPage(page, reason) {
+  return { state: 'empty', page, rows: [], fingerprint: '', reason };
 }
 
 function directResolver(_page, url) {
@@ -108,6 +109,53 @@ describe('exact-account Sogou fallback collector', () => {
       .toEqual(['1', '1', '2']);
   });
 
+  it('replaces the WeChat tab with a directly loaded Sogou tab before browser fallback', async () => {
+    const sogouPage = 'sogou-tab';
+    const page = {
+      closeWindow: vi.fn().mockResolvedValue(undefined),
+      newTab: vi.fn().mockResolvedValue(sogouPage),
+      setActivePage: vi.fn(),
+    };
+    const searchPage = vi.fn()
+      .mockResolvedValueOnce(resultPage(1, [
+        row('A', 'Example', 'https://weixin.sogou.com/link?url=a', 1),
+      ]))
+      .mockResolvedValueOnce(emptyPage(2));
+
+    await collectSogouAccountArticles({
+      page, accountName: 'Example', freshPage: true, searchPage, resolveUrl: directResolver,
+    });
+
+    const firstUrl = buildSogouSearchUrl('Example', 1);
+    expect(page.closeWindow).toHaveBeenCalledTimes(1);
+    expect(page.newTab).toHaveBeenCalledWith(firstUrl);
+    expect(page.closeWindow.mock.invocationCallOrder[0])
+      .toBeLessThan(page.newTab.mock.invocationCallOrder[0]);
+    expect(page.setActivePage).toHaveBeenCalledWith(sogouPage);
+    expect(searchPage).toHaveBeenNthCalledWith(1, page, {
+      query: 'Example', pageNo: 1, preloadedUrl: firstUrl,
+    });
+    expect(searchPage).toHaveBeenNthCalledWith(2, page, {
+      query: 'Example', pageNo: 2, preloadedUrl: undefined,
+    });
+  });
+
+  it('fails atomically when a fresh Sogou tab cannot be created', async () => {
+    const page = {
+      closeWindow: vi.fn().mockResolvedValue(undefined),
+      newTab: vi.fn().mockResolvedValue(undefined),
+      setActivePage: vi.fn(),
+    };
+    const searchPage = vi.fn();
+
+    await expect(collectSogouAccountArticles({
+      page, accountName: 'Example', freshPage: true, searchPage, resolveUrl: directResolver,
+    })).rejects.toBeInstanceOf(CommandExecutionError);
+    expect(searchPage).not.toHaveBeenCalled();
+    expect(page.closeWindow).toHaveBeenCalledTimes(1);
+    expect(page.setActivePage).not.toHaveBeenCalled();
+  });
+
   it('deduplicates Sogou links and resolved WeChat URLs before filling the limit', async () => {
     const first = row('First', 'Example', 'https://weixin.sogou.com/link?url=first', 30);
     const duplicateSource = { ...first, title: 'First duplicate' };
@@ -178,6 +226,21 @@ describe('exact-account Sogou fallback collector', () => {
     expect(error.hint).toContain('"Example"');
     expect(error.hint).toMatch(/search exhausted after 2 pages/i);
     expect(error.hint).not.toMatch(/later pages may still contain a match/i);
+  });
+
+  it('preserves collected articles and reports the anonymous 100-result cap', async () => {
+    const searchPage = vi.fn()
+      .mockResolvedValueOnce(resultPage(1, [
+        row('A', 'Example', 'https://weixin.sogou.com/link?url=a', 1),
+      ]))
+      .mockResolvedValueOnce(emptyPage(11, 'result-cap'));
+
+    const result = await collectSogouAccountArticles({
+      page: {}, accountName: 'Example', searchPage, resolveUrl: directResolver,
+    });
+
+    expect(result).toMatchObject({ coverage: 'result-cap-reached', pagesScanned: 2 });
+    expect(result.articles).toEqual([expect.objectContaining({ title: 'A' })]);
   });
 
   it.each([

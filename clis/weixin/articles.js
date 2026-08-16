@@ -48,7 +48,7 @@ export const articlesCommand = cli({
       if (!accountName) throw withMissingFallbackName('weixin articles', primaryError);
       try {
         const fallback = await collectSogouAccountArticles({
-          page, accountName, limit: args.limit, maxPages: args['max-pages'],
+          page, accountName, limit: args.limit, maxPages: args['max-pages'], freshPage: true,
         });
         articles = fallback.articles;
         source = fallback.source;

@@ -196,7 +196,7 @@ export const saveArticlesCommand = cli({
       try {
         const fallback = await collectSogouAccountArticles({
           page, accountName, limit: args.limit, maxPages: args['max-pages'],
-          resolutionPolicy: 'rows',
+          resolutionPolicy: 'rows', freshPage: true,
         });
         articles = fallback.articles;
         resolutionFailures = fallback.resolutionFailures;
