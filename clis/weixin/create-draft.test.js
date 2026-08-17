@@ -151,6 +151,56 @@ describe('weixin create-draft command', () => {
         });
     });
 
+    it('writes through the registered UEditor instance when the editor is available', async () => {
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: true, value: 'body' };
+                if (script.includes('div[contenteditable="true"]')) return { ok: false, reason: 'wrong editor selected' };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, { title: 'title', content: 'body' })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+        expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('window.UE.instants'));
+    });
+
+    it('uses native input for the rich-text editor when no UEditor instance is exposed', async () => {
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            nativeType: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
+                if (script.includes('editor content verification')) return { ok: true, value: 'body' };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, { title: 'title', content: 'body' })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+        expect(page.nativeType).toHaveBeenCalledWith('body');
+        const focusScript = page.evaluate.mock.calls
+            .map(([script]) => script)
+            .find(script => script.includes('nativeTargetFocused'));
+        expect(focusScript).toContain('window.getSelection');
+        expect(focusScript).not.toContain('execCommand');
+    });
+
     it('fails when the requested cover cannot be selected', async () => {
         const page = scriptedPage(baseEditorSequence(
             undefined,

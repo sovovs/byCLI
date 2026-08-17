@@ -102,21 +102,52 @@ async function fillField(page, selector, value) {
 }
 
 async function fillContent(page, text) {
-    return page.evaluate(`(() => {
+    var result = await page.evaluate(`(() => {
+        var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
+        var expected = normalize(${JSON.stringify(text)});
+        var instances = window.UE && window.UE.instants ? Object.values(window.UE.instants) : [];
+        var ueditor = instances.find(instance => instance
+            && typeof instance.setContent === 'function'
+            && typeof instance.getContentTxt === 'function');
+        if (ueditor && typeof ueditor.setContent === 'function' && typeof ueditor.getContentTxt === 'function') {
+            ueditor.setContent(${JSON.stringify(text)});
+            var ueditorActual = normalize(ueditor.getContentTxt());
+            if (ueditorActual === expected) {
+                return { ok: true, value: ueditorActual };
+            }
+        }
         var editors = document.querySelectorAll('div[contenteditable="true"]');
         var editor = editors[editors.length - 1];
         if (!editor) return { ok: false, reason: 'content editor not found' };
         editor.focus();
         if (editor.querySelector('[contenteditable="false"]')) editor.innerHTML = '';
-        document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, ${JSON.stringify(text)});
-        editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        var selection = window.getSelection();
+        if (!selection) return { ok: false, reason: 'text selection is unavailable' };
+        var range = document.createRange();
+        range.selectNodeContents(editor);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return { ok: false, nativeTargetFocused: true };
+    })()`);
+
+    if (!result?.nativeTargetFocused || typeof page.nativeType !== 'function') return result;
+
+    try {
+        await page.nativeType(text);
+    } catch {
+        return result;
+    }
+
+    return page.evaluate(`(() => {
         var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
         var expected = normalize(${JSON.stringify(text)});
+        var editors = document.querySelectorAll('div[contenteditable="true"]');
+        var editor = editors[editors.length - 1];
+        if (!editor) return { ok: false, reason: 'content editor not found' };
         var actual = normalize(editor.innerText ?? editor.textContent ?? '');
         return actual === expected
             ? { ok: true, value: actual }
-            : { ok: false, reason: 'value mismatch', value: actual };
+            : { ok: false, reason: 'editor content verification failed', value: actual };
     })()`);
 }
 
