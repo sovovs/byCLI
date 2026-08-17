@@ -14,7 +14,7 @@
  *   2   Argument / usage error          (ArgumentError)
  *  66   No input / empty result         (EmptyResultError)
  *  69   Service unavailable             (BrowserConnectError, adapter load failures)
- *  75   Temporary failure, retry later  (TimeoutError)   EX_TEMPFAIL
+ *  75   Temporary failure, retry later  (TimeoutError, RateLimitedError)   EX_TEMPFAIL
  *  77   Permission denied / auth needed (AuthRequiredError)
  *  78   Configuration error             (ConfigError)
  * 130   Interrupted by Ctrl-C           (set by tui.ts SIGINT handler)
@@ -92,6 +92,12 @@ export class BrowserConnectError extends CliError {
 export class CommandExecutionError extends CliError {
   constructor(message: string, hint?: string) {
     super('COMMAND_EXEC', message, hint, EXIT_CODES.GENERIC_ERROR);
+  }
+}
+
+export class RateLimitedError extends CliError {
+  constructor(message: string, hint?: string) {
+    super('RATE_LIMITED', message, hint, EXIT_CODES.TEMPFAIL);
   }
 }
 

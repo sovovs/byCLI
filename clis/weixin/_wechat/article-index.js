@@ -1,4 +1,4 @@
-import { AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { AuthRequiredError, CommandExecutionError, RateLimitedError } from '@sovovs/bycli/errors';
 import { buildSecretSet, redactText } from './redact.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
@@ -34,8 +34,8 @@ export function mapArticleIndexPayload(payload) {
     throw new AuthRequiredError(DOMAIN, 'WeChat article-index credentials have expired');
   }
   if (ret === 200013 && normalizedMessage === 'freq control') {
-    throw commandError(
-      'was rate limited (ret=200013)',
+    throw new RateLimitedError(
+      'WeChat appmsgpublish was rate limited (ret=200013)',
       'Wait before retrying the WeChat article-index request; repeated retries may extend frequency control.',
     );
   }
@@ -122,6 +122,10 @@ function transportError(error, credentials) {
   const redactedHint = hint ? redactText(hint, secrets) : undefined;
   if (error instanceof AuthRequiredError && error.domain === DOMAIN
     && redactedMessage === message && redactedHint === hint) return error;
+  if (error instanceof RateLimitedError) {
+    if (redactedMessage === message && redactedHint === hint) return error;
+    return new RateLimitedError(redactedMessage, redactedHint);
+  }
   if (isWechatVerificationResponse(redactedMessage, redactedHint)) {
     return new AuthRequiredError(
       DOMAIN,

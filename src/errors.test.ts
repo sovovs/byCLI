@@ -7,6 +7,7 @@ import {
   ConfigError,
   AuthRequiredError,
   TimeoutError,
+  RateLimitedError,
   ArgumentError,
   EmptyResultError,
   selectorError,
@@ -22,6 +23,7 @@ describe('Error type hierarchy', () => {
       new ConfigError('test'),
       new AuthRequiredError('example.com'),
       new TimeoutError('test', 30),
+      new RateLimitedError('test'),
       new ArgumentError('test'),
       new EmptyResultError('test/cmd'),
       selectorError('.btn'),
@@ -52,6 +54,14 @@ describe('Error type hierarchy', () => {
     expect(err.code).toBe('TIMEOUT');
     expect(err.message).toBe('bilibili/hot timed out after 60s');
     expect(err.hint).toContain('timeout');
+  });
+
+  it('RateLimitedError has a machine-readable code and temporary-failure exit code', () => {
+    const err = new RateLimitedError('WeChat rate limited', 'Wait before retrying.');
+    expect(err).toBeInstanceOf(CliError);
+    expect(err.code).toBe('RATE_LIMITED');
+    expect(err.exitCode).toBe(75);
+    expect(err.hint).toBe('Wait before retrying.');
   });
 
   it('ArgumentError has correct code', () => {

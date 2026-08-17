@@ -43,11 +43,25 @@ describe('mapArticleIndexPayload', () => {
   it('distinguishes frequency control and unknown ret=200013 responses from authentication', () => {
     expect(() => mapArticleIndexPayload({ base_resp: { ret: 200013, err_msg: 'freq control' } }))
       .toThrowError(expect.objectContaining({
-        name: 'CommandExecutionError', code: 'COMMAND_EXEC',
+        name: 'RateLimitedError', code: 'RATE_LIMITED', exitCode: 75,
         message: expect.stringContaining('rate limited'),
       }));
     expect(() => mapArticleIndexPayload({ base_resp: { ret: 200013, err_msg: '' } }))
       .toThrowError(expect.objectContaining({ name: 'CommandExecutionError', code: 'COMMAND_EXEC' }));
+  });
+
+  it('preserves RATE_LIMITED through the article-index transport wrapper', async () => {
+    const page = {
+      fetchJson: vi.fn().mockResolvedValue({ base_resp: { ret: 200013, err_msg: 'freq control' } }),
+    };
+    const fetchPage = createArticleIndexFetcher({
+      page, source: 'browser', credentials,
+    });
+
+    await expect(fetchPage({ fakeid: 'fake-id' })).rejects.toMatchObject({
+      name: 'RateLimitedError', code: 'RATE_LIMITED', exitCode: 75,
+      message: expect.stringContaining('rate limited'),
+    });
   });
 
   it.each([

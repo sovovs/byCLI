@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ArgumentError, AuthRequiredError, CommandExecutionError, EmptyResultError,
+  ArgumentError, AuthRequiredError, CliError, CommandExecutionError, EmptyResultError,
 } from '@sovovs/bycli/errors';
 import {
   combineArticleFallbackErrors,
@@ -11,6 +11,7 @@ import {
 describe('Weixin article fallback policy', () => {
   it('allows only command and empty primary errors to enter fallback', () => {
     expect(isEligibleArticleFallbackError(new CommandExecutionError('rate limited'))).toBe(true);
+    expect(isEligibleArticleFallbackError(new CliError('RATE_LIMITED', 'rate limited'))).toBe(true);
     expect(isEligibleArticleFallbackError(new EmptyResultError('primary'))).toBe(true);
     expect(isEligibleArticleFallbackError(new AuthRequiredError('mp.weixin.qq.com'))).toBe(false);
     expect(isEligibleArticleFallbackError(new ArgumentError('bad input'))).toBe(false);
@@ -20,12 +21,26 @@ describe('Weixin article fallback policy', () => {
   it.each([
     [new EmptyResultError('primary', 'Primary scan was empty.'), 'EMPTY_RESULT'],
     [new CommandExecutionError('Primary failed', 'Wait before retrying.'), 'COMMAND_EXEC'],
+    [new CliError('RATE_LIMITED', 'Primary rate limited', 'Wait before retrying.'), 'RATE_LIMITED'],
   ])('preserves the primary terminal type when fallback needs --name', (primaryError, code) => {
     const result = withMissingFallbackName('weixin articles', primaryError);
 
     expect(result).toMatchObject({ code });
     expect(result.hint).toContain('exact official-account name in --name');
     expect(result.hint).toContain(primaryError.hint);
+  });
+
+  it('keeps a primary rate limit terminal when the Sogou fallback also fails', () => {
+    const result = combineArticleFallbackErrors({
+      operation: 'weixin articles',
+      primaryError: new CliError('RATE_LIMITED', 'Primary rate limited', 'Wait before retrying.'),
+      fallbackError: new AuthRequiredError('weixin.sogou.com', 'Complete verification.'),
+      credentials: { token: 't', cookie: 'c' },
+    });
+
+    expect(result).toMatchObject({ code: 'RATE_LIMITED', exitCode: 75 });
+    expect(result.message).toContain('rate limited');
+    expect(result.hint).toContain('fallback (AUTH_REQUIRED)');
   });
 
   it('keeps two empty phases as EMPTY_RESULT with sanitized bounded context', () => {
