@@ -62,7 +62,7 @@ async function getToken(page) {
 }
 
 async function navigateToEditor(page) {
-    await page.goto(WEIXIN_HOME);
+    await page.goto(WEIXIN_HOME, { stealth: false });
     await page.wait(3);
     const token = await getToken(page);
     if (!token) {
@@ -71,8 +71,8 @@ async function navigateToEditor(page) {
             'Could not extract session token. Please log in to mp.weixin.qq.com',
         );
     }
-    await page.goto(`https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=77&token=${token}&lang=zh_CN`);
-    await page.wait(4);
+    await page.goto(`https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=77&token=${token}&lang=zh_CN`, { stealth: false });
+    await page.wait(10);
     const hasTitle = await page.evaluate('!!document.querySelector("textarea#title")');
     if (!hasTitle) {
         throw new AuthRequiredError(
@@ -119,6 +119,10 @@ async function fillContent(page, text) {
         var editors = document.querySelectorAll('div[contenteditable="true"]');
         var editor = editors[editors.length - 1];
         if (!editor) return { ok: false, reason: 'content editor not found' };
+        document.querySelectorAll('[data-bycli-content-target]').forEach(element => {
+            element.removeAttribute('data-bycli-content-target');
+        });
+        editor.setAttribute('data-bycli-content-target', 'true');
         editor.focus();
         if (editor.querySelector('[contenteditable="false"]')) editor.innerHTML = '';
         var selection = window.getSelection();
@@ -130,19 +134,61 @@ async function fillContent(page, text) {
         return { ok: false, nativeTargetFocused: true };
     })()`);
 
-    if (!result?.nativeTargetFocused || typeof page.nativeType !== 'function') return result;
+    if (!result?.nativeTargetFocused) return result;
 
-    try {
-        await page.nativeType(text);
-    } catch {
+    const editorTarget = 'div[contenteditable="true"][data-bycli-content-target="true"]';
+    if (typeof page.focusWindow === 'function') {
+        try { await page.focusWindow(); } catch { /* focus is best-effort */ }
+    }
+    if (typeof page.click === 'function') {
+        try {
+            await page.click(editorTarget);
+            await page.wait(0.3);
+        } catch {
+            return result;
+        }
+    } else if (typeof page.nativeClick === 'function') {
+        const point = await page.evaluate(`(() => {
+            var el = document.querySelector('${editorTarget}');
+            if (!el) return null;
+            el.scrollIntoView({ block: 'center' });
+            var rect = el.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return null;
+            return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + 24) };
+        })()`);
+        if (!point) return { ok: false, reason: 'content editor is not clickable' };
+        try {
+            await page.nativeClick(point.x, point.y);
+            await page.wait(0.5);
+        } catch {
+            return result;
+        }
+    }
+
+    if (typeof page.nativeType === 'function') {
+        try {
+            const chunkSize = 200;
+            for (let offset = 0; offset < text.length; offset += chunkSize) {
+                await page.nativeType(text.slice(offset, offset + chunkSize));
+                if (offset + chunkSize < text.length) await page.wait(3);
+            }
+        } catch {
+            return result;
+        }
+    } else if (typeof page.typeText === 'function') {
+        try {
+            await page.typeText(editorTarget, text);
+        } catch {
+            return result;
+        }
+    } else {
         return result;
     }
 
     return page.evaluate(`(() => {
         var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
         var expected = normalize(${JSON.stringify(text)});
-        var editors = document.querySelectorAll('div[contenteditable="true"]');
-        var editor = editors[editors.length - 1];
+        var editor = document.querySelector('${editorTarget}');
         if (!editor) return { ok: false, reason: 'content editor not found' };
         var actual = normalize(editor.innerText ?? editor.textContent ?? '');
         return actual === expected
@@ -307,6 +353,7 @@ export const createDraftCommand = cli({
         const args = normalizeCreateDraftArgs(kwargs);
         await navigateToEditor(page);
 
+
         const titleResult = await fillField(page, 'textarea#title', args.title);
         requirePageResult(titleResult, 'title');
 
@@ -314,6 +361,8 @@ export const createDraftCommand = cli({
             const authorResult = await fillField(page, 'input#author', args.author);
             requirePageResult(authorResult, 'author');
         }
+
+        await page.wait(10);
 
         const contentResult = await fillContent(page, args.content);
         requirePageResult(contentResult, 'content');

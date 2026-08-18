@@ -80,6 +80,22 @@ describe('weixin create-draft command', () => {
         });
     });
 
+    it('navigates to the editor without injecting stealth patches', async () => {
+        const page = scriptedPage(['123456', false]);
+
+        await expect(command.func(page, {
+            title: 'title',
+            content: 'body',
+        })).rejects.toBeInstanceOf(AuthRequiredError);
+
+        expect(page.goto).toHaveBeenNthCalledWith(1, 'https://mp.weixin.qq.com/', { stealth: false });
+        expect(page.goto).toHaveBeenNthCalledWith(
+            2,
+            expect.stringContaining('https://mp.weixin.qq.com/cgi-bin/appmsg'),
+            { stealth: false },
+        );
+    });
+
     it.each([
         [{ title: '   ', content: 'body' }, 'title'],
         [{ title: 'title', content: '   ' }, 'content'],
@@ -182,6 +198,7 @@ describe('weixin create-draft command', () => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes("input#author")) return { ok: true, value: 'Author' };
                 if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
                 if (script.includes('editor content verification')) return { ok: true, value: 'body' };
                 if (script.includes('保存为草稿')) return { ok: true };
@@ -197,8 +214,74 @@ describe('weixin create-draft command', () => {
         const focusScript = page.evaluate.mock.calls
             .map(([script]) => script)
             .find(script => script.includes('nativeTargetFocused'));
+        const verificationScript = page.evaluate.mock.calls
+            .map(([script]) => script)
+            .find(script => script.includes('editor content verification'));
         expect(focusScript).toContain('window.getSelection');
         expect(focusScript).not.toContain('execCommand');
+        expect(focusScript).toContain('data-bycli-content-target');
+        expect(verificationScript).toContain('[data-bycli-content-target="true"]');
+    });
+
+    it('waits for the editor and metadata fields before entering content', async () => {
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            click: vi.fn().mockResolvedValue(undefined),
+            nativeType: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes("input#author")) return { ok: true, value: 'Author' };
+                if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
+                if (script.includes('editor content verification')) return { ok: true, value: 'body' };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, { title: 'title', author: 'Author', content: 'body' })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title" by Author',
+        }]);
+
+        const editorTarget = 'div[contenteditable="true"][data-bycli-content-target="true"]';
+        expect(page.click).toHaveBeenCalledWith(editorTarget);
+        expect(page.nativeType).toHaveBeenCalledWith('body');
+        expect(page.wait.mock.calls.filter(([seconds]) => seconds === 10)).toHaveLength(2);
+    });
+
+    it('enters long rich-text content in bounded native-input chunks', async () => {
+        const content = 'a'.repeat(801);
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            nativeType: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
+                if (script.includes('editor content verification')) return { ok: true, value: content };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, { title: 'title', content })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+
+        expect(page.nativeType.mock.calls.map(([chunk]) => chunk)).toEqual([
+            'a'.repeat(200),
+            'a'.repeat(200),
+            'a'.repeat(200),
+            'a'.repeat(200),
+            'a',
+        ]);
+        expect(page.wait.mock.calls.filter(([seconds]) => seconds === 3)).toHaveLength(5);
     });
 
     it('fails when the requested cover cannot be selected', async () => {

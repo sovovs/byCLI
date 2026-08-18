@@ -141,6 +141,20 @@ describe('Page.getCurrentUrl', () => {
     expect(sendCommandMock).toHaveBeenCalledTimes(1);
   });
 
+  it('settles a navigation without stealth when the caller opts out', async () => {
+    sendCommandFullMock.mockResolvedValueOnce({ page: 'page-1', data: { url: 'https://mp.weixin.qq.com/' } });
+    sendCommandMock.mockResolvedValueOnce(null);
+
+    const page = new Page('wechat', undefined, undefined, undefined, 'adapter');
+    await page.goto('https://mp.weixin.qq.com/', { stealth: false });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('exec', expect.objectContaining({
+      code: expect.not.stringContaining('navigator.webdriver'),
+      page: 'page-1',
+    }));
+    expect(sendCommandMock.mock.calls[0][1].code).toContain('document');
+  });
+
   it('passes adapter site session lifecycle through daemon commands', async () => {
     sendCommandFullMock.mockResolvedValueOnce({ page: 'page-1', data: { url: 'https://chatgpt.com/' } });
     sendCommandMock.mockResolvedValueOnce(null);

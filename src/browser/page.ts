@@ -91,7 +91,7 @@ export class Page extends BasePage {
     };
   }
 
-  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number }): Promise<void> {
+  async goto(url: string, options?: { waitUntil?: 'load' | 'none'; settleMs?: number; stealth?: boolean }): Promise<void> {
     let result: { data: unknown; page?: string };
     try {
       result = await sendCommandFull('navigate', {
@@ -117,10 +117,13 @@ export class Page extends BasePage {
     }
     this._lastUrl = url;
     // Inject stealth + settle in a single round-trip instead of two sequential exec calls.
-    // The stealth guard flag prevents double-injection; settle uses DOM stability detection.
+    // Some security-sensitive editors reject runtime environment patches, so callers can
+    // retain the normal DOM-settle behavior while opting out of stealth injection.
+    const useStealth = options?.stealth !== false;
     if (options?.waitUntil !== 'none') {
       const maxMs = options?.settleMs ?? 1000;
-      const combinedCode = `${generateStealthJs()};\n${waitForDomStableJs(maxMs, Math.min(500, maxMs))}`;
+      const settleCode = waitForDomStableJs(maxMs, Math.min(500, maxMs));
+      const combinedCode = useStealth ? `${generateStealthJs()};\n${settleCode}` : settleCode;
       const combinedOpts = {
         code: combinedCode,
         ...this._cmdOpts(),
@@ -140,7 +143,7 @@ export class Page extends BasePage {
           if (classifyBrowserError(retryErr).kind !== 'target-navigation') throw retryErr;
         }
       }
-    } else {
+    } else if (useStealth) {
       // Even with waitUntil='none', still inject stealth (best-effort)
       try {
         await sendCommand('exec', {
