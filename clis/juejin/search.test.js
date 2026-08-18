@@ -8,6 +8,7 @@ const {
     TYPES,
     SORTS,
     PERIODS,
+    EMPTY_RETRY_ATTEMPTS,
     requireQuery,
     requireChoice,
     requireLimit,
@@ -108,6 +109,17 @@ function courseEntry() {
             user_info: { user_name: 'haojiahuo' },
         },
     };
+}
+
+// 按顺序返回每个 page，用完后固定重复最后一个（用于断言重试次数）。
+function mockSequence(pages) {
+    const queue = [...pages];
+    const fetchMock = vi.fn(async () => {
+        const page = queue.length > 0 ? queue.shift() : pages[pages.length - 1];
+        return { ok: true, status: 200, json: async () => page };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
 }
 
 function mockJson(pages) {
@@ -387,6 +399,33 @@ describe('end-to-end func behaviour', () => {
         const rows = await cmd.func({ query: 'golang', type: 'article', sort: 'relevance', period: 'all', limit: 50 });
         expect(rows).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a flaky empty first page and returns the rows it eventually gets', async () => {
+        // 掘金对 period != all 会间歇性返回空首页（err_no=0 但 data=[]）。
+        const empty = { err_no: 0, err_msg: 'success', data: [], cursor: '20_x', has_more: false };
+        const full = { err_no: 0, err_msg: 'success', data: [articleEntry()], cursor: '20_y', has_more: false };
+        const fetchMock = mockSequence([empty, empty, full]);
+        const rows = await cmd.func({ query: 'rust', type: 'article', sort: 'newest', period: 'week', limit: 20 });
+        expect(rows).toHaveLength(1);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('gives up after a bounded number of retries and still reports empty', async () => {
+        const fetchMock = mockJson([{ err_no: 0, err_msg: 'success', data: [], cursor: '', has_more: false }]);
+        await expect(cmd.func({ query: '鿃鿄鿅鿆', type: 'article', sort: 'relevance', period: 'all', limit: 20 }))
+            .rejects.toThrow(EmptyResultError);
+        expect(fetchMock).toHaveBeenCalledTimes(EMPTY_RETRY_ATTEMPTS);
+    });
+
+    it('does not retry an empty page reached mid-pagination', async () => {
+        // 翻页途中的空页是正常终止信号，不该触发重试。
+        const first = { err_no: 0, data: [articleEntry()], cursor: '20_p2', has_more: true };
+        const empty = { err_no: 0, data: [], cursor: '40_p3', has_more: false };
+        const fetchMock = mockSequence([first, empty]);
+        const rows = await cmd.func({ query: 'golang', type: 'article', sort: 'relevance', period: 'all', limit: 20 });
+        expect(rows).toHaveLength(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('throws EmptyResultError rather than returning an empty list', async () => {

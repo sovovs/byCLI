@@ -26,6 +26,21 @@ const PAGE_SIZE = 20;
 const MAX_LIMIT = 200;
 const MAX_PAGES = 30;
 
+// 掘金对**非 0 的时间窗**（search_type=1/2/3）会间歇性返回空首页：同一 query
+// 连打 6 次，2-5 次拿到 `data: []` 而 err_no 仍是 0/success，只有 cursor 里的
+// 实例标识不同——像是部分后端分片对时间窗查询答不出来。实测 period=week 命中
+// 率只有 1/6 ~ 2/6，但 4 次以内总能拿到数据。
+//
+// 真实无结果（如 query="鿃鿄鿅鿆"）连打 8 次稳定是 0，所以重试只会救回抖动，
+// 不会把空态变成假数据。只重试**首页且一行都没拿到**的情形：翻页途中的空页
+// 本来就是正常的终止信号。
+const EMPTY_RETRY_ATTEMPTS = 4;
+const EMPTY_RETRY_DELAY_MS = 400;
+
+function delay(ms) {
+    return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
 const TYPES = {
     all: 0,
     article: 2,
@@ -308,8 +323,17 @@ cli({
 
         while (rows.length < limit && pages < MAX_PAGES) {
             const url = buildUrl({ query, idType, sortType, period, cursor });
-            const payload = await fetchPage(url);
+            let payload = await fetchPage(url);
             pages += 1;
+
+            // 首页空 → 可能是上面说的分片抖动，有界重试；真实空态重试后仍是空。
+            if (rows.length === 0 && payload.data.length === 0) {
+                for (let attempt = 1; attempt < EMPTY_RETRY_ATTEMPTS; attempt += 1) {
+                    await delay(EMPTY_RETRY_DELAY_MS);
+                    payload = await fetchPage(url);
+                    if (payload.data.length > 0) break;
+                }
+            }
 
             for (const entry of payload.data) {
                 const normalized = normalizeEntry(entry);
@@ -357,6 +381,7 @@ export const __test__ = {
     PAGE_SIZE,
     MAX_LIMIT,
     MAX_PAGES,
+    EMPTY_RETRY_ATTEMPTS,
     requireQuery,
     requireChoice,
     requireLimit,
