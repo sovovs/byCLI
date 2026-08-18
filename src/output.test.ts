@@ -53,6 +53,32 @@ describe('output TTY detection', () => {
     expect(out).toContain('alice');
   });
 
+  it('serialises object columns as JSON instead of [object Object]', () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    const row = { id: '1', extra: { category: '后端', is_original: true } };
+    for (const fmt of ['table', 'md', 'csv', 'plain']) {
+      logSpy.mockClear();
+      render([row], { fmt, fmtExplicit: true, columns: ['id', 'extra'] });
+      const out = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+      expect(out, fmt).not.toContain('[object Object]');
+      // csv escapes the inner quotes, so only assert on the payload itself.
+      expect(out.replace(/""/g, '"'), fmt).toContain('"category":"后端"');
+    }
+  });
+
+  it('quotes a JSON-serialised cell in csv so the commas stay inside one field', () => {
+    render([{ id: '1', extra: { a: 1, b: 2 } }], { fmt: 'csv', fmtExplicit: true, columns: ['id', 'extra'] });
+    const lines = logSpy.mock.calls.map((c: unknown[]) => c[0] as string);
+    expect(lines[0]).toBe('id,extra');
+    expect(lines[1]).toBe('1,"{""a"":1,""b"":2}"');
+  });
+
+  it('keeps array columns readable in flat formats', () => {
+    render([{ tags: ['Go', 'API'] }], { fmt: 'md', fmtExplicit: true, columns: ['tags'] });
+    const out = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+    expect(out).toContain('["Go","API"]');
+  });
+
   it('prints single markdown payloads without wrapping them in a table', () => {
     render([{ markdown: '# Title\n\nBody' }], { fmt: 'md' });
     const out = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');

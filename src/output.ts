@@ -22,6 +22,25 @@ function normalizeRows(data: unknown): Record<string, unknown>[] {
   return [{ value: data }];
 }
 
+/**
+ * Render one cell for the flat text formats (table / plain / md / csv).
+ *
+ * Adapters occasionally expose a structured column (e.g. juejin/search's
+ * per-kind `extra`), which `String(v)` would turn into "[object Object]".
+ * JSON is lossless and still one line, so it degrades gracefully.
+ */
+function formatCell(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') {
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+  return String(v);
+}
+
 function resolveColumns(rows: Record<string, unknown>[], opts: RenderOptions): string[] {
   return opts.columns ?? Object.keys(rows[0] ?? {});
 }
@@ -61,8 +80,7 @@ function renderTable(data: unknown, opts: RenderOptions): void {
 
   for (const row of rows) {
     table.push(columns.map(c => {
-      const v = (row as Record<string, unknown>)[c];
-      return v === null || v === undefined ? '' : String(v);
+      return formatCell((row as Record<string, unknown>)[c]);
     }));
   }
 
@@ -98,7 +116,9 @@ function renderPlain(data: unknown, opts: RenderOptions): void {
   }
 
   rows.forEach((row, index) => {
-    const entries = Object.entries(row).filter(([, value]) => value !== undefined && value !== null && String(value) !== '');
+    const entries = Object.entries(row)
+      .map(([key, value]) => [key, formatCell(value)] as const)
+      .filter(([, value]) => value !== '');
     entries.forEach(([key, value]) => {
       console.log(`${key}: ${value}`);
     });
@@ -124,7 +144,7 @@ function renderMarkdown(data: unknown, opts: RenderOptions): void {
   console.log('| ' + columns.join(' | ') + ' |');
   console.log('| ' + columns.map(() => '---').join(' | ') + ' |');
   for (const row of rows) {
-    console.log('| ' + columns.map(c => String((row as Record<string, unknown>)[c] ?? '')).join(' | ') + ' |');
+    console.log('| ' + columns.map(c => formatCell((row as Record<string, unknown>)[c])).join(' | ') + ' |');
   }
 }
 
@@ -135,7 +155,7 @@ function renderCsv(data: unknown, opts: RenderOptions): void {
   console.log(columns.join(','));
   for (const row of rows) {
     console.log(columns.map(c => {
-      const v = String((row as Record<string, unknown>)[c] ?? '');
+      const v = formatCell((row as Record<string, unknown>)[c]);
       return v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')
         ? `"${v.replace(/"/g, '""')}"` : v;
     }).join(','));
