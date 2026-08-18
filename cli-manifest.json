@@ -11321,6 +11321,221 @@
     "sourceFile": "gitee/user.js"
   },
   {
+    "site": "github",
+    "name": "repo",
+    "description": "Single-repository metadata including the true watch count",
+    "access": "read",
+    "domain": "api.github.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "repo",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Repository as \"owner/repo\" (the full_name column from search) or its github.com URL"
+      }
+    ],
+    "columns": [
+      "full_name",
+      "stars",
+      "forks",
+      "watchers",
+      "open_issues",
+      "language",
+      "description",
+      "license",
+      "topics",
+      "homepage",
+      "default_branch",
+      "archived",
+      "is_fork",
+      "size_kb",
+      "created",
+      "pushed",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "github/repo.js",
+    "sourceFile": "github/repo.js"
+  },
+  {
+    "site": "github",
+    "name": "search",
+    "description": "Search GitHub repositories by stars, forks, watchers, language, topic and more",
+    "access": "read",
+    "domain": "api.github.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": false,
+        "positional": true,
+        "help": "Free-text keyword; optional when at least one filter flag is given"
+      },
+      {
+        "name": "stars",
+        "type": "str",
+        "required": false,
+        "help": "Star count filter: \"5000\" (>=), \">10000\", \"<500\", \"1000..5000\""
+      },
+      {
+        "name": "forks",
+        "type": "str",
+        "required": false,
+        "help": "Fork count filter, same syntax as --stars"
+      },
+      {
+        "name": "watchers",
+        "type": "str",
+        "required": false,
+        "help": "Watch count filter, same syntax as --stars (client-side; costs 1 API call per scanned repo)"
+      },
+      {
+        "name": "language",
+        "type": "str",
+        "required": false,
+        "help": "Primary language, comma-separated for multiple (e.g. \"rust,go\")"
+      },
+      {
+        "name": "topic",
+        "type": "str",
+        "required": false,
+        "help": "Repository topic, comma-separated for multiple (e.g. \"cli,devtools\")"
+      },
+      {
+        "name": "license",
+        "type": "str",
+        "required": false,
+        "help": "License keyword (e.g. \"mit\", \"apache-2.0\")"
+      },
+      {
+        "name": "size",
+        "type": "str",
+        "required": false,
+        "help": "Repo size in KB: \"1000\" (>=), \"<500\", \"100..1000\""
+      },
+      {
+        "name": "pushed",
+        "type": "str",
+        "required": false,
+        "help": "Last push date: \"2026-01-01\" (>=), \">2026-01-01\", \"2025-01-01..2026-01-01\""
+      },
+      {
+        "name": "created",
+        "type": "str",
+        "required": false,
+        "help": "Creation date, same syntax as --pushed"
+      },
+      {
+        "name": "issues",
+        "type": "str",
+        "required": false,
+        "help": "Good-first-issue count filter, same syntax as --stars"
+      },
+      {
+        "name": "owner",
+        "type": "str",
+        "required": false,
+        "help": "Restrict to owners/orgs, comma-separated (e.g. \"facebook,vercel\")"
+      },
+      {
+        "name": "in",
+        "type": "str",
+        "required": false,
+        "help": "Restrict free-text match to: name, description, readme, topics (comma-separated)"
+      },
+      {
+        "name": "include-forks",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "Include forked repos (GitHub excludes them by default)"
+      },
+      {
+        "name": "include-archived",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "Include archived repos"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "default": "best-match",
+        "required": false,
+        "help": "Ranking dimension; \"watchers\" sorts client-side and enriches every scanned row",
+        "choices": [
+          "best-match",
+          "stars",
+          "forks",
+          "watchers",
+          "updated",
+          "help-wanted-issues"
+        ]
+      },
+      {
+        "name": "order",
+        "type": "str",
+        "default": "desc",
+        "required": false,
+        "help": "Sort direction",
+        "choices": [
+          "desc",
+          "asc"
+        ]
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Max results (1-100)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page; GitHub never serves past result 1000"
+      },
+      {
+        "name": "scan",
+        "type": "int",
+        "default": 30,
+        "required": false,
+        "help": "Candidate pool size when filtering/sorting by watchers (1-100, one API call each)"
+      },
+      {
+        "name": "with-watchers",
+        "type": "bool",
+        "default": false,
+        "required": false,
+        "help": "Add the real watch count column without filtering on it"
+      }
+    ],
+    "columns": [
+      "rank",
+      "full_name",
+      "stars",
+      "forks",
+      "watchers",
+      "language",
+      "description",
+      "license",
+      "topics",
+      "open_issues",
+      "pushed",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "github/search.js",
+    "sourceFile": "github/search.js"
+  },
+  {
     "site": "google",
     "name": "news",
     "description": "Get Google News headlines",

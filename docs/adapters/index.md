@@ -123,6 +123,7 @@ Run `bycli list` for the live registry.
 | **[npm](./browser/npm.md)**                       | `search` `package` `downloads`                                                                                                                 | 🌐 Public    |
 | **[pypi](./browser/pypi.md)**                     | `package` `downloads`                                                                                                                          | 🌐 Public    |
 | **[crates](./browser/crates.md)**                 | `search` `crate`                                                                                                                               | 🌐 Public    |
+| **[github](./browser/github.md)**                 | `search` `repo`                                                                                                                                | 🌐 Public    |
 | **[mdn](./browser/mdn.md)**                       | `search`                                                                                                                                       | 🌐 Public    |
 | **[nvd](./browser/nvd.md)**                       | `cve`                                                                                                                                          | 🌐 Public    |
 | **[dockerhub](./browser/dockerhub.md)**           | `search` `image`                                                                                                                               | 🌐 Public    |
