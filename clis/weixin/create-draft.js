@@ -101,6 +101,30 @@ async function fillField(page, selector, value) {
     })()`);
 }
 
+// WeChat's editor-integrity check can raise a "浏览器插件存在安全隐患" modal. It is a
+// blocking overlay, so any later click (cover picker, save) would land on its mask.
+// Dismiss it via its own 我知道了 button rather than removing the node, so the
+// editor's own teardown runs.
+async function dismissPluginWarning(page) {
+    return page.evaluate(`(() => {
+        var closed = 0;
+        document.querySelectorAll('.weui-desktop-dialog__wrp, .weui-desktop-dialog').forEach(function(dialog) {
+            if ((dialog.innerText || '').indexOf('\\u5b89\\u5168\\u9690\\u60a3') < 0) return;
+            var wrap = dialog.closest('.weui-desktop-dialog__wrp') || dialog;
+            if (window.getComputedStyle(wrap).display === 'none' || wrap.offsetHeight <= 0) return;
+            var buttons = wrap.querySelectorAll('button, a, .weui-desktop-btn');
+            for (var i = 0; i < buttons.length; i++) {
+                if ((buttons[i].textContent || '').trim() === '\\u6211\\u77e5\\u9053\\u4e86') {
+                    buttons[i].click();
+                    closed++;
+                    return;
+                }
+            }
+        });
+        return { closed: closed };
+    })()`);
+}
+
 async function fillContent(page, text) {
     var result = await page.evaluate(`(() => {
         var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
@@ -116,6 +140,13 @@ async function fillContent(page, text) {
                 return { ok: true, value: ueditorActual };
             }
         }
+        // The editor is a rich-text framework (ProseMirror) that owns its DOM, so
+        // only tag it here. Do NOT clear innerHTML, build a Range, or send a
+        // select-all chord: WeChat's editor-integrity check reads those as plugin
+        // tampering and shows a blocking "当前使用的浏览器插件存在安全隐患" modal.
+        // Once that mask is up every click lands on it and no text is ever typed.
+        // page.typeText() drives the editor through CDP DOM.focus + Input.insertText,
+        // which the editor accepts as genuine input.
         var editors = document.querySelectorAll('div[contenteditable="true"]');
         var editor = editors[editors.length - 1];
         if (!editor) return { ok: false, reason: 'content editor not found' };
@@ -123,14 +154,6 @@ async function fillContent(page, text) {
             element.removeAttribute('data-bycli-content-target');
         });
         editor.setAttribute('data-bycli-content-target', 'true');
-        editor.focus();
-        if (editor.querySelector('[contenteditable="false"]')) editor.innerHTML = '';
-        var selection = window.getSelection();
-        if (!selection) return { ok: false, reason: 'text selection is unavailable' };
-        var range = document.createRange();
-        range.selectNodeContents(editor);
-        selection.removeAllRanges();
-        selection.addRange(range);
         return { ok: false, nativeTargetFocused: true };
     })()`);
 
@@ -140,53 +163,26 @@ async function fillContent(page, text) {
     if (typeof page.focusWindow === 'function') {
         try { await page.focusWindow(); } catch { /* focus is best-effort */ }
     }
-    if (typeof page.click === 'function') {
-        try {
-            await page.click(editorTarget);
-            await page.wait(0.3);
-        } catch {
-            return result;
-        }
-    } else if (typeof page.nativeClick === 'function') {
-        const point = await page.evaluate(`(() => {
-            var el = document.querySelector('${editorTarget}');
-            if (!el) return null;
-            el.scrollIntoView({ block: 'center' });
-            var rect = el.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return null;
-            return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + 24) };
-        })()`);
-        if (!point) return { ok: false, reason: 'content editor is not clickable' };
-        try {
-            await page.nativeClick(point.x, point.y);
-            await page.wait(0.5);
-        } catch {
-            return result;
-        }
-    }
 
-    if (typeof page.nativeType === 'function') {
-        try {
-            const chunkSize = 200;
-            for (let offset = 0; offset < text.length; offset += chunkSize) {
-                await page.nativeType(text.slice(offset, offset + chunkSize));
-                if (offset + chunkSize < text.length) await page.wait(3);
-            }
-        } catch {
-            return result;
-        }
-    } else if (typeof page.typeText === 'function') {
-        try {
-            await page.typeText(editorTarget, text);
-        } catch {
-            return result;
-        }
-    } else {
-        return result;
+    if (typeof page.typeText !== 'function') {
+        return { ok: false, reason: 'page.typeText is unavailable for content entry' };
     }
+    try {
+        await page.typeText(editorTarget, text);
+    } catch (err) {
+        return { ok: false, reason: `content typing failed: ${String(err).slice(0, 120)}` };
+    }
+    await page.wait(1);
+    await dismissPluginWarning(page);
 
     return page.evaluate(`(() => {
-        var normalize = value => String(value ?? '').replace(/\\r\\n?/g, '\\n').trim();
+        // The editor renders paragraph breaks as its own block structure, so its
+        // innerText carries extra blank lines the source text does not have.
+        // Compare on collapsed whitespace instead of exact line breaks.
+        var normalize = value => String(value ?? '')
+            .replace(/\\r\\n?/g, '\\n')
+            .replace(/[\\s\\u00a0\\u200b]+/g, ' ')
+            .trim();
         var expected = normalize(${JSON.stringify(text)});
         var editor = document.querySelector('${editorTarget}');
         if (!editor) return { ok: false, reason: 'content editor not found' };

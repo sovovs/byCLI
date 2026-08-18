@@ -193,7 +193,7 @@ describe('weixin create-draft command', () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
-            nativeType: vi.fn().mockResolvedValue(undefined),
+            typeText: vi.fn().mockResolvedValue({ match_level: 'exact', matches_n: 1 }),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
@@ -201,6 +201,7 @@ describe('weixin create-draft command', () => {
                 if (script.includes("input#author")) return { ok: true, value: 'Author' };
                 if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
                 if (script.includes('editor content verification')) return { ok: true, value: 'body' };
+                if (script.includes('安全隐患')) return { closed: 0 };
                 if (script.includes('保存为草稿')) return { ok: true };
                 return true;
             }),
@@ -210,16 +211,19 @@ describe('weixin create-draft command', () => {
             status: 'draft saved',
             detail: '"title"',
         }]);
-        expect(page.nativeType).toHaveBeenCalledWith('body');
+        expect(page.typeText).toHaveBeenCalledWith(
+            'div[contenteditable="true"][data-bycli-content-target="true"]',
+            'body'
+        );
         const focusScript = page.evaluate.mock.calls
             .map(([script]) => script)
             .find(script => script.includes('nativeTargetFocused'));
         const verificationScript = page.evaluate.mock.calls
             .map(([script]) => script)
             .find(script => script.includes('editor content verification'));
-        expect(focusScript).toContain('window.getSelection');
-        expect(focusScript).not.toContain('execCommand');
         expect(focusScript).toContain('data-bycli-content-target');
+        expect(focusScript).not.toMatch(/\.innerHTML\s*=/);
+        expect(focusScript).not.toContain('selectNodeContents');
         expect(verificationScript).toContain('[data-bycli-content-target="true"]');
     });
 
@@ -227,8 +231,7 @@ describe('weixin create-draft command', () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
-            click: vi.fn().mockResolvedValue(undefined),
-            nativeType: vi.fn().mockResolvedValue(undefined),
+            typeText: vi.fn().mockResolvedValue({ match_level: 'exact', matches_n: 1 }),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
@@ -236,6 +239,7 @@ describe('weixin create-draft command', () => {
                 if (script.includes("input#author")) return { ok: true, value: 'Author' };
                 if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
                 if (script.includes('editor content verification')) return { ok: true, value: 'body' };
+                if (script.includes('安全隐患')) return { closed: 0 };
                 if (script.includes('保存为草稿')) return { ok: true };
                 return true;
             }),
@@ -247,8 +251,7 @@ describe('weixin create-draft command', () => {
         }]);
 
         const editorTarget = 'div[contenteditable="true"][data-bycli-content-target="true"]';
-        expect(page.click).toHaveBeenCalledWith(editorTarget);
-        expect(page.nativeType).toHaveBeenCalledWith('body');
+        expect(page.typeText).toHaveBeenCalledWith(editorTarget, 'body');
         expect(page.wait.mock.calls.filter(([seconds]) => seconds === 10)).toHaveLength(2);
     });
 
@@ -257,13 +260,14 @@ describe('weixin create-draft command', () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
-            nativeType: vi.fn().mockResolvedValue(undefined),
+            typeText: vi.fn().mockResolvedValue({ match_level: 'exact', matches_n: 1 }),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
                 if (script.includes('nativeTargetFocused')) return { ok: false, nativeTargetFocused: true };
                 if (script.includes('editor content verification')) return { ok: true, value: content };
+                if (script.includes('安全隐患')) return { closed: 0 };
                 if (script.includes('保存为草稿')) return { ok: true };
                 return true;
             }),
@@ -274,14 +278,10 @@ describe('weixin create-draft command', () => {
             detail: '"title"',
         }]);
 
-        expect(page.nativeType.mock.calls.map(([chunk]) => chunk)).toEqual([
-            'a'.repeat(200),
-            'a'.repeat(200),
-            'a'.repeat(200),
-            'a'.repeat(200),
-            'a',
-        ]);
-        expect(page.wait.mock.calls.filter(([seconds]) => seconds === 3)).toHaveLength(5);
+        expect(page.typeText).toHaveBeenCalledWith(
+            'div[contenteditable="true"][data-bycli-content-target="true"]',
+            content
+        );
     });
 
     it('fails when the requested cover cannot be selected', async () => {
