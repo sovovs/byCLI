@@ -15079,6 +15079,87 @@
     "sourceFile": "jira/search.js"
   },
   {
+    "site": "juejin",
+    "name": "search",
+    "description": "掘金搜索，支持综合/文章/课程/标签/用户维度与综合/最新/最热排序",
+    "access": "read",
+    "domain": "api.juejin.cn",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "type",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "结果类型：all(综合) / article(文章) / course(课程) / tag(标签) / user(用户)",
+        "choices": [
+          "all",
+          "article",
+          "course",
+          "tag",
+          "user"
+        ]
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "default": "relevance",
+        "required": false,
+        "help": "排序：relevance(综合) / newest(最新优先) / hottest(最热优先)",
+        "choices": [
+          "relevance",
+          "newest",
+          "hottest"
+        ]
+      },
+      {
+        "name": "period",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "时间范围：all(不限) / day(最近一天) / week(最近一周) / month3(最近三月)",
+        "choices": [
+          "all",
+          "day",
+          "week",
+          "month3"
+        ]
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回条数 (max 200)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "kind",
+      "id",
+      "title",
+      "author",
+      "views",
+      "likes",
+      "comments",
+      "hot_index",
+      "published_at",
+      "url",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "juejin/search.js",
+    "sourceFile": "juejin/search.js"
+  },
+  {
     "site": "ke",
     "name": "chengjiao",
     "description": "贝壳找房成交记录",
