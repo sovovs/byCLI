@@ -28487,6 +28487,42 @@
   },
   {
     "site": "weixin",
+    "name": "home-overview",
+    "aliases": [
+      "overview",
+      "dashboard",
+      "fans"
+    ],
+    "description": "读取公众号首页概览：原创内容、总用户数（粉丝数）、昨日阅读/分享/新增关注人数及阅读增长百分比；账号级昨日汇总，单篇文章数据请用 published",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "settle",
+        "type": "int",
+        "default": 3,
+        "required": false,
+        "help": "打开首页后等待渲染的秒数"
+      }
+    ],
+    "columns": [
+      "original_count",
+      "total_users",
+      "yesterday_reads",
+      "yesterday_reads_change_pct",
+      "yesterday_shares",
+      "yesterday_new_followers",
+      "stat_range"
+    ],
+    "type": "js",
+    "modulePath": "weixin/home-overview.js",
+    "sourceFile": "weixin/home-overview.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
     "name": "published",
     "description": "List Weixin published records and engagement metrics",
     "access": "read",
