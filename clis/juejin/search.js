@@ -26,20 +26,26 @@ const PAGE_SIZE = 20;
 const MAX_LIMIT = 200;
 const MAX_PAGES = 30;
 
-// 掘金对**非 0 的时间窗**（search_type=1/2/3）会间歇性返回空首页：同一 query
-// 连打 6 次，2-5 次拿到 `data: []` 而 err_no 仍是 0/success，只有 cursor 里的
-// 实例标识不同——像是部分后端分片对时间窗查询答不出来。实测 period=week 命中
-// 率只有 1/6 ~ 2/6，但 4 次以内总能拿到数据。
+// 掘金对**非 0 的时间窗**（search_type=1/2/3）会间歇性返回空首页：`data: []`
+// 但 err_no 仍是 0 / err_msg "success"，整个响应体除了 cursor 里的实例标识
+// 之外和有数据时完全一致，只有 has_more 跟着变 false——像是部分后端分片对时间
+// 窗查询答不出来。
 //
-// 真实无结果（如 query="鿃鿄鿅鿆"）连打 8 次稳定是 0，所以重试只会救回抖动，
-// 不会把空态变成假数据。只重试**首页且一行都没拿到**的情形：翻页途中的空页
-// 本来就是正常的终止信号。
-const EMPTY_RETRY_ATTEMPTS = 4;
-const EMPTY_RETRY_DELAY_MS = 400;
-
-function delay(ms) {
-    return new Promise((resolve) => { setTimeout(resolve, ms); });
-}
+// 单次请求的空概率实测 **76%**（query=rust/period=day，25 次里 19 次空），
+// 且与请求间隔无关（0ms 9/12、400ms 10/12、1500ms 11/12——加延迟只会更差），
+// 所以各次尝试相互独立、退避没有意义。改过 8 种参数组合（去 cursor / 去 limit /
+// 去 spider / 补 version / 换 sort_type / 换 id_type / 最小参数集）空率都在
+// 6-9/10，没有能让它确定化的参数。
+//
+// 首次成功所需次数实测分布（12 轮）：中位数 3、p90 5、最大 7。取 12 次把
+// 独立失败概率压到 0.76^12 ≈ 3%（4 次时是 33%，实测正好对应 4/6 的命中率）。
+//
+// 真实无结果（query="鿃鿄鿅鿆" / "zzzqqqxxx..."）连打 12-14 次稳定是 0，所以
+// 重试只会救回抖动，不会把空态变成假数据。注意掘金对**无匹配**的查询会退化成
+// 返回无关的推荐文章，但那属于「有数据」分支，和这里的空首页是两回事。
+//
+// 只重试**首页且一行都没拿到**的情形：翻页途中的空页本来就是正常的终止信号。
+const EMPTY_RETRY_ATTEMPTS = 12;
 
 const TYPES = {
     all: 0,
@@ -327,9 +333,9 @@ cli({
             pages += 1;
 
             // 首页空 → 可能是上面说的分片抖动，有界重试；真实空态重试后仍是空。
+            // 不加退避：实测各次尝试独立，延迟只会拖慢且略微更差。
             if (rows.length === 0 && payload.data.length === 0) {
                 for (let attempt = 1; attempt < EMPTY_RETRY_ATTEMPTS; attempt += 1) {
-                    await delay(EMPTY_RETRY_DELAY_MS);
                     payload = await fetchPage(url);
                     if (payload.data.length > 0) break;
                 }
