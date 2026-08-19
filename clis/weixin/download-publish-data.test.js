@@ -62,8 +62,17 @@ const METRICS = {
 };
 
 const PUBLIC_METRICS = {
-  readUsers: 94, avgReadMinutes: 0.47, finishedReadRatio: 0.478723, newFollowers: 0, listenUsers: 0,
-  shares: 2, zaikan: 0, likes: 0, rewardYuan: 0, comments: 0, collections: 1,
+  readUsers: null,  // from record.reads (null by default)
+  avgReadMinutes: 0.47,
+  finishedReadRatio: 0.478723,
+  newFollowers: 0,
+  listenUsers: 0,
+  shares: null,  // from record.shares (null by default)
+  zaikan: 0,
+  likes: null,  // from record.likes (null by default)
+  rewardYuan: 0,
+  comments: null,  // from record.comments (null by default)
+  collections: 1,
 };
 
 const NULL_METRICS = Object.fromEntries(Object.keys(PUBLIC_METRICS).map(key => [key, null]));
@@ -468,7 +477,7 @@ describe('weixin download-publish-data command', () => {
     await expect(command.func({}, { query: 'Ontology Weekly' })).rejects.toBe(error);
   });
 
-  it('prefers published list data over detail-page metrics for overlapping fields', async () => {
+  it('uses published list data as authoritative source, ignoring detail-page metrics', async () => {
     arrangeSuccess();
     const recordWithListData = privateRecord({
       reads: 150,
@@ -481,16 +490,16 @@ describe('weixin download-publish-data command', () => {
     const [result] = await command.func({}, { query: 'Ontology Weekly' });
 
     expect(result).toMatchObject({
-      readUsers: 150,  // from record.reads
-      shares: 5,       // from record.shares
-      likes: 3,        // from record.likes
-      comments: 2,     // from record.comments
+      readUsers: 150,  // always from record.reads
+      shares: 5,       // always from record.shares
+      likes: 3,        // always from record.likes
+      comments: 2,     // always from record.comments
       avgReadMinutes: 0.47,  // from metrics (detail page only)
       finishedReadRatio: 0.478723,  // from metrics (detail page only)
     });
   });
 
-  it('falls back to detail-page metrics when published list data is null', async () => {
+  it('returns null for list fields when published list data is null', async () => {
     arrangeSuccess();
     const recordWithNullData = privateRecord({
       reads: null,
@@ -503,10 +512,11 @@ describe('weixin download-publish-data command', () => {
     const [result] = await command.func({}, { query: 'Ontology Weekly' });
 
     expect(result).toMatchObject({
-      readUsers: 94,   // from metrics.readUsers
-      shares: 2,       // from metrics.shares
-      likes: 0,        // from metrics.likes
-      comments: 0,     // from metrics.comments
+      readUsers: null,  // null from record.reads, no fallback to metrics
+      shares: null,     // null from record.shares, no fallback to metrics
+      likes: null,      // null from record.likes, no fallback to metrics
+      comments: null,   // null from record.comments, no fallback to metrics
+      avgReadMinutes: 0.47,  // still from metrics (detail-only field)
     });
   });
 });

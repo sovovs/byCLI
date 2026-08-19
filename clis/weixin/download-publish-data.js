@@ -136,19 +136,19 @@ export const downloadPublishDataCommand = cli({
       : dataResult || markdownResult ? 'partial' : 'failed';
     const metrics = markdownResult?.metrics ?? null;
 
-    // Prefer published list data over detail page metrics where they overlap.
-    // The list endpoint may be more current or use different aggregation logic.
+    // Use published list data as the authoritative source for overlapping fields.
+    // Detail page metrics are only used for fields exclusive to the detail page.
     const mergedMetrics = {
-      readUsers: record.reads ?? metrics?.readUsers ?? null,
+      readUsers: record.reads,
       avgReadMinutes: metrics?.avgReadMinutes ?? null,
       finishedReadRatio: metrics?.finishedReadRatio ?? null,
       newFollowers: metrics?.newFollowers ?? null,
       listenUsers: metrics?.listenUsers ?? null,
-      shares: record.shares ?? metrics?.shares ?? null,
+      shares: record.shares,
       zaikan: metrics?.zaikan ?? null,
-      likes: record.likes ?? metrics?.likes ?? null,
+      likes: record.likes,
       rewardYuan: metrics?.rewardYuan ?? null,
-      comments: record.comments ?? metrics?.comments ?? null,
+      comments: record.comments,
       collections: metrics?.collections ?? null,
     };
 
