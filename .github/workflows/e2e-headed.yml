@@ -53,6 +53,12 @@ jobs:
         uses: ./.github/actions/setup-chrome
         id: setup-chrome
 
+      # recorder-core ships its types from dist/, which is gitignored. A fresh
+      # checkout has no dist/, so the build cannot resolve
+      # @sovovs/bycli-recorder-core until the workspace is built.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
+
       - name: Build
         run: npm run build
 

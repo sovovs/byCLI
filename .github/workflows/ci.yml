@@ -32,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # recorder-core ships its types from dist/, which is gitignored. A fresh
+      # checkout has no dist/, so `tsc --noEmit` cannot resolve
+      # @sovovs/bycli-recorder-core until the workspace is built.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
+
       - name: Type check
         run: npx tsc --noEmit
 
