@@ -28455,7 +28455,15 @@
       "markdownSize",
       "dataPath",
       "dataSize",
-      "error"
+      "error",
+      "listReads",
+      "listShares",
+      "listLikes",
+      "listComments",
+      "detailReadUsers",
+      "detailShares",
+      "detailLikes",
+      "detailComments"
     ],
     "type": "js",
     "modulePath": "weixin/download-publish-data.js",
