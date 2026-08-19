@@ -28440,7 +28440,7 @@
       "publishedAt",
       "url",
       "status",
-      "reads",
+      "readUsers",
       "avgReadMinutes",
       "finishedReadRatio",
       "newFollowers",

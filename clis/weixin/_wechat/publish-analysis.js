@@ -300,7 +300,7 @@ const RUNTIME_ANALYSIS_JS = `(() => {
     firstSelector: firstPage ? selectorFor(firstPage) : '',
     firstCurrent: Boolean(firstPage?.classList.contains('weui-desktop-pagination__num_current')),
   } : null;
-  return { leaves, tables, charts, highchartsAriaCharts, controls, pagination, visibleText: text(document.body).slice(0, 12000) };
+  return { leaves, tables, charts, highchartsAriaCharts, controls, pagination };
 })()`;
 
 function runtimeToAnalysis(runtime) {
@@ -313,7 +313,6 @@ function runtimeToAnalysis(runtime) {
   }
   Object.assign(result, normalizeEchartsOptions(runtime.charts));
   Object.assign(result, normalizeHighchartsAriaCharts(runtime.highchartsAriaCharts));
-  if (Object.keys(result).length === 0 && runtime.visibleText) result['可见页面内容'] = { 内容: runtime.visibleText };
   return result;
 }
 
@@ -354,9 +353,7 @@ function multimediaRuntimeToAnalysis(runtime, kind) {
     }
     if (Object.keys(details).length > 0) result['数据明细分析'] = details;
   } else {
-    const listening = runtimeToAnalysis({ ...runtime, leaves: [] });
-    delete listening['可见页面内容'];
-    result['收听分析'] = listening;
+    result['收听分析'] = runtimeToAnalysis({ ...runtime, leaves: [] });
   }
   return result;
 }

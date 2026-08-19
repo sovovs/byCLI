@@ -8,7 +8,7 @@ import {
 
 // Captured from a live mp.weixin.qq.com article analysis page (2026-08-17 article).
 const LIVE_PAYLOAD = {
-  reads: 94,
+  readUsers: 94,
   avgReadSeconds: 28,
   finishedReadRatio: 0.478723406792,
   newFollowers: 0,
@@ -26,7 +26,7 @@ const LIVE_PAYLOAD = {
 describe('article metrics normalization', () => {
   it('keeps the reading and interaction counters observed on a live article', () => {
     expect(normalizeArticleMetrics(LIVE_PAYLOAD)).toEqual({
-      reads: 94,
+      readUsers: 94,
       avgReadSeconds: 28,
       avgReadMinutes: 0.47,
       finishedReadRatio: 0.478723,
@@ -53,12 +53,12 @@ describe('article metrics normalization', () => {
   });
 
   it('reports missing counters as null instead of zero', () => {
-    expect(normalizeArticleMetrics({ reads: 5, collections: null }))
-      .toMatchObject({ reads: 5, likes: null, comments: null, avgReadMinutes: null });
+    expect(normalizeArticleMetrics({ readUsers: 5, collections: null }))
+      .toMatchObject({ readUsers: 5, likes: null, comments: null, avgReadMinutes: null });
   });
 
   it('rejects a payload that exposes no counters at all', () => {
-    expect(() => normalizeArticleMetrics({ reads: null, likes: null }))
+    expect(() => normalizeArticleMetrics({ readUsers: null, likes: null }))
       .toThrow(CommandExecutionError);
     expect(() => normalizeArticleMetrics(null)).toThrow(CommandExecutionError);
   });
@@ -76,7 +76,7 @@ describe('article metrics normalization', () => {
 
   it('reads counters through page.evaluate and tolerates a changed layout', async () => {
     await expect(collectArticleMetrics({ evaluate: async () => LIVE_PAYLOAD }))
-      .resolves.toMatchObject({ reads: 94, collections: 1 });
+      .resolves.toMatchObject({ readUsers: 94, collections: 1 });
     await expect(collectArticleMetrics({ evaluate: async () => ({}) })).resolves.toBeNull();
     await expect(collectArticleMetrics({})).resolves.toBeNull();
   });

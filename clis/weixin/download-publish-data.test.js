@@ -42,7 +42,7 @@ function privateRecord(overrides = {}) {
 
 // Shape returned by collectArticleMetrics; only the public columns are surfaced.
 const METRICS = {
-  reads: 94,
+  readUsers: 94,
   avgReadSeconds: 28,
   avgReadMinutes: 0.47,
   finishedReadRatio: 0.478723,
@@ -58,7 +58,7 @@ const METRICS = {
 };
 
 const PUBLIC_METRICS = {
-  reads: 94, avgReadMinutes: 0.47, finishedReadRatio: 0.478723, newFollowers: 0, listenUsers: 0,
+  readUsers: 94, avgReadMinutes: 0.47, finishedReadRatio: 0.478723, newFollowers: 0, listenUsers: 0,
   shares: 2, zaikan: 0, likes: 0, rewardYuan: 0, comments: 0, collections: 1,
 };
 
@@ -109,7 +109,7 @@ describe('weixin download-publish-data command', () => {
       navigateBefore: false,
       columns: [
         'title', 'publishedAt', 'url', 'status',
-        'reads', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
+        'readUsers', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
         'shares', 'zaikan', 'likes', 'rewardYuan', 'comments', 'collections',
         'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
       ],

@@ -17,7 +17,7 @@ import {
 } from './_wechat/publish-records.js';
 
 const METRIC_COLUMNS = [
-  'reads', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
+  'readUsers', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
   'shares', 'zaikan', 'likes', 'rewardYuan', 'comments', 'collections',
 ];
 

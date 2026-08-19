@@ -4,7 +4,7 @@ import { CommandExecutionError } from '@sovovs/bycli/errors';
  * Reading and interaction counters shown on the article analysis detail page.
  *
  * @typedef {{
- *   reads: number | null,
+ *   readUsers: number | null,
  *   avgReadSeconds: number | null,
  *   avgReadMinutes: number | null,
  *   finishedReadRatio: number | null,
@@ -77,7 +77,7 @@ export const ARTICLE_METRICS_SCRIPT = `(() => {
   const rewardFen = digits(metrics.praise_money);
 
   return {
-    reads: digits(metrics.read_uv) ?? readingTile('阅读'),
+    readUsers: digits(metrics.read_uv) ?? readingTile('阅读'),
     avgReadSeconds: readSeconds ?? (domReadMinutes === null ? null : domReadMinutes * 60),
     finishedReadRatio: digits(metrics.finished_read_pv_ratio)
       ?? (domFinishedPercent === null ? null : domFinishedPercent / 100),
@@ -124,7 +124,7 @@ export function normalizeArticleMetrics(payload) {
   const rewardYuan = rewardFen === null ? number('rewardYuanFallback') : rewardFen / 100;
 
   const metrics = {
-    reads: number('reads'),
+    readUsers: number('readUsers'),
     avgReadSeconds,
     avgReadMinutes: roundTo(avgReadSeconds === null ? null : avgReadSeconds / 60, 2),
     finishedReadRatio: roundTo(number('finishedReadRatio'), 6),
@@ -155,7 +155,7 @@ export function articleMetricsSections(metrics) {
     : `${roundTo(metrics.finishedReadRatio * 100, 2)}%`;
   return {
     阅读: {
-      阅读人数: metrics.reads,
+      阅读人数: metrics.readUsers,
       平均阅读时长分钟: metrics.avgReadMinutes,
       完读率: percent,
       新增关注: metrics.newFollowers,
