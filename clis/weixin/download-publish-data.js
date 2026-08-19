@@ -25,6 +25,8 @@ const COLUMNS = [
   'title', 'publishedAt', 'url', 'status',
   ...METRIC_COLUMNS,
   'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
+  'listReads', 'listShares', 'listLikes', 'listComments',
+  'detailReadUsers', 'detailShares', 'detailLikes', 'detailComments',
 ];
 
 function sanitizedError(error, secrets, fallback) {
@@ -163,6 +165,15 @@ export const downloadPublishDataCommand = cli({
       dataPath: dataResult?.path ?? null,
       dataSize: dataResult?.size ?? null,
       error: errors.length > 0 ? errors.join('; ') : null,
+      // Data source transparency: show raw values from both sources
+      listReads: record.reads,
+      listShares: record.shares,
+      listLikes: record.likes,
+      listComments: record.comments,
+      detailReadUsers: metrics?.readUsers ?? null,
+      detailShares: metrics?.shares ?? null,
+      detailLikes: metrics?.likes ?? null,
+      detailComments: metrics?.comments ?? null,
     }];
   },
 });

@@ -75,6 +75,17 @@ const PUBLIC_METRICS = {
   collections: 1,
 };
 
+const DATA_SOURCE_FIELDS = {
+  listReads: null,
+  listShares: null,
+  listLikes: null,
+  listComments: null,
+  detailReadUsers: 94,
+  detailShares: 2,
+  detailLikes: 0,
+  detailComments: 0,
+};
+
 const NULL_METRICS = Object.fromEntries(Object.keys(PUBLIC_METRICS).map(key => [key, null]));
 
 function arrangeSuccess(overrides = {}) {
@@ -125,6 +136,8 @@ describe('weixin download-publish-data command', () => {
         'readUsers', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
         'shares', 'zaikan', 'likes', 'rewardYuan', 'comments', 'collections',
         'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
+        'listReads', 'listShares', 'listLikes', 'listComments',
+        'detailReadUsers', 'detailShares', 'detailLikes', 'detailComments',
       ],
     });
     expect(command.args).toEqual([
@@ -157,6 +170,7 @@ describe('weixin download-publish-data command', () => {
       dataPath,
       dataSize: 25088,
       error: null,
+      ...DATA_SOURCE_FIELDS,
     }]);
 
     expect(auth.resolveBrowserCredentials).toHaveBeenCalledWith(page);
@@ -261,6 +275,7 @@ describe('weixin download-publish-data command', () => {
       dataPath: null,
       dataSize: null,
       error: expect.stringContaining('download failed'),
+      ...DATA_SOURCE_FIELDS,
     });
     expect(result.error).not.toContain('token-1');
     expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, {
@@ -288,6 +303,8 @@ describe('weixin download-publish-data command', () => {
       ...NULL_METRICS,
       markdownPath: null, markdownSize: null, dataPath, dataSize: 25088,
       error: expect.stringContaining('Markdown analysis failed'),
+      listReads: null, listShares: null, listLikes: null, listComments: null,
+      detailReadUsers: null, detailShares: null, detailLikes: null, detailComments: null,
     });
     expect(result.error).not.toContain('secret-cookie');
   });
