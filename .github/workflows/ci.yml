@@ -92,6 +92,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # recorder-core ships its types from dist/, which is gitignored.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
+
       - name: Run unit tests (Node ${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
         run: npx vitest run --project unit --project extension --reporter=verbose --shard=${{ matrix.shard }}/2
 
@@ -115,6 +119,12 @@ jobs:
       # so the root install already provisions its node_modules (incl. its pinned vitest 2.x).
       - name: Install dependencies
         run: npm ci
+
+      # recorder-core ships its types from dist/, which is gitignored. A fresh
+      # checkout has no dist/, so the build cannot resolve
+      # @sovovs/bycli-recorder-core until the workspace is built.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
 
       # dist is required: the daemon subprocess runs dist/src/daemon.js and the verify
       # runner spawns node dist/src/main.js (no tsx) — see dashboard-be/test/recorder-real-daemon-e2e.test.ts.
@@ -144,6 +154,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # recorder-core ships its types from dist/, which is gitignored.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
+
       - name: Run unit tests under Bun
         run: bun vitest run --project unit --reporter=verbose
 
@@ -165,6 +179,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # recorder-core ships its types from dist/, which is gitignored.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
 
       - name: Run focused adapter tests
         run: npm run test:adapter -- --reporter=verbose
@@ -194,6 +212,10 @@ jobs:
       - name: Setup Chrome
         uses: ./.github/actions/setup-chrome
         id: setup-chrome
+
+      # recorder-core ships its types from dist/, which is gitignored.
+      - name: Build recorder core
+        run: npm run build --workspace @sovovs/bycli-recorder-core
 
       - name: Build
         run: npm run build
