@@ -16,8 +16,14 @@ import {
   validatePublishedQuery,
 } from './_wechat/publish-records.js';
 
+const METRIC_COLUMNS = [
+  'reads', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
+  'shares', 'zaikan', 'likes', 'rewardYuan', 'comments', 'collections',
+];
+
 const COLUMNS = [
   'title', 'publishedAt', 'url', 'status',
+  ...METRIC_COLUMNS,
   'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
 ];
 
@@ -128,11 +134,13 @@ export const downloadPublishDataCommand = cli({
 
     const status = dataResult && markdownResult ? 'downloaded'
       : dataResult || markdownResult ? 'partial' : 'failed';
+    const metrics = markdownResult?.metrics ?? null;
     return [{
       title: record.title,
       publishedAt: record.publishedAt,
       url: record.url,
       status,
+      ...Object.fromEntries(METRIC_COLUMNS.map(key => [key, metrics?.[key] ?? null])),
       markdownPath: markdownResult?.path ?? null,
       markdownSize: markdownResult?.size ?? null,
       dataPath: dataResult?.path ?? null,

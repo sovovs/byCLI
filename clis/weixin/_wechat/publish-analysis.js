@@ -2,6 +2,7 @@ import { link, mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { CommandExecutionError } from '@sovovs/bycli/errors';
+import { articleMetricsSections, collectArticleMetrics } from './article-metrics.js';
 
 const DOMAIN = 'mp.weixin.qq.com';
 
@@ -452,9 +453,11 @@ export async function collectPublishAnalysis(page, { detailUrl, title, published
   if (captureStarted === false) throw new CommandExecutionError('WeChat publish analysis requires supported browser network capture');
   await page.goto(detailUrl);
   await page.wait?.(1000);
+  const metrics = await collectArticleMetrics(page);
   const capturedEntries = await page.readNetworkCapture();
   const payloads = extractAnalysisPayloads(capturedEntries);
   let data = Object.fromEntries(payloads.map(({ name, data: value }, index) => [index === 0 ? name : `${name}-${index + 1}`, value]));
+  if (metrics) Object.assign(data, articleMetricsSections(metrics));
   if (typeof page.evaluate === 'function') {
     Object.assign(data, await collectPeriodAnalysis(page));
     const videoUrl = await page.evaluate(`(() => [...document.querySelectorAll('a[href]')]
@@ -482,5 +485,5 @@ export async function collectPublishAnalysis(page, { detailUrl, title, published
   const content = formatAnalysisMarkdown({ title, publishedAt, data });
   const path = await publishMarkdown(resolve(outputDir), safeFilename(title), content);
   const info = await stat(path);
-  return { status: 'saved', path, size: info.size };
+  return { status: 'saved', path, size: info.size, metrics };
 }

@@ -40,6 +40,30 @@ function privateRecord(overrides = {}) {
   };
 }
 
+// Shape returned by collectArticleMetrics; only the public columns are surfaced.
+const METRICS = {
+  reads: 94,
+  avgReadSeconds: 28,
+  avgReadMinutes: 0.47,
+  finishedReadRatio: 0.478723,
+  newFollowers: 0,
+  listenUsers: 0,
+  listenPlays: 0,
+  shares: 2,
+  zaikan: 0,
+  likes: 0,
+  rewardYuan: 0,
+  comments: 0,
+  collections: 1,
+};
+
+const PUBLIC_METRICS = {
+  reads: 94, avgReadMinutes: 0.47, finishedReadRatio: 0.478723, newFollowers: 0, listenUsers: 0,
+  shares: 2, zaikan: 0, likes: 0, rewardYuan: 0, comments: 0, collections: 1,
+};
+
+const NULL_METRICS = Object.fromEntries(Object.keys(PUBLIC_METRICS).map(key => [key, null]));
+
 function arrangeSuccess(overrides = {}) {
   const records = [privateRecord()];
   const matched = overrides.matched ?? records[0];
@@ -56,6 +80,7 @@ function arrangeSuccess(overrides = {}) {
     status: 'saved',
     path: markdownPath,
     size: 1234,
+    metrics: overrides.metrics === undefined ? { ...METRICS } : overrides.metrics,
   });
   return { records, matched };
 }
@@ -82,7 +107,12 @@ describe('weixin download-publish-data command', () => {
       strategy: 'intercept',
       browser: true,
       navigateBefore: false,
-      columns: ['title', 'publishedAt', 'url', 'status', 'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error'],
+      columns: [
+        'title', 'publishedAt', 'url', 'status',
+        'reads', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
+        'shares', 'zaikan', 'likes', 'rewardYuan', 'comments', 'collections',
+        'markdownPath', 'markdownSize', 'dataPath', 'dataSize', 'error',
+      ],
     });
     expect(command.args).toEqual([
       { name: 'query', positional: true, required: true, help: 'Exact article URL or title text' },
@@ -108,6 +138,7 @@ describe('weixin download-publish-data command', () => {
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
       status: 'downloaded',
+      ...PUBLIC_METRICS,
       markdownPath,
       markdownSize: 1234,
       dataPath,
@@ -190,6 +221,14 @@ describe('weixin download-publish-data command', () => {
     }));
   });
 
+  it('reports null counters when the analysis page exposes no metrics', async () => {
+    arrangeSuccess({ metrics: null });
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({ status: 'downloaded', ...NULL_METRICS });
+  });
+
   it('returns partial success when Excel fails but Markdown succeeds', async () => {
     arrangeSuccess();
     publishDownload.downloadPublishData.mockRejectedValue(
@@ -203,6 +242,7 @@ describe('weixin download-publish-data command', () => {
       publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly',
       status: 'partial',
+      ...PUBLIC_METRICS,
       markdownPath,
       markdownSize: 1234,
       dataPath: null,
@@ -232,6 +272,7 @@ describe('weixin download-publish-data command', () => {
     expect(result).toEqual({
       title: 'Ontology Weekly', publishedAt: '2026-08-07',
       url: 'https://mp.weixin.qq.com/s/ontology-weekly', status: 'partial',
+      ...NULL_METRICS,
       markdownPath: null, markdownSize: null, dataPath, dataSize: 25088,
       error: expect.stringContaining('Markdown analysis failed'),
     });
