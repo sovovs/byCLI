@@ -135,12 +135,29 @@ export const downloadPublishDataCommand = cli({
     const status = dataResult && markdownResult ? 'downloaded'
       : dataResult || markdownResult ? 'partial' : 'failed';
     const metrics = markdownResult?.metrics ?? null;
+
+    // Prefer published list data over detail page metrics where they overlap.
+    // The list endpoint may be more current or use different aggregation logic.
+    const mergedMetrics = {
+      readUsers: record.reads ?? metrics?.readUsers ?? null,
+      avgReadMinutes: metrics?.avgReadMinutes ?? null,
+      finishedReadRatio: metrics?.finishedReadRatio ?? null,
+      newFollowers: metrics?.newFollowers ?? null,
+      listenUsers: metrics?.listenUsers ?? null,
+      shares: record.shares ?? metrics?.shares ?? null,
+      zaikan: metrics?.zaikan ?? null,
+      likes: record.likes ?? metrics?.likes ?? null,
+      rewardYuan: metrics?.rewardYuan ?? null,
+      comments: record.comments ?? metrics?.comments ?? null,
+      collections: metrics?.collections ?? null,
+    };
+
     return [{
       title: record.title,
       publishedAt: record.publishedAt,
       url: record.url,
       status,
-      ...Object.fromEntries(METRIC_COLUMNS.map(key => [key, metrics?.[key] ?? null])),
+      ...mergedMetrics,
       markdownPath: markdownResult?.path ?? null,
       markdownSize: markdownResult?.size ?? null,
       dataPath: dataResult?.path ?? null,

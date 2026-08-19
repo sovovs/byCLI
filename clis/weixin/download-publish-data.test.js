@@ -36,6 +36,10 @@ function privateRecord(overrides = {}) {
     itemIdx: '1',
     publishDate: '2026-08-07',
     cookie: 'must-not-leak',
+    reads: null,
+    likes: null,
+    shares: null,
+    comments: null,
     ...overrides,
   };
 }
@@ -462,5 +466,47 @@ describe('weixin download-publish-data command', () => {
     if (getMock() === publishRecords.matchPublishedRecord) getMock().mockImplementation(() => { throw error; });
 
     await expect(command.func({}, { query: 'Ontology Weekly' })).rejects.toBe(error);
+  });
+
+  it('prefers published list data over detail-page metrics for overlapping fields', async () => {
+    arrangeSuccess();
+    const recordWithListData = privateRecord({
+      reads: 150,
+      shares: 5,
+      likes: 3,
+      comments: 2,
+    });
+    publishRecords.matchPublishedRecord.mockReturnValue(recordWithListData);
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({
+      readUsers: 150,  // from record.reads
+      shares: 5,       // from record.shares
+      likes: 3,        // from record.likes
+      comments: 2,     // from record.comments
+      avgReadMinutes: 0.47,  // from metrics (detail page only)
+      finishedReadRatio: 0.478723,  // from metrics (detail page only)
+    });
+  });
+
+  it('falls back to detail-page metrics when published list data is null', async () => {
+    arrangeSuccess();
+    const recordWithNullData = privateRecord({
+      reads: null,
+      shares: null,
+      likes: null,
+      comments: null,
+    });
+    publishRecords.matchPublishedRecord.mockReturnValue(recordWithNullData);
+
+    const [result] = await command.func({}, { query: 'Ontology Weekly' });
+
+    expect(result).toMatchObject({
+      readUsers: 94,   // from metrics.readUsers
+      shares: 2,       // from metrics.shares
+      likes: 0,        // from metrics.likes
+      comments: 0,     // from metrics.comments
+    });
   });
 });
