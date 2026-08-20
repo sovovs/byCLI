@@ -113,9 +113,13 @@ describe('RunnerPort · mechanism (controlled child)', () => {
 
     const inputPath = inputPathOf(captured.args!);
     const tempRoot = path.dirname(inputPath);
-    // POSIX security guarantees (08 Input JSON Security)
-    expect(fs.statSync(inputPath).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(tempRoot).mode & 0o777).toBe(0o700);
+    // POSIX security guarantees (08 Input JSON Security). NTFS has no POSIX
+    // permission bits — the open()/chmod() mode is ignored and stat() reports a
+    // synthetic 0o666 for any writable file — so assert these on POSIX only.
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(inputPath).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(tempRoot).mode & 0o777).toBe(0o700);
+    }
     // raw seed args DO live in input.json (execution-only)
     expect(fs.readFileSync(inputPath, 'utf8')).toContain('S3CR3T-RAW');
     expect(JSON.parse(fs.readFileSync(inputPath, 'utf8')).expectedSourceSha256)
