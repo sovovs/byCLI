@@ -82,7 +82,7 @@ describe('同源 UI 托管(①)', () => {
     RECORDER_TOKEN: 'ui-token-1234567890abcdef',
     LOG_LEVEL: 'error', // quiet structured-request logs in test output
     RECORDER_PORT: String(UI_PORT),
-    RECORDER_UI_DIST: new URL('../../dashboard/dist', import.meta.url).pathname,
+    RECORDER_UI_DIST: new URL('./fixtures/ui', import.meta.url).pathname,
     FEATURE_LOCALHOST_HTTP_UI: 'true', // #5a: 同源托管现由 restart-only flag 主控,UI_DIST 单独不再够
   });
   const uiApp = createApp(uiCfg);
