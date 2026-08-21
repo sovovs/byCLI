@@ -28307,9 +28307,26 @@
       {
         "name": "content",
         "type": "str",
-        "required": true,
+        "required": false,
         "positional": true,
-        "help": "文章正文"
+        "help": "文章正文；也可使用 --content-file"
+      },
+      {
+        "name": "content-file",
+        "type": "str",
+        "required": false,
+        "help": "正文文件路径"
+      },
+      {
+        "name": "content-format",
+        "type": "str",
+        "default": "text",
+        "required": false,
+        "help": "正文格式 (default: text)",
+        "choices": [
+          "text",
+          "html"
+        ]
       },
       {
         "name": "author",
@@ -28328,6 +28345,13 @@
         "type": "str",
         "required": false,
         "help": "文章摘要"
+      },
+      {
+        "name": "dry-run",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "填充并验证内容后停止，不保存草稿"
       },
       {
         "name": "timeout",

@@ -189,6 +189,153 @@ describe('weixin create-draft command', () => {
         expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('window.UE.instants'));
     });
 
+    it('inserts HTML through the registered rich-text editor instead of typing markup as text', async () => {
+        const html = '<p><strong>Lightfield</strong></p>';
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: true, html };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', content: html, 'content-format': 'html',
+        })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+
+        const htmlScript = page.evaluate.mock.calls
+            .map(([script]) => script)
+            .find(script => script.includes('setContent'));
+        expect(htmlScript).toContain(JSON.stringify(html));
+    });
+
+    it('pastes HTML through the native clipboard when the editor is ProseMirror', async () => {
+        const html = '<p><strong>Lightfield</strong></p>';
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
+                if (script.includes('editor.focus')) return { ok: true };
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html, text: 'Lightfield' };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', content: html, 'content-format': 'html',
+        })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+
+        expect(page.cdp).toHaveBeenCalledWith('Input.dispatchKeyEvent', expect.objectContaining({
+            type: 'keyDown', key: 'v', code: 'KeyV', modifiers: 4,
+        }));
+    });
+
+    it('supports a no-save HTML insertion check for browser verification', async () => {
+        const html = '<p><strong>Lightfield</strong></p>';
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
+                if (script.includes('editor.focus')) return { ok: true };
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html, text: 'Lightfield' };
+                if (script.includes('保存为草稿')) throw new Error('save must not be called in dry-run');
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', content: html, 'content-format': 'html', 'dry-run': true,
+        })).resolves.toEqual([{
+            status: 'draft ready',
+            detail: '"title" (dry-run)',
+        }]);
+    });
+
+    it('removes the temporary inline image inserted by WeChat before pasting the full HTML', async () => {
+        const contentFile = join(temporaryDirectory, 'article.html');
+        await writeFile(contentFile, '<p>Before</p><img src="./cover.png"><p>After</p>');
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            setFileInput: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
+                if (script.includes('#js_editor_insertimage') || script.includes('.js_img_dropdown_menu')) return true;
+                if (script.includes("var editors = document.querySelectorAll('#ueditor_0")) return ['https://mmbiz.qpic.cn/uploaded'];
+                if (script.includes('editor.focus')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html: '<p>Before</p><img src="https://mmbiz.qpic.cn/uploaded"><p>After</p>', text: 'Before After' };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', 'content-file': contentFile, 'content-format': 'html', 'dry-run': true,
+        })).resolves.toEqual([{
+            status: 'draft ready',
+            detail: '"title" (dry-run)',
+        }]);
+
+        expect(page.nativeKeyPress).toHaveBeenCalledTimes(2);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('Backspace', []);
+    });
+
+    it('accepts HTML from content-file without requiring a positional content argument', async () => {
+        const html = '<p><strong>From file</strong></p>';
+        const contentFile = join(temporaryDirectory, 'article.html');
+        await writeFile(contentFile, html);
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('window.UE.instants')) return { ok: true, html };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', 'content-file': contentFile, 'content-format': 'html',
+        })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+    });
+
     it('uses native input for the rich-text editor when no UEditor instance is exposed', async () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),

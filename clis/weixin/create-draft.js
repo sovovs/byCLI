@@ -2,6 +2,8 @@ import * as nodeFs from 'node:fs';
 import * as nodePath from 'node:path';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { loadDraftContent, prepareHtmlContent } from './_wechat/draft-content.js';
+import { pasteHtmlThroughClipboard } from './_wechat/html-clipboard.js';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
 const WEIXIN_HOME = 'https://mp.weixin.qq.com/';
@@ -40,7 +42,6 @@ function validateCoverImage(value) {
 
 function normalizeCreateDraftArgs(kwargs) {
     const title = requiredText(kwargs.title, 'title');
-    requiredText(kwargs.content, 'content');
     if (codePointLength(title) > MAX_TITLE_LENGTH) {
         throw new ArgumentError(`title must be at most ${MAX_TITLE_LENGTH} characters`);
     }
@@ -48,12 +49,18 @@ function normalizeCreateDraftArgs(kwargs) {
     if (author && codePointLength(author) > MAX_AUTHOR_LENGTH) {
         throw new ArgumentError(`author must be at most ${MAX_AUTHOR_LENGTH} characters`);
     }
+    const draftContent = loadDraftContent({
+        content: kwargs.content,
+        contentFile: kwargs['content-file'],
+        contentFormat: kwargs['content-format'],
+    });
     return {
         title,
-        content: String(kwargs.content),
+        ...draftContent,
         author,
         summary: kwargs.summary == null ? null : String(kwargs.summary).trim(),
         coverImage: validateCoverImage(kwargs['cover-image']),
+        dryRun: kwargs['dry-run'] === true,
     };
 }
 
@@ -193,6 +200,21 @@ async function fillContent(page, text) {
     })()`);
 }
 
+async function fillHtmlContent(page, html) {
+    return page.evaluate(`(() => {
+        var instances = window.UE && window.UE.instants ? Object.values(window.UE.instants) : [];
+        var ueditor = instances.find(instance => instance
+            && typeof instance.setContent === 'function'
+            && typeof instance.getContent === 'function');
+        if (!ueditor) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
+        ueditor.setContent(${JSON.stringify(html)});
+        var actual = ueditor.getContent();
+        return typeof actual === 'string' && actual.trim()
+            ? { ok: true, html: actual }
+            : { ok: false, reason: 'rich HTML content was not retained by the editor' };
+    })()`);
+}
+
 function requirePageResult(result, label) {
     if (!result?.ok) {
         throw new CommandExecutionError(`Failed to fill ${label}: ${result?.reason ?? 'unverified page state'}`);
@@ -225,17 +247,29 @@ async function uploadContentImage(page, imagePath) {
 
     for (let attempt = 0; attempt < 15; attempt++) {
         await page.wait(1);
-        const cdnCount = await page.evaluate(`(() => {
+        const uploaded = await page.evaluate(`(() => {
             var editors = document.querySelectorAll('#ueditor_0, div[contenteditable="true"]');
-            var count = 0;
+            var sources = [];
             editors.forEach(function(editor) {
-                count += editor.querySelectorAll('img[src*="mmbiz"], img[data-src*="mmbiz"]').length;
+                editor.querySelectorAll('img[src*="mmbiz"], img[data-src*="mmbiz"]').forEach(function(image) {
+                    var src = image.getAttribute('src') || image.getAttribute('data-src') || '';
+                    if (src && !sources.includes(src)) sources.push(src);
+                });
             });
-            return count;
+            return sources;
         })()`);
-        if (cdnCount > 0) return;
+        if (Array.isArray(uploaded) && uploaded.length > 0) return uploaded[uploaded.length - 1];
+        if (typeof uploaded === 'string' && uploaded) return uploaded;
+        if (typeof uploaded === 'number' && uploaded > 0) return true;
     }
     throw new CommandExecutionError('Image did not upload to WeChat CDN');
+}
+
+async function removeTemporaryInsertedImage(page) {
+    if (typeof page.nativeKeyPress !== 'function') return;
+    await page.nativeKeyPress('Backspace', []);
+    await page.nativeKeyPress('Backspace', []);
+    if (typeof page.wait === 'function') await page.wait(1);
 }
 
 async function selectCoverFromContent(page) {
@@ -337,10 +371,13 @@ export const createDraftCommand = cli({
     navigateBefore: false,
     args: [
         { name: 'title', required: true, help: '文章标题 (最长64字)' },
-        { name: 'content', required: true, positional: true, help: '文章正文' },
+        { name: 'content', required: false, positional: true, help: '文章正文；也可使用 --content-file' },
+        { name: 'content-file', help: '正文文件路径' },
+        { name: 'content-format', choices: ['text', 'html'], default: 'text', help: '正文格式 (default: text)' },
         { name: 'author', help: '作者名 (最长8字)' },
         { name: 'cover-image', help: '封面图片路径 (会先上传到正文再设为封面)' },
         { name: 'summary', help: '文章摘要' },
+        { name: 'dry-run', type: 'boolean', default: false, help: '填充并验证内容后停止，不保存草稿' },
         { name: 'timeout', type: 'int', required: false, default: 180, help: 'Max seconds for the overall command (default: 180)' },
     ],
     columns: ['status', 'detail'],
@@ -360,8 +397,36 @@ export const createDraftCommand = cli({
 
         await page.wait(10);
 
-        const contentResult = await fillContent(page, args.content);
-        requirePageResult(contentResult, 'content');
+        let content = args.content;
+        if (args.format === 'html') {
+            const baseDir = args.filePath ? nodePath.dirname(args.filePath) : process.cwd();
+            const prepared = await prepareHtmlContent(content, {
+                baseDir,
+                resolveImage: async imagePath => {
+                    const uploaded = await uploadContentImage(page, imagePath);
+                    await removeTemporaryInsertedImage(page);
+                    return uploaded;
+                },
+            });
+            const contentResult = await fillHtmlContent(page, prepared.html);
+            if (contentResult?.ok) {
+                requirePageResult(contentResult, 'rich HTML content');
+            } else if (contentResult?.reason === 'rich HTML insertion requires a registered UEditor instance') {
+                await pasteHtmlThroughClipboard(page, prepared.html, { origin: `https://${WEIXIN_DOMAIN}` });
+            } else {
+                requirePageResult(contentResult, 'rich HTML content');
+            }
+        } else {
+            const contentResult = await fillContent(page, content);
+            requirePageResult(contentResult, 'content');
+        }
+
+        if (args.dryRun) {
+            return [{
+                status: 'draft ready',
+                detail: `"${args.title}" (dry-run)`,
+            }];
+        }
 
         if (args.coverImage) {
             await uploadContentImage(page, args.coverImage);
