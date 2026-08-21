@@ -33,11 +33,21 @@ function clipboardWriteScript(html, text) {
 
 function editorReadScript() {
   return `(() => {
-    const editors = [...document.querySelectorAll('div[contenteditable="true"], [contenteditable="true"]')];
-    const visibleEditors = editors.filter(node => node.offsetParent !== null);
-    const editor = visibleEditors[visibleEditors.length - 1] || editors[editors.length - 1];
+    const ueditor = document.querySelector('#ueditor_0');
+    const iframeBody = ueditor?.tagName === 'IFRAME' ? ueditor.contentDocument?.body : null;
+    const scopedEditors = [...document.querySelectorAll('#js_ueditor [contenteditable="true"], #js_editor [contenteditable="true"]')];
+    const visibleEditors = scopedEditors.filter(node => node.offsetParent !== null);
+    const editor = iframeBody || (ueditor?.matches?.('[contenteditable="true"]') ? ueditor : null)
+      || visibleEditors[visibleEditors.length - 1];
     if (!editor) return { ok: false, reason: 'contenteditable editor not found' };
-    return { ok: true, html: editor.innerHTML || '', text: editor.innerText || editor.textContent || '' };
+    const warning = [...document.querySelectorAll('.weui-desktop-dialog__wrp, .weui-desktop-dialog')]
+      .some(dialog => {
+        const wrap = dialog.closest('.weui-desktop-dialog__wrp') || dialog;
+        return window.getComputedStyle(wrap).display !== 'none'
+          && wrap.offsetHeight > 0
+          && (dialog.innerText || '').includes('\u5b89\u5168\u9690\u60a3');
+      });
+    return { ok: true, warning, html: editor.innerHTML || '', text: editor.innerText || editor.textContent || '' };
   })()`;
 }
 
@@ -48,7 +58,7 @@ export async function pasteHtmlThroughClipboard(page, html, {
   if (typeof page?.cdp !== 'function') {
     throw new CommandExecutionError('Rich HTML paste requires Browser Bridge CDP support');
   }
-  if (typeof page?.evaluate !== 'function' || typeof page?.nativeKeyPress !== 'function') {
+  if (typeof page?.evaluate !== 'function' || typeof page?.nativeKeyPress !== 'function' || typeof page?.nativeClick !== 'function') {
     throw new CommandExecutionError('Rich HTML paste requires page evaluation and native key support');
   }
 
@@ -71,55 +81,37 @@ export async function pasteHtmlThroughClipboard(page, html, {
     }
   }
 
-  const focused = await page.evaluate(`(() => {
-    const editors = [...document.querySelectorAll('div[contenteditable="true"], [contenteditable="true"]')];
-    const visibleEditors = editors.filter(node => node.offsetParent !== null);
-    const editor = visibleEditors[visibleEditors.length - 1] || editors[editors.length - 1];
+  const editorLocation = await page.evaluate(`(() => {
+    const ueditor = document.querySelector('#ueditor_0');
+    const iframeBody = ueditor?.tagName === 'IFRAME' ? ueditor.contentDocument?.body : null;
+    const scopedEditors = [...document.querySelectorAll('#js_ueditor [contenteditable="true"], #js_editor [contenteditable="true"]')];
+    const visibleEditors = scopedEditors.filter(node => node.offsetParent !== null);
+    const editor = iframeBody || (ueditor?.matches?.('[contenteditable="true"]') ? ueditor : null)
+      || visibleEditors[visibleEditors.length - 1];
     if (!editor) return { ok: false, reason: 'contenteditable editor not found' };
-    editor.focus();
-    if (editor.childNodes.length) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    const rect = editor.getBoundingClientRect();
+    const rect = (ueditor?.tagName === 'IFRAME' ? ueditor : editor).getBoundingClientRect();
     return {
-      ok: document.activeElement === editor || editor.contains(document.activeElement),
+      ok: rect.width > 0 && rect.height > 0,
       rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
     };
   })()`);
-  if (!focused?.ok) throw new CommandExecutionError(`Could not focus rich-text editor: ${focused?.reason ?? 'unknown error'}`);
+  if (!editorLocation?.ok) throw new CommandExecutionError(`Could not locate rich-text editor: ${editorLocation?.reason ?? 'unknown error'}`);
 
   if (typeof page.focusWindow === 'function') {
     try { await page.focusWindow(); } catch { /* the clipboard write reports the actionable error */ }
   }
-  if (typeof page.nativeClick === 'function' && focused.rect) {
-    const x = Math.round(focused.rect.x + focused.rect.width / 2);
-    const y = Math.round(focused.rect.y + focused.rect.height / 2);
-    await page.nativeClick(x, y);
-    await page.evaluate(`(() => {
-      const editors = [...document.querySelectorAll('div[contenteditable="true"], [contenteditable="true"]')];
-      const visibleEditors = editors.filter(node => node.offsetParent !== null);
-      const editor = visibleEditors[visibleEditors.length - 1] || editors[editors.length - 1];
-      if (!editor) return false;
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return true;
-    })()`);
-  }
+  const x = Math.round(editorLocation.rect.x + editorLocation.rect.width / 2);
+  const y = Math.round(editorLocation.rect.y + editorLocation.rect.height / 2);
+  await page.nativeClick(x, y);
 
   const written = await page.evaluate(clipboardWriteScript(source, plainTextFromHtml(source)));
   if (!written?.ok) throw new CommandExecutionError(`Could not write HTML to clipboard: ${written?.reason ?? 'unknown error'}`);
 
-  const modifiers = platform === 'darwin' ? 4 : 2;
+  const shortcut = platform === 'darwin' ? ['Meta'] : ['Ctrl'];
   try {
+    await page.nativeKeyPress('v', shortcut);
+  } catch {
+    const modifiers = platform === 'darwin' ? 4 : 2;
     await page.cdp('Input.dispatchKeyEvent', {
       type: 'keyDown', key: 'v', code: 'KeyV', modifiers,
       windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86,
@@ -128,12 +120,13 @@ export async function pasteHtmlThroughClipboard(page, html, {
       type: 'keyUp', key: 'v', code: 'KeyV', modifiers,
       windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86,
     });
-  } catch {
-    await page.nativeKeyPress('v', platform === 'darwin' ? ['Meta'] : ['Ctrl']);
   }
   if (typeof page.wait === 'function') await page.wait(1);
 
   const result = await page.evaluate(editorReadScript());
+  if (result?.warning) {
+    throw new CommandExecutionError('WeChat displayed its editor-integrity warning after rich HTML paste; the draft was not saved');
+  }
   if (!result?.ok || !String(result.text ?? '').trim() || !RICH_NODE_PATTERN.test(String(result.html ?? ''))) {
     const actualHtml = String(result?.html ?? '');
     const actualText = String(result?.text ?? '');

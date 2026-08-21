@@ -23,6 +23,20 @@ describe('weixin draft content preparation', () => {
     await rm(directory, { recursive: true, force: true });
   });
 
+  it('converts an HTML file to readable paragraph text for text-first drafting', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'bycli-draft-content-'));
+    const filePath = join(directory, 'article.html');
+    await writeFile(filePath, '<h2>Heading</h2><p>First <strong>paragraph</strong>.</p><p>Second paragraph.</p>');
+
+    expect(loadDraftContent({ contentFile: filePath, contentFormat: 'html-text' })).toEqual({
+      format: 'text',
+      content: 'Heading\nFirst paragraph.\nSecond paragraph.',
+      filePath,
+    });
+
+    await rm(directory, { recursive: true, force: true });
+  });
+
   it('sanitizes unsafe HTML while preserving rich-text structure', async () => {
     const result = await prepareHtmlContent(`
       <h2 style="color: #0052d9">Title</h2>

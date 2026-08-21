@@ -4,6 +4,7 @@ import { cli, Strategy } from '@sovovs/bycli/registry';
 import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { loadDraftContent, prepareHtmlContent } from './_wechat/draft-content.js';
 import { pasteHtmlThroughClipboard } from './_wechat/html-clipboard.js';
+import { createDraftViaApi } from './_wechat/api-draft.js';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
 const WEIXIN_HOME = 'https://mp.weixin.qq.com/';
@@ -54,6 +55,11 @@ function normalizeCreateDraftArgs(kwargs) {
         contentFile: kwargs['content-file'],
         contentFormat: kwargs['content-format'],
     });
+    const appid = kwargs.appid == null ? '' : String(kwargs.appid).trim();
+    const appsecret = kwargs.appsecret == null ? '' : String(kwargs.appsecret).trim();
+    if (Boolean(appid) !== Boolean(appsecret)) {
+        throw new ArgumentError('appid and appsecret must be provided together');
+    }
     return {
         title,
         ...draftContent,
@@ -61,6 +67,8 @@ function normalizeCreateDraftArgs(kwargs) {
         summary: kwargs.summary == null ? null : String(kwargs.summary).trim(),
         coverImage: validateCoverImage(kwargs['cover-image']),
         dryRun: kwargs['dry-run'] === true,
+        appid: appid || null,
+        appsecret: appsecret || null,
     };
 }
 
@@ -197,21 +205,6 @@ async function fillContent(page, text) {
         return actual === expected
             ? { ok: true, value: actual }
             : { ok: false, reason: 'editor content verification failed', value: actual };
-    })()`);
-}
-
-async function fillHtmlContent(page, html) {
-    return page.evaluate(`(() => {
-        var instances = window.UE && window.UE.instants ? Object.values(window.UE.instants) : [];
-        var ueditor = instances.find(instance => instance
-            && typeof instance.setContent === 'function'
-            && typeof instance.getContent === 'function');
-        if (!ueditor) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
-        ueditor.setContent(${JSON.stringify(html)});
-        var actual = ueditor.getContent();
-        return typeof actual === 'string' && actual.trim()
-            ? { ok: true, html: actual }
-            : { ok: false, reason: 'rich HTML content was not retained by the editor' };
     })()`);
 }
 
@@ -364,26 +357,46 @@ export const createDraftCommand = cli({
     site: 'weixin',
     name: 'create-draft',
     access: 'write',
-    description: '创建微信公众号图文草稿',
+    description: '创建微信公众号草稿（支持浏览器富文本或官方 API）',
+    example: 'bycli weixin create-draft --title "文章标题" --content-file article.html --content-format html --cover-image cover.jpg',
     domain: WEIXIN_DOMAIN,
     strategy: Strategy.COOKIE,
     browser: true,
     navigateBefore: false,
     args: [
-        { name: 'title', required: true, help: '文章标题 (最长64字)' },
-        { name: 'content', required: false, positional: true, help: '文章正文；也可使用 --content-file' },
-        { name: 'content-file', help: '正文文件路径' },
-        { name: 'content-format', choices: ['text', 'html'], default: 'text', help: '正文格式 (default: text)' },
-        { name: 'author', help: '作者名 (最长8字)' },
-        { name: 'cover-image', help: '封面图片路径 (会先上传到正文再设为封面)' },
-        { name: 'summary', help: '文章摘要' },
-        { name: 'dry-run', type: 'boolean', default: false, help: '填充并验证内容后停止，不保存草稿' },
-        { name: 'timeout', type: 'int', required: false, default: 180, help: 'Max seconds for the overall command (default: 180)' },
+        { name: 'title', required: true, help: '文章标题（最长 64 字）' },
+        { name: 'content', required: false, positional: true, help: '正文文本；也可用 --content-file 读取 HTML 文件' },
+        { name: 'content-file', help: '正文文件路径；HTML 模式支持本地图片' },
+        { name: 'content-format', choices: ['text', 'html', 'html-text'], default: 'text', help: '正文格式：text=纯文本，html=富文本，html-text=保留段落但忽略样式' },
+        { name: 'author', help: '作者名（最长 8 字）' },
+        { name: 'cover-image', help: '封面图路径；API 模式必填，浏览器模式会上传后设为封面' },
+        { name: 'summary', help: '文章摘要；API 模式对应 digest' },
+        { name: 'appid', help: '公众号 AppID；与 --appsecret 同传时走官方 API，不打开浏览器' },
+        { name: 'appsecret', help: '公众号 AppSecret；请勿提交到 shell 历史或日志' },
+        { name: 'dry-run', type: 'boolean', default: false, help: '浏览器模式：填充并验证正文后停止，不会保存草稿' },
+        { name: 'timeout', type: 'int', required: false, default: 180, help: '命令总超时时间（秒，默认 180）' },
     ],
     columns: ['status', 'detail'],
 
     func: async (page, kwargs) => {
         const args = normalizeCreateDraftArgs(kwargs);
+        if (args.appid && args.appsecret) {
+            const baseDir = args.filePath ? nodePath.dirname(args.filePath) : process.cwd();
+            const result = await createDraftViaApi({
+                appid: args.appid,
+                appsecret: args.appsecret,
+                title: args.title,
+                author: args.author ?? '',
+                digest: args.summary ?? '',
+                coverImage: args.coverImage,
+                html: args.content,
+                baseDir,
+            });
+            return [{
+                status: 'draft created',
+                detail: `"${args.title}" (media_id: ${result.mediaId})`,
+            }];
+        }
         await navigateToEditor(page);
 
 
@@ -408,14 +421,7 @@ export const createDraftCommand = cli({
                     return uploaded;
                 },
             });
-            const contentResult = await fillHtmlContent(page, prepared.html);
-            if (contentResult?.ok) {
-                requirePageResult(contentResult, 'rich HTML content');
-            } else if (contentResult?.reason === 'rich HTML insertion requires a registered UEditor instance') {
-                await pasteHtmlThroughClipboard(page, prepared.html, { origin: `https://${WEIXIN_DOMAIN}` });
-            } else {
-                requirePageResult(contentResult, 'rich HTML content');
-            }
+            await pasteHtmlThroughClipboard(page, prepared.html, { origin: `https://${WEIXIN_DOMAIN}` });
         } else {
             const contentResult = await fillContent(page, content);
             requirePageResult(contentResult, 'content');

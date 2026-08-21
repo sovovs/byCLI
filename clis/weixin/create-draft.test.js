@@ -41,6 +41,17 @@ function baseEditorSequence(...afterContent) {
 }
 
 describe('weixin create-draft command', () => {
+    it('describes the supported publishing modes and content formats', () => {
+        const args = Object.fromEntries(command.args.map((arg) => [arg.name, arg]));
+
+        expect(command.description).toContain('官方 API');
+        expect(command.example).toContain('--content-format html');
+        expect(args.content.help).toContain('--content-file');
+        expect(args['content-format'].help).toContain('text=纯文本');
+        expect(args.appid.help).toContain('不打开浏览器');
+        expect(args['dry-run'].help).toContain('不会保存草稿');
+    });
+
     beforeEach(async () => {
         temporaryDirectory = await mkdtemp(join(tmpdir(), 'bycli-create-draft-'));
         validCover = join(temporaryDirectory, 'cover.png');
@@ -94,6 +105,29 @@ describe('weixin create-draft command', () => {
             expect.stringContaining('https://mp.weixin.qq.com/cgi-bin/appmsg'),
             { stealth: false },
         );
+    });
+
+    it('uses the official API when both appid and appsecret are supplied', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ access_token: 'token' }) })
+            .mockResolvedValueOnce({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ media_id: 'cover-media' }) })
+            .mockResolvedValueOnce({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ media_id: 'draft-media' }) });
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(command.func(navigationTrap(), {
+            title: 'title', content: '<p>body</p>',
+            appid: 'wx123', appsecret: 'secret', 'cover-image': validCover,
+        })).resolves.toEqual([{
+            status: 'draft created',
+            detail: '"title" (media_id: draft-media)',
+        }]);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('rejects partial API credentials before opening a browser', async () => {
+        await expect(command.func(navigationTrap(), {
+            title: 'title', content: 'body', appid: 'wx123',
+        })).rejects.toMatchObject({ code: 'ARGUMENT' });
     });
 
     it.each([
@@ -189,47 +223,20 @@ describe('weixin create-draft command', () => {
         expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('window.UE.instants'));
     });
 
-    it('inserts HTML through the registered rich-text editor instead of typing markup as text', async () => {
-        const html = '<p><strong>Lightfield</strong></p>';
-        const page = {
-            goto: vi.fn().mockResolvedValue(undefined),
-            wait: vi.fn().mockResolvedValue(undefined),
-            evaluate: vi.fn().mockImplementation(async (script) => {
-                if (script.includes('window.location.href.match')) return '123456';
-                if (script === '!!document.querySelector("textarea#title")') return true;
-                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
-                if (script.includes('window.UE.instants')) return { ok: true, html };
-                if (script.includes('保存为草稿')) return { ok: true };
-                return true;
-            }),
-        };
-
-        await expect(command.func(page, {
-            title: 'title', content: html, 'content-format': 'html',
-        })).resolves.toEqual([{
-            status: 'draft saved',
-            detail: '"title"',
-        }]);
-
-        const htmlScript = page.evaluate.mock.calls
-            .map(([script]) => script)
-            .find(script => script.includes('setContent'));
-        expect(htmlScript).toContain(JSON.stringify(html));
-    });
-
-    it('pastes HTML through the native clipboard when the editor is ProseMirror', async () => {
+    it('always uses the native rich HTML paste path', async () => {
         const html = '<p><strong>Lightfield</strong></p>';
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
             cdp: vi.fn().mockResolvedValue({}),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
             nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
-                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
-                if (script.includes('editor.focus')) return { ok: true };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
                 if (script.includes('navigator.clipboard.write')) return { ok: true };
                 if (script.includes('contenteditable')) return { ok: true, html, text: 'Lightfield' };
                 if (script.includes('保存为草稿')) return { ok: true };
@@ -244,9 +251,40 @@ describe('weixin create-draft command', () => {
             detail: '"title"',
         }]);
 
-        expect(page.cdp).toHaveBeenCalledWith('Input.dispatchKeyEvent', expect.objectContaining({
-            type: 'keyDown', key: 'v', code: 'KeyV', modifiers: 4,
-        }));
+        const scripts = page.evaluate.mock.calls.map(([script]) => String(script));
+        expect(scripts.some(script => script.includes('setContent'))).toBe(false);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
+    });
+
+    it('pastes HTML through the native clipboard when the editor is ProseMirror', async () => {
+        const html = '<p><strong>Lightfield</strong></p>';
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes("textarea#title")) return { ok: true, value: 'title' };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html, text: 'Lightfield' };
+                if (script.includes('保存为草稿')) return { ok: true };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title', content: html, 'content-format': 'html',
+        })).resolves.toEqual([{
+            status: 'draft saved',
+            detail: '"title"',
+        }]);
+
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
     });
 
     it('supports a no-save HTML insertion check for browser verification', async () => {
@@ -256,12 +294,13 @@ describe('weixin create-draft command', () => {
             wait: vi.fn().mockResolvedValue(undefined),
             cdp: vi.fn().mockResolvedValue({}),
             nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
-                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
-                if (script.includes('editor.focus')) return { ok: true };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
                 if (script.includes('navigator.clipboard.write')) return { ok: true };
                 if (script.includes('contenteditable')) return { ok: true, html, text: 'Lightfield' };
                 if (script.includes('保存为草稿')) throw new Error('save must not be called in dry-run');
@@ -285,15 +324,16 @@ describe('weixin create-draft command', () => {
             wait: vi.fn().mockResolvedValue(undefined),
             cdp: vi.fn().mockResolvedValue({}),
             nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
             setFileInput: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
-                if (script.includes('window.UE.instants')) return { ok: false, reason: 'rich HTML insertion requires a registered UEditor instance' };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
                 if (script.includes('#js_editor_insertimage') || script.includes('.js_img_dropdown_menu')) return true;
                 if (script.includes("var editors = document.querySelectorAll('#ueditor_0")) return ['https://mmbiz.qpic.cn/uploaded'];
-                if (script.includes('editor.focus')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
                 if (script.includes('navigator.clipboard.write')) return { ok: true };
                 if (script.includes('contenteditable')) return { ok: true, html: '<p>Before</p><img src="https://mmbiz.qpic.cn/uploaded"><p>After</p>', text: 'Before After' };
                 return true;
@@ -307,8 +347,9 @@ describe('weixin create-draft command', () => {
             detail: '"title" (dry-run)',
         }]);
 
-        expect(page.nativeKeyPress).toHaveBeenCalledTimes(2);
+        expect(page.nativeKeyPress).toHaveBeenCalledTimes(3);
         expect(page.nativeKeyPress).toHaveBeenCalledWith('Backspace', []);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
     });
 
     it('accepts HTML from content-file without requiring a positional content argument', async () => {
@@ -318,11 +359,17 @@ describe('weixin create-draft command', () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
             wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockImplementation(async (script) => {
                 if (script.includes('window.location.href.match')) return '123456';
                 if (script === '!!document.querySelector("textarea#title")') return true;
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
-                if (script.includes('window.UE.instants')) return { ok: true, html };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html, text: 'From file' };
                 if (script.includes('保存为草稿')) return { ok: true };
                 return true;
             }),

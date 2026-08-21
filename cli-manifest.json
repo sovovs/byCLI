@@ -28292,8 +28292,9 @@
   {
     "site": "weixin",
     "name": "create-draft",
-    "description": "创建微信公众号图文草稿",
+    "description": "创建微信公众号草稿（支持浏览器富文本或官方 API）",
     "access": "write",
+    "example": "bycli weixin create-draft --title \"文章标题\" --content-file article.html --content-format html --cover-image cover.jpg",
     "domain": "mp.weixin.qq.com",
     "strategy": "cookie",
     "browser": true,
@@ -28302,63 +28303,76 @@
         "name": "title",
         "type": "str",
         "required": true,
-        "help": "文章标题 (最长64字)"
+        "help": "文章标题（最长 64 字）"
       },
       {
         "name": "content",
         "type": "str",
         "required": false,
         "positional": true,
-        "help": "文章正文；也可使用 --content-file"
+        "help": "正文文本；也可用 --content-file 读取 HTML 文件"
       },
       {
         "name": "content-file",
         "type": "str",
         "required": false,
-        "help": "正文文件路径"
+        "help": "正文文件路径；HTML 模式支持本地图片"
       },
       {
         "name": "content-format",
         "type": "str",
         "default": "text",
         "required": false,
-        "help": "正文格式 (default: text)",
+        "help": "正文格式：text=纯文本，html=富文本，html-text=保留段落但忽略样式",
         "choices": [
           "text",
-          "html"
+          "html",
+          "html-text"
         ]
       },
       {
         "name": "author",
         "type": "str",
         "required": false,
-        "help": "作者名 (最长8字)"
+        "help": "作者名（最长 8 字）"
       },
       {
         "name": "cover-image",
         "type": "str",
         "required": false,
-        "help": "封面图片路径 (会先上传到正文再设为封面)"
+        "help": "封面图路径；API 模式必填，浏览器模式会上传后设为封面"
       },
       {
         "name": "summary",
         "type": "str",
         "required": false,
-        "help": "文章摘要"
+        "help": "文章摘要；API 模式对应 digest"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": false,
+        "help": "公众号 AppID；与 --appsecret 同传时走官方 API，不打开浏览器"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": false,
+        "help": "公众号 AppSecret；请勿提交到 shell 历史或日志"
       },
       {
         "name": "dry-run",
         "type": "boolean",
         "default": false,
         "required": false,
-        "help": "填充并验证内容后停止，不保存草稿"
+        "help": "浏览器模式：填充并验证正文后停止，不会保存草稿"
       },
       {
         "name": "timeout",
         "type": "int",
         "default": 180,
         "required": false,
-        "help": "Max seconds for the overall command (default: 180)"
+        "help": "命令总超时时间（秒，默认 180）"
       }
     ],
     "columns": [

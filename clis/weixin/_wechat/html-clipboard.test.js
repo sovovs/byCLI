@@ -6,7 +6,7 @@ function createPage(editorResult = { ok: true, html: '<p><strong>Rich</strong></
     cdp: vi.fn().mockResolvedValue({}),
     evaluate: vi.fn().mockImplementation(async script => {
       if (script.includes('navigator.clipboard.write')) return { ok: true };
-      if (script.includes('editor.focus')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
+      if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
       if (script.includes('contenteditable')) return editorResult;
       return true;
     }),
@@ -30,13 +30,13 @@ describe('weixin HTML clipboard paste', () => {
       permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
     });
     expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('navigator.clipboard.write'));
-    expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('collapse(false)'));
-    expect(page.evaluate.mock.calls.filter(([script]) => script.includes('collapse(false)'))).toHaveLength(2);
-    expect(page.cdp).toHaveBeenCalledWith('Input.dispatchKeyEvent', expect.objectContaining({
-      type: 'keyDown', key: 'v', code: 'KeyV', modifiers: 4,
-    }));
+    const evaluatedScripts = page.evaluate.mock.calls.map(([script]) => String(script));
+    expect(evaluatedScripts.some(script => script.includes('createRange'))).toBe(false);
+    expect(evaluatedScripts.some(script => script.includes('selectNodeContents'))).toBe(false);
+    expect(evaluatedScripts.some(script => script.includes('.innerHTML ='))).toBe(false);
     expect(page.focusWindow).toHaveBeenCalledTimes(2);
     expect(page.nativeClick).toHaveBeenCalledWith(420, 390);
+    expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
   });
 
   it('uses Ctrl+V on non-macOS platforms', async () => {
@@ -44,9 +44,7 @@ describe('weixin HTML clipboard paste', () => {
 
     await pasteHtmlThroughClipboard(page, '<p>Rich</p>', { platform: 'linux' });
 
-    expect(page.cdp).toHaveBeenCalledWith('Input.dispatchKeyEvent', expect.objectContaining({
-      type: 'keyDown', key: 'v', code: 'KeyV', modifiers: 2,
-    }));
+    expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Ctrl']);
   });
 
   it('continues when the bridge does not expose permission grant passthrough', async () => {
@@ -70,5 +68,17 @@ describe('weixin HTML clipboard paste', () => {
 
     await expect(pasteHtmlThroughClipboard(page, '<p>Rich</p>', { platform: 'linux' }))
       .resolves.toMatchObject({ text: 'Rich' });
+  });
+
+  it('stops before saving when WeChat shows its editor-integrity warning', async () => {
+    const page = createPage({
+      ok: true,
+      warning: true,
+      html: '<p><strong>Rich</strong></p>',
+      text: 'Rich',
+    });
+
+    await expect(pasteHtmlThroughClipboard(page, '<p>Rich</p>', { platform: 'linux' }))
+      .rejects.toThrow(/editor-integrity warning/);
   });
 });

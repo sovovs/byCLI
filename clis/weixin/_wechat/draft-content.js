@@ -1,7 +1,7 @@
 import * as nodeFs from 'node:fs';
 import * as nodePath from 'node:path';
-import { parseFragment, serialize } from 'parse5';
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
+import { parseWechatHtmlFragment, serializeWechatHtml } from '@sovovs/bycli/download/article-download';
 
 const DROP_TAGS = new Set(['base', 'embed', 'form', 'iframe', 'link', 'meta', 'object', 'script', 'style', 'template']);
 const ALLOWED_TAGS = new Set([
@@ -14,6 +14,21 @@ const IMPORTANT_STYLE_PROPERTIES = new Set([
   'font-size', 'line-height', 'margin', 'margin-bottom', 'padding', 'text-align', 'text-indent',
   'vertical-align',
 ]);
+
+export function htmlToPlainText(html) {
+  return String(html ?? '')
+    .replace(/<(?:br)\b[^>]*>/giu, '\n')
+    .replace(/<\/(?:p|div|section|h[1-6]|li|tr|blockquote|table)>/giu, '\n')
+    .replace(/<[^>]*>/gu, '')
+    .replace(/&nbsp;/giu, ' ')
+    .replace(/&amp;/giu, '&')
+    .replace(/&lt;/giu, '<')
+    .replace(/&gt;/giu, '>')
+    .replace(/[\t \f\v]+/gu, ' ')
+    .replace(/ *\n */gu, '\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+}
 
 function attributes(node) {
   return Array.isArray(node.attrs) ? node.attrs : [];
@@ -156,7 +171,7 @@ async function sanitizeNode(node, options) {
 
 export function loadDraftContent({ content, contentFile, contentFormat = 'text' }) {
   const format = String(contentFormat ?? 'text').toLowerCase();
-  if (!['html', 'text'].includes(format)) throw new ArgumentError('content-format must be html or text');
+  if (!['html', 'html-text', 'text'].includes(format)) throw new ArgumentError('content-format must be html, html-text, or text');
   if (contentFile) {
     const filePath = nodePath.resolve(String(contentFile));
     let fileContent;
@@ -166,20 +181,28 @@ export function loadDraftContent({ content, contentFile, contentFormat = 'text' 
       throw new ArgumentError(`content-file must be a readable file: ${filePath}`);
     }
     if (!fileContent.trim()) throw new ArgumentError('content-file must not be empty');
-    return { format, content: fileContent, filePath };
+    return {
+      format: format === 'html-text' ? 'text' : format,
+      content: format === 'html-text' ? htmlToPlainText(fileContent) : fileContent,
+      filePath,
+    };
   }
   const value = String(content ?? '');
   if (!value.trim()) throw new ArgumentError('content or content-file must not be empty');
-  return { format, content: value, filePath: null };
+  return {
+    format: format === 'html-text' ? 'text' : format,
+    content: format === 'html-text' ? htmlToPlainText(value) : value,
+    filePath: null,
+  };
 }
 
 export async function prepareHtmlContent(html, { baseDir = process.cwd(), resolveImage } = {}) {
   if (typeof resolveImage !== 'function') throw new ArgumentError('resolveImage is required for HTML content');
-  const fragment = parseFragment(String(html ?? ''));
+  const fragment = parseWechatHtmlFragment(String(html ?? ''));
   const imageResolver = async source => {
     const absolute = /^https?:\/\//iu.test(source) ? source : nodePath.resolve(baseDir, source);
     return resolveImage(absolute);
   };
   await Promise.all((fragment.childNodes ?? []).map(node => sanitizeNode(node, { resolveImage: imageResolver })));
-  return { html: serialize(fragment) };
+  return { html: serializeWechatHtml(fragment) };
 }

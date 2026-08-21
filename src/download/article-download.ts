@@ -14,6 +14,7 @@ import { gfm } from 'turndown-plugin-gfm';
 import { httpDownload, sanitizeFilename } from './index.js';
 import { formatBytes } from './progress.js';
 export { extractWechatArticleHtml } from './wechat-article.js';
+export { parseFragment as parseWechatHtmlFragment, serialize as serializeWechatHtml } from 'parse5';
 
 const IMAGE_CONCURRENCY = 5;
 
