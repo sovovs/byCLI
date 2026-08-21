@@ -25494,6 +25494,54 @@
     "sourceFile": "toutiao/hot.js"
   },
   {
+    "site": "toutiao",
+    "name": "search",
+    "description": "搜索今日头条公开站内内容",
+    "access": "read",
+    "domain": "www.toutiao.com",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": false,
+        "positional": true,
+        "help": "搜索关键词"
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "default": "synthesis",
+        "required": false,
+        "help": "搜索类型 (synthesis/information/video/atlas/user/xiaoshipin/weitoutiao/music)"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回条数 (1-50)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "source",
+      "publish_time",
+      "summary",
+      "image_url",
+      "like_count",
+      "comment_count",
+      "share_count",
+      "read_count"
+    ],
+    "type": "js",
+    "modulePath": "toutiao/search.js",
+    "sourceFile": "toutiao/search.js"
+  },
+  {
     "site": "tvmaze",
     "name": "search",
     "description": "TVmaze TV show search by title (returns id, name, network, premiered/ended, rating)",

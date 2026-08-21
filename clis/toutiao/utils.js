@@ -7,6 +7,9 @@ const ARTICLES_MIN_PAGE = 1;
 const ARTICLES_MAX_PAGE = 4;
 const HOT_MIN_LIMIT = 1;
 const HOT_MAX_LIMIT = 50;
+const SEARCH_MIN_LIMIT = 1;
+const SEARCH_MAX_LIMIT = 50;
+const SEARCH_TYPES = ['synthesis', 'information', 'video', 'atlas', 'user', 'xiaoshipin', 'weitoutiao', 'music'];
 
 export function parseArticlesPage(raw, fallback = 1) {
     if (raw === undefined || raw === null || raw === '') return fallback;
@@ -30,6 +33,27 @@ export function parseHotLimit(raw, fallback = 30) {
         throw new ArgumentError(`--limit must be between ${HOT_MIN_LIMIT} and ${HOT_MAX_LIMIT}, got ${parsed}`);
     }
     return parsed;
+}
+
+export function parseSearchLimit(raw, fallback = 20) {
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        throw new ArgumentError(`--limit must be an integer between ${SEARCH_MIN_LIMIT} and ${SEARCH_MAX_LIMIT}, got ${JSON.stringify(raw)}`);
+    }
+    if (parsed < SEARCH_MIN_LIMIT || parsed > SEARCH_MAX_LIMIT) {
+        throw new ArgumentError(`--limit must be between ${SEARCH_MIN_LIMIT} and ${SEARCH_MAX_LIMIT}, got ${parsed}`);
+    }
+    return parsed;
+}
+
+export function parseSearchType(raw, fallback = 'synthesis') {
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const value = String(raw).trim();
+    if (!SEARCH_TYPES.includes(value)) {
+        throw new ArgumentError(`--type must be one of ${SEARCH_TYPES.join(', ')}, got ${JSON.stringify(raw)}`);
+    }
+    return value;
 }
 
 const NON_TITLE_LINES = new Set([
@@ -149,6 +173,83 @@ export function mapHotRow(item, index) {
 }
 
 export const HOT_BOARD_URL = 'https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc';
+export const TOUTIAO_SEARCH_URL = 'https://www.toutiao.com/search/';
+
+function parseSearchNumber(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number(String(value).replace(/,/g, ''));
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
+function absoluteSearchUrl(value) {
+    const url = trimOrNull(value);
+    if (!url) return null;
+    try {
+        return new URL(url, 'https://www.toutiao.com/').toString();
+    } catch {
+        return null;
+    }
+}
+
+function searchImage(item) {
+    const candidates = [
+        item?.image_url,
+        item?.large_image_url,
+        item?.other_image_url,
+        ...(Array.isArray(item?.image_list) ? item.image_list.map((image) => image?.url || image) : []),
+        ...(Array.isArray(item?.detail_image_list) ? item.detail_image_list.map((image) => image?.url || image) : []),
+    ];
+    return candidates.map(trimOrNull).find(Boolean) || null;
+}
+
+function searchRowFromCard(item, index) {
+    if (!item || typeof item !== 'object') return null;
+    const title = trimOrNull(item.title);
+    const url = absoluteSearchUrl(
+        item.article_url || item.open_url || item.source_url || item.item_source_url || item?.display?.info?.url,
+    );
+    if (!title || !url) return null;
+    return {
+        rank: index + 1,
+        title,
+        url,
+        source: trimOrNull(item.source || item.media_name),
+        publish_time: trimOrNull(item.datetime || item.publish_time || item.display_time),
+        summary: trimOrNull(item.abstract || item.summary || item?.emphasized?.summary),
+        image_url: searchImage(item),
+        like_count: parseSearchNumber(item.like_count ?? item.digg_count),
+        comment_count: parseSearchNumber(item.comment_count),
+        share_count: parseSearchNumber(item.share_count ?? item.repin_count ?? item.forward_count),
+        read_count: parseSearchNumber(item.read_count),
+    };
+}
+
+/**
+ * Extract search result cards embedded in the public Toutiao search page.
+ * The page currently serializes each result as an application/json script.
+ */
+export function parseToutiaoSearchHtml(html, limit = 20) {
+    const source = String(html || '');
+    const rows = [];
+    const seenUrls = new Set();
+    const scriptPattern = /<script\b[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptPattern.exec(source))) {
+        let payload;
+        try {
+            payload = JSON.parse(match[1]);
+        } catch {
+            continue;
+        }
+        const candidate = payload?.data;
+        const row = searchRowFromCard(candidate, rows.length);
+        if (!row || seenUrls.has(row.url)) continue;
+        seenUrls.add(row.url);
+        rows.push(row);
+        if (rows.length >= limit) break;
+    }
+    return rows.map((row, index) => ({ ...row, rank: index + 1 }));
+}
 
 export function looksToutiaoAuthWallText(value) {
     const text = String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -158,4 +259,12 @@ export function looksToutiaoAuthWallText(value) {
         /mp\.toutiao\.com\/profile_v4\/login/.test(text);
 }
 
-export const __test__ = { ARTICLES_MIN_PAGE, ARTICLES_MAX_PAGE, HOT_MIN_LIMIT, HOT_MAX_LIMIT };
+export const __test__ = {
+    ARTICLES_MIN_PAGE,
+    ARTICLES_MAX_PAGE,
+    HOT_MIN_LIMIT,
+    HOT_MAX_LIMIT,
+    SEARCH_MIN_LIMIT,
+    SEARCH_MAX_LIMIT,
+    SEARCH_TYPES,
+};

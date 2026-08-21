@@ -9,11 +9,16 @@ import {
     looksToutiaoAuthWallText,
     parseArticlesPage,
     parseHotLimit,
+    parseSearchLimit,
+    parseSearchType,
+    parseToutiaoSearchHtml,
     parseToutiaoArticlesText,
+    TOUTIAO_SEARCH_URL,
 } from './utils.js';
 
 import './articles.js';
 import './hot.js';
+import './search.js';
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -70,6 +75,71 @@ describe('toutiao parseHotLimit', () => {
 
     it('rejects non-numeric limits with ArgumentError', () => {
         expect(() => parseHotLimit('abc')).toThrow(ArgumentError);
+    });
+});
+
+describe('toutiao search helpers', () => {
+    it('parses valid search limits in [1, 50] and rejects invalid values', () => {
+        expect(parseSearchLimit(undefined)).toBe(20);
+        expect(parseSearchLimit('10')).toBe(10);
+        expect(parseSearchLimit(50)).toBe(50);
+        expect(() => parseSearchLimit(0)).toThrow(ArgumentError);
+        expect(() => parseSearchLimit(51)).toThrow(ArgumentError);
+        expect(() => parseSearchLimit('abc')).toThrow(ArgumentError);
+    });
+
+    it('parses supported public search types and rejects unknown types', () => {
+        expect(parseSearchType(undefined)).toBe('synthesis');
+        expect(parseSearchType('information')).toBe('information');
+        expect(parseSearchType('video')).toBe('video');
+        expect(() => parseSearchType('invalid')).toThrow(ArgumentError);
+    });
+
+    it('extracts rich result fields from Toutiao JSON card HTML', () => {
+        const html = `<script type="application/json">${JSON.stringify({ data: {
+            title: '标题',
+            article_url: 'https://www.toutiao.com/article/1',
+            media_name: '来源',
+            datetime: '2026-08-21 10:00:00',
+            abstract: '摘要',
+            image_url: 'https://img.example/a.jpg',
+            digg_count: 12,
+            comment_count: 3,
+            repin_count: 4,
+            read_count: 99,
+        } })}</script>`;
+
+        expect(parseToutiaoSearchHtml(html, 10)).toEqual([{
+            rank: 1,
+            title: '标题',
+            url: 'https://www.toutiao.com/article/1',
+            source: '来源',
+            publish_time: '2026-08-21 10:00:00',
+            summary: '摘要',
+            image_url: 'https://img.example/a.jpg',
+            like_count: 12,
+            comment_count: 3,
+            share_count: 4,
+            read_count: 99,
+        }]);
+    });
+
+    it('keeps missing optional fields as null and resolves relative URLs', () => {
+        const html = `<script type="application/json">${JSON.stringify({ data: {
+            title: '部分结果',
+            item_source_url: '/group/123/',
+        } })}</script>`;
+
+        expect(parseToutiaoSearchHtml(html, 10)[0]).toMatchObject({
+            url: 'https://www.toutiao.com/group/123/',
+            source: null,
+            summary: null,
+            image_url: null,
+            like_count: null,
+            comment_count: null,
+            share_count: null,
+            read_count: null,
+        });
     });
 });
 
@@ -222,6 +292,7 @@ describe('toutiao mapHotRow', () => {
 describe('toutiao registry shape', () => {
     const articles = getRegistry().get('toutiao/articles');
     const hot = getRegistry().get('toutiao/hot');
+    const search = getRegistry().get('toutiao/search');
 
     it('articles is registered as browser/cookie read adapter', () => {
         expect(articles).toBeTruthy();
@@ -235,6 +306,17 @@ describe('toutiao registry shape', () => {
         expect(hot.access).toBe('read');
         expect(hot.browser).toBe(false);
         expect(hot.columns).toEqual(['rank', 'group_id', 'title', 'query', 'hot_value', 'label', 'url', 'image_url']);
+    });
+
+    it('search is registered as public non-browser read adapter', () => {
+        expect(search).toBeTruthy();
+        expect(search.access).toBe('read');
+        expect(search.browser).toBe(false);
+        expect(search.args.map(({ name }) => name)).toEqual(['query', 'type', 'limit']);
+        expect(search.columns).toEqual([
+            'rank', 'title', 'url', 'source', 'publish_time', 'summary', 'image_url',
+            'like_count', 'comment_count', 'share_count', 'read_count',
+        ]);
     });
 });
 
@@ -365,6 +447,48 @@ describe('toutiao hot adapter (registry func)', () => {
         const rows = await cmd.func(null, { limit: 2 });
         expect(rows.map(r => r.title)).toEqual(['kept', 'also kept']);
         expect(rows.map(r => r.rank)).toEqual([1, 2]); // dense rank after empty-title drop
+    });
+});
+
+describe('toutiao search adapter (registry func)', () => {
+    const cmd = getRegistry().get('toutiao/search');
+
+    it('rejects invalid limit before fetching', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(cmd.func(null, { query: 'AI', limit: 0 })).rejects.toThrow(ArgumentError);
+        await expect(cmd.func(null, { query: 'AI', limit: 51 })).rejects.toThrow(ArgumentError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('fetches the public search page and returns normalized rows', async () => {
+        const html = `<script type="application/json">${JSON.stringify({ data: {
+            title: '搜索结果',
+            article_url: '/article/1',
+            media_name: '来源',
+            digg_count: 5,
+        } })}</script>`;
+        const fetchMock = vi.fn().mockResolvedValue(new Response(html, { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const rows = await cmd.func(null, { query: '人工 智能', type: 'video', limit: 5 });
+        const requested = new URL(fetchMock.mock.calls[0][0]);
+        expect(requested.origin + requested.pathname).toBe(TOUTIAO_SEARCH_URL);
+        expect(requested.searchParams.get('keyword')).toBe('人工 智能');
+        expect(requested.searchParams.get('pd')).toBe('video');
+        expect(rows[0]).toMatchObject({ title: '搜索结果', like_count: 5 });
+    });
+
+    it('wraps HTTP, parse, network, and empty-result failures', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 503 })));
+        await expect(cmd.func(null, { query: 'AI', limit: 5 })).rejects.toThrow(CommandExecutionError);
+
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not-json-card', { status: 200 })));
+        await expect(cmd.func(null, { query: 'AI', limit: 5 })).rejects.toThrow(EmptyResultError);
+
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+        await expect(cmd.func(null, { query: 'AI', limit: 5 })).rejects.toThrow(CommandExecutionError);
     });
 });
 
