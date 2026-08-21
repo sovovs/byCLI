@@ -46,6 +46,10 @@ describe('weixin create-draft command', () => {
 
         expect(command.description).toContain('官方 API');
         expect(command.example).toContain('--content-format html');
+        expect(command.browser).toBe('conditional');
+        expect(command.requiresBrowser({})).toBe(true);
+        expect(command.requiresBrowser({ appid: 'wx123', appsecret: 'secret' })).toBe(false);
+        expect(() => command.requiresBrowser({ appid: 'wx123' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
         expect(args.content.help).toContain('--content-file');
         expect(args['content-format'].help).toContain('text=纯文本');
         expect(args.appid.help).toContain('不打开浏览器');

@@ -28297,7 +28297,7 @@
     "example": "bycli weixin create-draft --title \"文章标题\" --content-file article.html --content-format html --cover-image cover.jpg",
     "domain": "mp.weixin.qq.com",
     "strategy": "cookie",
-    "browser": true,
+    "browser": "conditional",
     "args": [
       {
         "name": "title",

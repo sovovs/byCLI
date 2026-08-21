@@ -41,6 +41,20 @@ function validateCoverImage(value) {
     return coverPath;
 }
 
+function readApiCredentials(kwargs) {
+    const appid = kwargs.appid == null ? '' : String(kwargs.appid).trim();
+    const appsecret = kwargs.appsecret == null ? '' : String(kwargs.appsecret).trim();
+    if (Boolean(appid) !== Boolean(appsecret)) {
+        throw new ArgumentError('appid and appsecret must be provided together');
+    }
+    return { appid: appid || null, appsecret: appsecret || null };
+}
+
+function requiresBrowser(kwargs) {
+    const { appid, appsecret } = readApiCredentials(kwargs);
+    return !(appid && appsecret);
+}
+
 function normalizeCreateDraftArgs(kwargs) {
     const title = requiredText(kwargs.title, 'title');
     if (codePointLength(title) > MAX_TITLE_LENGTH) {
@@ -55,11 +69,7 @@ function normalizeCreateDraftArgs(kwargs) {
         contentFile: kwargs['content-file'],
         contentFormat: kwargs['content-format'],
     });
-    const appid = kwargs.appid == null ? '' : String(kwargs.appid).trim();
-    const appsecret = kwargs.appsecret == null ? '' : String(kwargs.appsecret).trim();
-    if (Boolean(appid) !== Boolean(appsecret)) {
-        throw new ArgumentError('appid and appsecret must be provided together');
-    }
+    const { appid, appsecret } = readApiCredentials(kwargs);
     return {
         title,
         ...draftContent,
@@ -67,8 +77,8 @@ function normalizeCreateDraftArgs(kwargs) {
         summary: kwargs.summary == null ? null : String(kwargs.summary).trim(),
         coverImage: validateCoverImage(kwargs['cover-image']),
         dryRun: kwargs['dry-run'] === true,
-        appid: appid || null,
-        appsecret: appsecret || null,
+        appid,
+        appsecret,
     };
 }
 
@@ -361,7 +371,7 @@ export const createDraftCommand = cli({
     example: 'bycli weixin create-draft --title "文章标题" --content-file article.html --content-format html --cover-image cover.jpg',
     domain: WEIXIN_DOMAIN,
     strategy: Strategy.COOKIE,
-    browser: true,
+    browser: requiresBrowser,
     navigateBefore: false,
     args: [
         { name: 'title', required: true, help: '文章标题（最长 64 字）' },
