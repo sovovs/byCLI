@@ -1178,6 +1178,66 @@
     "navigateBefore": false
   },
   {
+    "site": "52pojie",
+    "name": "search",
+    "description": "Search 52pojie",
+    "access": "read",
+    "domain": "www.52pojie.cn",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of threads (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "section",
+        "type": "str",
+        "required": false,
+        "help": "Forum section identifier"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "required": false,
+        "help": "Sort order: relevance, latest, replies, views"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "52pojie/search.js",
+    "sourceFile": "52pojie/search.js"
+  },
+  {
     "site": "aibase",
     "name": "news",
     "description": "AIbase 日报 - 每天三分钟关注AI行业趋势",
@@ -25119,6 +25179,72 @@
     "modulePath": "tdx/hot-rank.js",
     "sourceFile": "tdx/hot-rank.js",
     "navigateBefore": true
+  },
+  {
+    "site": "threads",
+    "name": "search",
+    "description": "Search Threads",
+    "access": "read",
+    "domain": "www.threads.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of posts (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "author",
+        "type": "str",
+        "required": false,
+        "help": "Filter by author handle"
+      },
+      {
+        "name": "since",
+        "type": "str",
+        "required": false,
+        "help": "Only posts on or after YYYY-MM-DD"
+      },
+      {
+        "name": "until",
+        "type": "str",
+        "required": false,
+        "help": "Only posts on or before YYYY-MM-DD"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "threads/search.js",
+    "sourceFile": "threads/search.js"
   },
   {
     "site": "ths",
