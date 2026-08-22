@@ -29,6 +29,27 @@ bycli 12306 stations 北京        # 公开命令,无需登录
 bycli juejin search bycli        # 掘金搜索
 ```
 
+### 搜索适配器
+
+当前可用的搜索命令包括:
+
+```bash
+bycli baidu search "open cli" --limit 10 --page 1 --site github.com
+bycli bing search "open cli" --freshness week --market zh-CN
+bycli yandex search "open cli" --lr 213 --sort date
+bycli so search "open cli" --type news
+bycli sogou search "open cli" --time week --sort date
+bycli gitlab search runner --scope issues --order-by updated_at --sort desc
+bycli csdn search "node cli" --content-type blog --sort latest
+bycli threads search "open cli" --author alice
+bycli 52pojie search "open cli" --sort latest
+```
+
+这些命令会尽量提供 `--limit`、分页、排序、时间、区域、类型等参数，
+并返回包含排名、标题、URL、摘要、结果类型、作者、发布时间、评分和平台专属
+`extra` 字段的结构化结果。适配器使用公开页面或当前浏览器会话；遇到登录、验证码
+或反爬页面时会返回明确的类型化错误，而不是伪造空结果。
+
 ## 许可证
 
 基于 [Apache License 2.0](./LICENSE) 开源。
