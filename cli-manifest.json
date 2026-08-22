@@ -1856,6 +1856,78 @@
     "sourceFile": "arxiv/search.js"
   },
   {
+    "site": "baidu",
+    "name": "search",
+    "description": "Search Baidu",
+    "access": "read",
+    "domain": "www.baidu.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "site",
+        "type": "str",
+        "required": false,
+        "help": "Restrict results to a domain"
+      },
+      {
+        "name": "filetype",
+        "type": "str",
+        "required": false,
+        "help": "File type: pdf, doc, xls, ppt, rtf, all"
+      },
+      {
+        "name": "platform",
+        "type": "str",
+        "required": false,
+        "help": "Client platform: pc or mobile"
+      },
+      {
+        "name": "time",
+        "type": "str",
+        "required": false,
+        "help": "Recent time filter understood by Baidu"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "baidu/search.js",
+    "sourceFile": "baidu/search.js"
+  },
+  {
     "site": "baidu-scholar",
     "name": "search",
     "description": "百度学术搜索",
@@ -3264,6 +3336,78 @@
     "type": "js",
     "modulePath": "binance/trades.js",
     "sourceFile": "binance/trades.js"
+  },
+  {
+    "site": "bing",
+    "name": "search",
+    "description": "Search Bing",
+    "access": "read",
+    "domain": "www.bing.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "freshness",
+        "type": "str",
+        "required": false,
+        "help": "Time range: day, week, month, year"
+      },
+      {
+        "name": "market",
+        "type": "str",
+        "required": false,
+        "help": "Market code such as en-US or zh-CN"
+      },
+      {
+        "name": "answer",
+        "type": "str",
+        "required": false,
+        "help": "Result scope: web, news, video, images"
+      },
+      {
+        "name": "safe",
+        "type": "str",
+        "required": false,
+        "help": "Safe search: off, moderate, strict"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "bing/search.js",
+    "sourceFile": "bing/search.js"
   },
   {
     "site": "bloomberg",
@@ -23469,6 +23613,132 @@
     "navigateBefore": "https://www.smzdm.com"
   },
   {
+    "site": "so",
+    "name": "search",
+    "description": "Search 360 Search",
+    "access": "read",
+    "domain": "so.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "type",
+        "type": "str",
+        "required": false,
+        "help": "Result type: web, news, video, image"
+      },
+      {
+        "name": "safe",
+        "type": "str",
+        "required": false,
+        "help": "Safe search: off or on"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "so/search.js",
+    "sourceFile": "so/search.js"
+  },
+  {
+    "site": "sogou",
+    "name": "search",
+    "description": "Search Sogou",
+    "access": "read",
+    "domain": "sogou.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "type",
+        "type": "str",
+        "required": false,
+        "help": "Result type: web, news, video, image"
+      },
+      {
+        "name": "time",
+        "type": "str",
+        "required": false,
+        "help": "Time range: day, week, month, year"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "required": false,
+        "help": "Sort order: relevance or date"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "sogou/search.js",
+    "sourceFile": "sogou/search.js"
+  },
+  {
     "site": "spotify",
     "name": "auth",
     "description": "Authenticate with Spotify (OAuth — run once)",
@@ -31442,6 +31712,72 @@
     "modulePath": "yahoo-finance/quote.js",
     "sourceFile": "yahoo-finance/quote.js",
     "navigateBefore": "https://finance.yahoo.com"
+  },
+  {
+    "site": "yandex",
+    "name": "search",
+    "description": "Search Yandex",
+    "access": "read",
+    "domain": "yandex.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "lr",
+        "type": "str",
+        "required": false,
+        "help": "Yandex region code"
+      },
+      {
+        "name": "lang",
+        "type": "str",
+        "required": false,
+        "help": "Language code"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "required": false,
+        "help": "Sort order: relevance or date"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "yandex/search.js",
+    "sourceFile": "yandex/search.js"
   },
   {
     "site": "yollomi",
