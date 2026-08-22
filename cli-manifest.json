@@ -6867,6 +6867,72 @@
     "sourceFile": "crates/search.js"
   },
   {
+    "site": "csdn",
+    "name": "search",
+    "description": "Search CSDN",
+    "access": "read",
+    "domain": "so.csdn.net",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "content-type",
+        "type": "str",
+        "required": false,
+        "help": "Content type: all, blog, download, course"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "required": false,
+        "help": "Sort order: relevance, latest, hot"
+      },
+      {
+        "name": "time",
+        "type": "str",
+        "required": false,
+        "help": "Time range: day, week, month, year"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "csdn/search.js",
+    "sourceFile": "csdn/search.js"
+  },
+  {
     "site": "ctrip",
     "name": "flight",
     "description": "搜索携程一程机票（按出发/到达 IATA 三字码 + 日期）",
@@ -11678,6 +11744,72 @@
     "type": "js",
     "modulePath": "github/search.js",
     "sourceFile": "github/search.js"
+  },
+  {
+    "site": "gitlab",
+    "name": "search",
+    "description": "Search GitLab",
+    "access": "read",
+    "domain": "gitlab.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "keyword",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Search query"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results (1-50)"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Result page number"
+      },
+      {
+        "name": "scope",
+        "type": "str",
+        "required": false,
+        "help": "Search scope: projects, issues, merge_requests, commits, blobs, users"
+      },
+      {
+        "name": "order-by",
+        "type": "str",
+        "required": false,
+        "help": "Order by: created_at, updated_at, latest_activity_at"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "required": false,
+        "help": "Sort direction: asc or desc"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "url",
+      "snippet",
+      "displayUrl",
+      "source",
+      "resultType",
+      "author",
+      "publishedAt",
+      "score",
+      "extra"
+    ],
+    "type": "js",
+    "modulePath": "gitlab/search.js",
+    "sourceFile": "gitlab/search.js"
   },
   {
     "site": "google",
