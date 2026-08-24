@@ -7,6 +7,7 @@
  */
 
 import { UI_BINDING_NAME, UI_LISTENER_SOURCE, MAX_UI_EVENTS, parseUiEvent, type UserActionEvent } from './ui-capture';
+import { ImaReaderAuthStore, isImaReaderRequest } from './ima-reader';
 import { maskUrlAuthTokens } from './url-redact';
 
 const attached = new Set<number>();
@@ -76,6 +77,42 @@ const CDP_REQUEST_BODY_CAPTURE_LIMIT = 1 * 1024 * 1024;
 // WebSocket(kind='cdp-websocket'):单帧 payload 截断上限 + 单连接帧数上限(背压)。
 const CDP_WS_FRAME_CAPTURE_LIMIT = 256 * 1024;
 const MAX_WS_FRAMES_PER_CONN = 500;
+const IMA_READER_AUTH_BINDING = '__bycli_ima_reader_auth';
+const IMA_READER_AUTH_CAPTURE_SOURCE = String.raw`
+(() => {
+  if (window.__bycliImaReaderAuthCaptureInstalled) return;
+  window.__bycliImaReaderAuthCaptureInstalled = true;
+  const report = (url, headers) => {
+    try {
+      const normalized = Object.fromEntries(Object.entries(headers || {}).map(([key, value]) => [String(key).toLowerCase(), String(value)]));
+      if (normalized['x-ima-cookie'] && typeof window.${IMA_READER_AUTH_BINDING} === 'function') {
+        window.${IMA_READER_AUTH_BINDING}(JSON.stringify({ url: String(url), headers: normalized }));
+      }
+    } catch {}
+  };
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    try {
+      const request = new Request(input, init);
+      report(request.url, Object.fromEntries(request.headers.entries()));
+    } catch {}
+    return originalFetch.apply(this, arguments);
+  };
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this.__bycliImaReaderUrl = String(url);
+    this.__bycliImaReaderHeaders = {};
+    return originalOpen.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+    try {
+      this.__bycliImaReaderHeaders[String(name).toLowerCase()] = String(value);
+      report(this.__bycliImaReaderUrl, this.__bycliImaReaderHeaders);
+    } catch {}
+    return originalSetRequestHeader.apply(this, arguments);
+  };
+})();`;
 
 type WebSocketFrame = {
   direction: 'sent' | 'received';
@@ -138,6 +175,24 @@ export type DownloadWaitResult = {
 };
 
 const networkCaptures = new Map<number, NetworkCaptureState>();
+const imaReaderAuthStore = new ImaReaderAuthStore();
+const imaReaderCaptureTabs = new Set<number>();
+const imaReaderRequestUrls = new Map<number, Map<string, string>>();
+let imaReaderFetchListenerRegistered = false;
+
+function ensureImaReaderFetchListener(): void {
+  if (imaReaderFetchListenerRegistered) return;
+  imaReaderFetchListenerRegistered = true;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    if (method !== 'Fetch.requestPaused' || !source.tabId || !imaReaderCaptureTabs.has(source.tabId)) return;
+    const request = (params as { requestId?: string; request?: { url?: string; headers?: Record<string, unknown> } } | undefined);
+    if (!request?.requestId || !isImaReaderRequest(request.request?.url)) return;
+    imaReaderAuthStore.capture(source.tabId, request.request ?? {});
+    chrome.debugger.sendCommand({ tabId: source.tabId }, 'Fetch.continueRequest', {
+      requestId: request.requestId,
+    }).catch(() => {});
+  });
+}
 
 // 采集录制 DevTools 的 Fetch/XHR，以及导航产生的 Document 响应。
 // Document 往往包含服务端嵌入的初始分析数据；其余静态资源仍排除。
@@ -897,6 +952,57 @@ export async function readNetworkCapture(tabId: number, filter?: CaptureFrameFil
   return entries;
 }
 
+export async function startImaReaderAuthCapture(tabId: number): Promise<void> {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, 'Network.enable');
+  ensureImaReaderFetchListener();
+  await chrome.debugger.sendCommand({ tabId }, 'Fetch.enable', {
+    patterns: [
+      { urlPattern: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/*', requestStage: 'Request' },
+      { urlPattern: 'https://ima.qq.com/cgi-bin/activity_tab/get_available_activities', requestStage: 'Request' },
+    ],
+  });
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.addBinding', { name: IMA_READER_AUTH_BINDING });
+  await chrome.debugger.sendCommand({ tabId }, 'Page.addScriptToEvaluateOnNewDocument', {
+    source: IMA_READER_AUTH_CAPTURE_SOURCE,
+  });
+  await evaluate(tabId, IMA_READER_AUTH_CAPTURE_SOURCE, true);
+  imaReaderCaptureTabs.add(tabId);
+}
+
+export function readImaReaderAuth(tabId: number): { authId: string } | null {
+  return imaReaderAuthStore.read(tabId);
+}
+
+function readerRequestExpression(headers: Record<string, string>, path: string, body: Record<string, unknown>): string {
+  const url = `https://ima.qq.com/cgi-bin/knowledge_tab_reader${path}`;
+  const requestHeaders = { 'content-type': 'application/json', ...headers };
+  return `(async () => {
+    const response = await fetch(${JSON.stringify(url)}, {
+      method: 'POST', credentials: 'include', redirect: 'error',
+      headers: ${JSON.stringify(requestHeaders)}, body: ${JSON.stringify(JSON.stringify(body))},
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error('ima reader API returned HTTP ' + response.status);
+    return response.json();
+  })()`;
+}
+
+export async function requestImaReader(
+  tabId: number,
+  authId: string,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return imaReaderAuthStore.request(tabId, authId, path, body, async (headers, requestBody) => (
+    evaluate(tabId, readerRequestExpression(headers, path, requestBody), true)
+  ));
+}
+
+export function releaseImaReaderAuth(authId: string): void {
+  imaReaderAuthStore.release(authId);
+}
+
 /** embedded_iframe 目标 iframe 解析出多候选 → be 回 ambiguous_iframe_target 让 UI 提示用户澄清。 */
 export class AmbiguousIframeTargetError extends Error {
   readonly code = 'ambiguous_iframe_target' as const;
@@ -988,7 +1094,7 @@ function applyFrameFilter<T extends { frameSessionId?: string }>(
 }
 
 export function hasActiveNetworkCapture(tabId: number): boolean {
-  return networkCaptures.has(tabId);
+  return networkCaptures.has(tabId) || imaReaderCaptureTabs.has(tabId);
 }
 
 // ── UI 节点录制(M-UI-1)────────────────────────────────────────────────────
@@ -1061,6 +1167,7 @@ function ensureFetchListener(): void {
       const requestId = p?.requestId as string;
       const url = (p?.request?.url as string) ?? '';
       const resourceType = p?.resourceType as string | undefined;
+      if (imaReaderCaptureTabs.has(tabId) && isImaReaderRequest(url)) return;
       // Only enforce on top-level documents; let sub-resources through unmodified.
       if (resourceType !== 'Document') {
         chrome.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId }).catch(() => {});
@@ -1100,7 +1207,16 @@ export async function armFetchGuard(
     // Network domain enables remoteIPAddress observation (ip-observed-only).
     await chrome.debugger.sendCommand({ tabId }, 'Network.enable').catch(() => {});
     await chrome.debugger.sendCommand({ tabId }, 'Fetch.enable', {
-      patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Request' }],
+      patterns: [
+        { urlPattern: '*', resourceType: 'Document', requestStage: 'Request' },
+        ...(imaReaderCaptureTabs.has(tabId) ? [{
+          urlPattern: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/*',
+          requestStage: 'Request',
+        }, {
+          urlPattern: 'https://ima.qq.com/cgi-bin/activity_tab/get_available_activities',
+          requestStage: 'Request',
+        }] : []),
+      ],
     });
   } catch (e) {
     fetchGuards.delete(tabId);
@@ -1145,6 +1261,8 @@ export async function detach(tabId: number): Promise<void> {
   clearFrameTargetsForTab(tabId);
   clearChildSessionsForTab(tabId);
   networkCaptures.delete(tabId);
+  imaReaderCaptureTabs.delete(tabId);
+  imaReaderRequestUrls.delete(tabId);
   uiCaptures.delete(tabId);
   fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
@@ -1157,6 +1275,8 @@ export function registerListeners(): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    imaReaderCaptureTabs.delete(tabId);
+    imaReaderRequestUrls.delete(tabId);
   uiCaptures.delete(tabId);
     fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
@@ -1167,6 +1287,8 @@ export function registerListeners(): void {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      imaReaderCaptureTabs.delete(source.tabId);
+      imaReaderRequestUrls.delete(source.tabId);
       uiCaptures.delete(source.tabId);
       fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
@@ -1237,6 +1359,15 @@ export function registerListeners(): void {
     // UI 录制(M-UI-1):注入脚本调 window.__bycli_ui → Runtime.bindingCalled。先于 network 守卫处理。
     if (method === 'Runtime.bindingCalled') {
       const bp = params as { name?: string; payload?: string } | undefined;
+      if (bp?.name === IMA_READER_AUTH_BINDING) {
+        if (imaReaderCaptureTabs.has(tabId)) {
+          try {
+            const request = JSON.parse(String(bp.payload ?? '')) as { url?: string; headers?: Record<string, unknown> };
+            imaReaderAuthStore.capture(tabId, request);
+          } catch { /* Untrusted page payload: ignore malformed data. */ }
+        }
+        return;
+      }
       if (bp?.name === UI_BINDING_NAME) {
         const ui = uiCaptures.get(tabId);
         if (ui) {
@@ -1254,14 +1385,10 @@ export function registerListeners(): void {
       }
       return;
     }
-    const state = networkCaptures.get(tabId);
-    if (!state) return;
     const eventParams = params as Record<string, any> | undefined;
+    const state = networkCaptures.get(tabId);
 
     if (method === 'Network.requestWillBeSent') {
-      // 只收 Fetch/XHR(DevTools Network「Fetch/XHR」同款过滤);静态资源直接丢弃。
-      if (!isApiResourceType(eventParams?.type)) return;
-      const requestId = String(eventParams?.requestId || '');
       const request = eventParams?.request as {
         url?: string;
         method?: string;
@@ -1269,6 +1396,23 @@ export function registerListeners(): void {
         postData?: string;
         hasPostData?: boolean;
       } | undefined;
+      if (isImaReaderRequest(request?.url)) {
+        const requestKey = reqKey(sessionId, String(eventParams?.requestId || ''));
+        let requests = imaReaderRequestUrls.get(tabId);
+        if (!requests) {
+          requests = new Map();
+          imaReaderRequestUrls.set(tabId, requests);
+        }
+        requests.set(requestKey, request?.url ?? '');
+        if (imaReaderCaptureTabs.has(tabId) && imaReaderAuthStore.capture(tabId, request ?? {})) {
+          requests.delete(requestKey);
+        }
+        return;
+      }
+      if (!state) return;
+      // 只收 Fetch/XHR(DevTools Network「Fetch/XHR」同款过滤);静态资源直接丢弃。
+      if (!isApiResourceType(eventParams?.type)) return;
+      const requestId = String(eventParams?.requestId || '');
       const entry = getOrCreateNetworkCaptureEntry(tabId, reqKey(sessionId, requestId), {
         url: maskUrlAuthTokens(request?.url),
         method: request?.method,
@@ -1310,6 +1454,19 @@ export function registerListeners(): void {
       }
       return;
     }
+
+    if (method === 'Network.requestWillBeSentExtraInfo') {
+      const requestKey = reqKey(sessionId, String(eventParams?.requestId || ''));
+      const requests = imaReaderRequestUrls.get(tabId);
+      const url = requests?.get(requestKey);
+      if (url && imaReaderCaptureTabs.has(tabId)
+        && imaReaderAuthStore.capture(tabId, { url, headers: eventParams?.headers })) {
+        requests?.delete(requestKey);
+      }
+      return;
+    }
+
+    if (!state) return;
 
     if (method === 'Network.responseReceived') {
       const requestId = String(eventParams?.requestId || '');

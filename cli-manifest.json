@@ -13547,6 +13547,38 @@
     "navigateBefore": false
   },
   {
+    "site": "ima",
+    "name": "knowledge",
+    "description": "按名称或 ID 获取 ima 知识库中的文章标题、URL 与文件夹路径",
+    "access": "read",
+    "domain": "ima.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "knowledgeBase",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "知识库的完整名称或 ima 页面中的 knowledgeBaseId"
+      }
+    ],
+    "columns": [
+      "knowledgeBaseId",
+      "knowledgeBase",
+      "folderPath",
+      "title",
+      "url",
+      "contentType",
+      "addedDate"
+    ],
+    "defaultFormat": "json",
+    "type": "js",
+    "modulePath": "ima/knowledge.js",
+    "sourceFile": "ima/knowledge.js",
+    "navigateBefore": false
+  },
+  {
     "site": "imdb",
     "name": "person",
     "description": "Get actor or director info",

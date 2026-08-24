@@ -319,6 +319,29 @@ export class Page extends BasePage {
     }
   }
 
+  async startImaAuthCapture(): Promise<void> {
+    await sendCommand('ima-auth-start', this._cmdOpts());
+  }
+
+  async readImaAuth(): Promise<{ authId: string } | null> {
+    const result = await sendCommand('ima-auth-read', this._cmdOpts());
+    if (!result || typeof result !== 'object' || typeof (result as { authId?: unknown }).authId !== 'string') return null;
+    return { authId: (result as { authId: string }).authId };
+  }
+
+  async requestImaReader(authId: string, path: string, body: Record<string, unknown>): Promise<unknown> {
+    return sendCommand('ima-reader-request', {
+      authId,
+      readerPath: path,
+      readerBody: body,
+      ...this._cmdOpts(),
+    });
+  }
+
+  async releaseImaAuth(authId: string): Promise<void> {
+    await sendCommand('ima-auth-release', { authId, ...this._cmdOpts() });
+  }
+
   async waitForDownload(
     pattern: string = '',
     timeoutMs: number = 30_000,

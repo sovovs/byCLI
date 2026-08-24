@@ -566,6 +566,104 @@ describe('network capture · Fetch/XHR filter + WebSocket frames', () => {
     for (const fn of listeners) await fn({ tabId }, method, params);
   }
 
+  it('captures ima reader auth privately and excludes it from generic capture', async () => {
+    const { chrome, debuggerEventListeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const mod = await import('./cdp');
+    mod.registerListeners();
+    await mod.startImaReaderAuthCapture(1);
+    expect(mod.hasActiveNetworkCapture(1)).toBe(true);
+    await mod.startNetworkCapture(1);
+
+    await emitAll(debuggerEventListeners, 1, 'Network.requestWillBeSent', {
+      requestId: 'reader', type: 'Fetch', request: {
+        url: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/get_knowledge_list',
+        method: 'POST',
+        headers: { 'x-ima-cookie': 'IMA-TOKEN=secret', 'x-ima-bkn': '123' },
+      },
+    });
+
+    expect(mod.readImaReaderAuth(1)).toEqual({ authId: expect.any(String) });
+    expect(JSON.stringify(await mod.readNetworkCapture(1))).not.toContain('IMA-TOKEN=secret');
+  });
+
+  it('captures reader auth from the CDP extra-info headers event', async () => {
+    const { chrome, debuggerEventListeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const mod = await import('./cdp');
+    mod.registerListeners();
+    await mod.startImaReaderAuthCapture(1);
+
+    await emitAll(debuggerEventListeners, 1, 'Network.requestWillBeSent', {
+      requestId: 'reader-extra', type: 'Fetch', request: {
+        url: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/get_home_page_data',
+        method: 'POST', headers: {},
+      },
+    });
+    await emitAll(debuggerEventListeners, 1, 'Network.requestWillBeSentExtraInfo', {
+      requestId: 'reader-extra',
+      headers: { 'x-ima-cookie': 'IMA-TOKEN=secret' },
+    });
+
+    expect(mod.readImaReaderAuth(1)).toEqual({ authId: expect.any(String) });
+  });
+
+  it('captures reader auth from the page binding when CDP network events omit custom headers', async () => {
+    const { chrome, debuggerEventListeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const mod = await import('./cdp');
+    mod.registerListeners();
+    await mod.startImaReaderAuthCapture(1);
+
+    await emitAll(debuggerEventListeners, 1, 'Runtime.bindingCalled', {
+      name: '__bycli_ima_reader_auth',
+      payload: JSON.stringify({
+        url: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/get_home_page_data',
+        headers: { 'x-ima-cookie': 'IMA-TOKEN=secret' },
+      }),
+    });
+
+    expect(mod.readImaReaderAuth(1)).toEqual({ authId: expect.any(String) });
+  });
+
+  it('captures reader auth from Fetch interception before the request is sent', async () => {
+    const { chrome, debuggerEventListeners, debuggerApi } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const mod = await import('./cdp');
+    mod.registerListeners();
+    await mod.startImaReaderAuthCapture(1);
+
+    await emitAll(debuggerEventListeners, 1, 'Fetch.requestPaused', {
+      requestId: 'reader-paused', resourceType: 'Fetch', request: {
+        url: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/get_home_page_data',
+        headers: { 'x-ima-cookie': 'IMA-TOKEN=secret' },
+      },
+    });
+
+    expect(mod.readImaReaderAuth(1)).toEqual({ authId: expect.any(String) });
+    expect(debuggerApi.sendCommand).toHaveBeenCalledWith(
+      { tabId: 1 }, 'Fetch.continueRequest', { requestId: 'reader-paused' },
+    );
+  });
+
+  it('never records ima reader headers in generic capture when private auth is not armed', async () => {
+    const { chrome, debuggerEventListeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const mod = await import('./cdp');
+    mod.registerListeners();
+    await mod.startNetworkCapture(1);
+
+    await emitAll(debuggerEventListeners, 1, 'Network.requestWillBeSent', {
+      requestId: 'reader', type: 'Fetch', request: {
+        url: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/get_knowledge_list',
+        method: 'POST',
+        headers: { 'x-ima-cookie': 'IMA-TOKEN=secret', 'x-ima-bkn': '123' },
+      },
+    });
+
+    expect(await mod.readNetworkCapture(1)).toEqual([]);
+  });
+
   it('records Fetch/XHR and Document responses; drops Script and Image resources', async () => {
     const { chrome, debuggerEventListeners } = createChromeMock();
     vi.stubGlobal('chrome', chrome);

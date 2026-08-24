@@ -55,6 +55,22 @@ describe('Page.focusWindow', () => {
     });
   });
 
+  it('sends ima reader requests with an opaque auth ID rather than credential headers', async () => {
+    const page = new Page('ima', undefined, 'profile-1', undefined, 'adapter');
+    page.setActivePage('ima-tab');
+    sendCommandMock.mockResolvedValueOnce({ started: true });
+    sendCommandMock.mockResolvedValueOnce({ code: 0 });
+
+    await page.startImaAuthCapture();
+    await page.requestImaReader('opaque-id', '/get_knowledge_list', { cursor: '' });
+
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 'ima-auth-start', expect.objectContaining({ page: 'ima-tab' }));
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 'ima-reader-request', expect.objectContaining({
+      authId: 'opaque-id', readerPath: '/get_knowledge_list', readerBody: { cursor: '' },
+    }));
+    expect(JSON.stringify(sendCommandMock.mock.calls)).not.toContain('x-ima-cookie');
+  });
+
   it('rejects an old extension before sending an unsupported focus command', async () => {
     fetchDaemonStatusMock.mockResolvedValueOnce({
       extensionConnected: true,

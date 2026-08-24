@@ -135,6 +135,80 @@ const UI_LISTENER_SOURCE = `(function(){
   window.addEventListener('hashchange', navEmit, { passive:true });
 })();`;
 
+const READER_ORIGIN = "https://ima.qq.com";
+const READER_PREFIX = "/cgi-bin/knowledge_tab_reader/";
+const READER_PATHS = /* @__PURE__ */ new Set([
+  "/get_knowledge_base_list",
+  "/get_knowledge_list"
+]);
+const AUTH_SOURCE_PATHS = /* @__PURE__ */ new Set([
+  "/cgi-bin/activity_tab/get_available_activities"
+]);
+const AUTH_TTL_MS = 3e4;
+function normalizedHeaders(headers) {
+  const allowed = /* @__PURE__ */ new Set([
+    "x-ima-cookie",
+    "x-ima-bkn",
+    "extension_version",
+    "from_browser_ima"
+  ]);
+  return Object.fromEntries(Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), String(value)]).filter(([name]) => allowed.has(name)));
+}
+function isImaReaderRequest(url) {
+  try {
+    const parsed = new URL(url ?? "");
+    return parsed.origin === READER_ORIGIN && (parsed.pathname.startsWith(READER_PREFIX) || AUTH_SOURCE_PATHS.has(parsed.pathname));
+  } catch {
+    return false;
+  }
+}
+function imaBknFromCookie(cookie) {
+  const token = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("IMA-TOKEN="))?.slice("IMA-TOKEN=".length);
+  if (!token) return null;
+  let hash = 5381;
+  for (const character of token) hash += (hash << 5) + character.charCodeAt(0);
+  return String(hash & 2147483647);
+}
+class ImaReaderAuthStore {
+  sessions = /* @__PURE__ */ new Map();
+  capture(tabId, request) {
+    if (!isImaReaderRequest(request.url)) return false;
+    const headers = normalizedHeaders(request.headers);
+    if (!headers["x-ima-cookie"]) return false;
+    headers["x-ima-bkn"] ??= imaBknFromCookie(headers["x-ima-cookie"]) ?? "";
+    if (!headers["x-ima-bkn"]) return false;
+    const existing = this.sessions.get(tabId);
+    this.sessions.set(tabId, {
+      authId: existing && existing.expiresAt > Date.now() ? existing.authId : crypto.randomUUID(),
+      expiresAt: Date.now() + AUTH_TTL_MS,
+      headers
+    });
+    return true;
+  }
+  read(tabId) {
+    const session = this.sessions.get(tabId);
+    if (!session || session.expiresAt <= Date.now()) {
+      this.sessions.delete(tabId);
+      return null;
+    }
+    return { authId: session.authId };
+  }
+  async request(tabId, authId, path, body, perform) {
+    if (!READER_PATHS.has(path)) throw new Error(`ima reader path is not allowed: ${path}`);
+    const session = this.sessions.get(tabId);
+    if (session?.authId === authId) {
+      if (session.expiresAt <= Date.now()) this.sessions.delete(tabId);
+      else return perform(session.headers, body);
+    }
+    throw new Error("ima reader authentication is missing or expired");
+  }
+  release(authId) {
+    for (const [tabId, session] of this.sessions) {
+      if (session.authId === authId) this.sessions.delete(tabId);
+    }
+  }
+}
+
 const attached = /* @__PURE__ */ new Set();
 const tabFrameContexts = /* @__PURE__ */ new Map();
 const frameTargets = /* @__PURE__ */ new Map();
@@ -181,7 +255,61 @@ const CDP_RESPONSE_BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
 const CDP_REQUEST_BODY_CAPTURE_LIMIT = 1 * 1024 * 1024;
 const CDP_WS_FRAME_CAPTURE_LIMIT = 256 * 1024;
 const MAX_WS_FRAMES_PER_CONN = 500;
+const IMA_READER_AUTH_BINDING = "__bycli_ima_reader_auth";
+const IMA_READER_AUTH_CAPTURE_SOURCE = String.raw`
+(() => {
+  if (window.__bycliImaReaderAuthCaptureInstalled) return;
+  window.__bycliImaReaderAuthCaptureInstalled = true;
+  const report = (url, headers) => {
+    try {
+      const normalized = Object.fromEntries(Object.entries(headers || {}).map(([key, value]) => [String(key).toLowerCase(), String(value)]));
+      if (normalized['x-ima-cookie'] && typeof window.${IMA_READER_AUTH_BINDING} === 'function') {
+        window.${IMA_READER_AUTH_BINDING}(JSON.stringify({ url: String(url), headers: normalized }));
+      }
+    } catch {}
+  };
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    try {
+      const request = new Request(input, init);
+      report(request.url, Object.fromEntries(request.headers.entries()));
+    } catch {}
+    return originalFetch.apply(this, arguments);
+  };
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this.__bycliImaReaderUrl = String(url);
+    this.__bycliImaReaderHeaders = {};
+    return originalOpen.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+    try {
+      this.__bycliImaReaderHeaders[String(name).toLowerCase()] = String(value);
+      report(this.__bycliImaReaderUrl, this.__bycliImaReaderHeaders);
+    } catch {}
+    return originalSetRequestHeader.apply(this, arguments);
+  };
+})();`;
 const networkCaptures = /* @__PURE__ */ new Map();
+const imaReaderAuthStore = new ImaReaderAuthStore();
+const imaReaderCaptureTabs = /* @__PURE__ */ new Set();
+const imaReaderRequestUrls = /* @__PURE__ */ new Map();
+let imaReaderFetchListenerRegistered = false;
+function ensureImaReaderFetchListener() {
+  if (imaReaderFetchListenerRegistered) return;
+  imaReaderFetchListenerRegistered = true;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    if (method !== "Fetch.requestPaused" || !source.tabId || !imaReaderCaptureTabs.has(source.tabId)) return;
+    const request = params;
+    if (!request?.requestId || !isImaReaderRequest(request.request?.url)) return;
+    imaReaderAuthStore.capture(source.tabId, request.request ?? {});
+    chrome.debugger.sendCommand({ tabId: source.tabId }, "Fetch.continueRequest", {
+      requestId: request.requestId
+    }).catch(() => {
+    });
+  });
+}
 const CAPTURE_RESOURCE_TYPES = /* @__PURE__ */ new Set(["XHR", "Fetch", "Document"]);
 function isApiResourceType(type) {
   return typeof type === "string" && CAPTURE_RESOURCE_TYPES.has(type);
@@ -718,6 +846,45 @@ async function readNetworkCapture(tabId, filter) {
   state.requestToIndex.clear();
   return entries;
 }
+async function startImaReaderAuthCapture(tabId) {
+  await ensureAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+  ensureImaReaderFetchListener();
+  await chrome.debugger.sendCommand({ tabId }, "Fetch.enable", {
+    patterns: [
+      { urlPattern: "https://ima.qq.com/cgi-bin/knowledge_tab_reader/*", requestStage: "Request" },
+      { urlPattern: "https://ima.qq.com/cgi-bin/activity_tab/get_available_activities", requestStage: "Request" }
+    ]
+  });
+  await chrome.debugger.sendCommand({ tabId }, "Runtime.addBinding", { name: IMA_READER_AUTH_BINDING });
+  await chrome.debugger.sendCommand({ tabId }, "Page.addScriptToEvaluateOnNewDocument", {
+    source: IMA_READER_AUTH_CAPTURE_SOURCE
+  });
+  await evaluate(tabId, IMA_READER_AUTH_CAPTURE_SOURCE, true);
+  imaReaderCaptureTabs.add(tabId);
+}
+function readImaReaderAuth(tabId) {
+  return imaReaderAuthStore.read(tabId);
+}
+function readerRequestExpression(headers, path, body) {
+  const url = `https://ima.qq.com/cgi-bin/knowledge_tab_reader${path}`;
+  const requestHeaders = { "content-type": "application/json", ...headers };
+  return `(async () => {
+    const response = await fetch(${JSON.stringify(url)}, {
+      method: 'POST', credentials: 'include', redirect: 'error',
+      headers: ${JSON.stringify(requestHeaders)}, body: ${JSON.stringify(JSON.stringify(body))},
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error('ima reader API returned HTTP ' + response.status);
+    return response.json();
+  })()`;
+}
+async function requestImaReader(tabId, authId, path, body) {
+  return imaReaderAuthStore.request(tabId, authId, path, body, async (headers, requestBody) => evaluate(tabId, readerRequestExpression(headers, path, requestBody), true));
+}
+function releaseImaReaderAuth(authId) {
+  imaReaderAuthStore.release(authId);
+}
 class AmbiguousIframeTargetError extends Error {
   code = "ambiguous_iframe_target";
   constructor(count) {
@@ -783,7 +950,7 @@ function applyFrameFilter(tabId, items, filter) {
   return { items: items.filter((it) => it.frameSessionId !== void 0 && allow.has(it.frameSessionId)), resolve };
 }
 function hasActiveNetworkCapture(tabId) {
-  return networkCaptures.has(tabId);
+  return networkCaptures.has(tabId) || imaReaderCaptureTabs.has(tabId);
 }
 async function startUiCapture(tabId) {
   await ensureAttached(tabId);
@@ -828,6 +995,7 @@ function ensureFetchListener() {
       const requestId = p?.requestId;
       const url = p?.request?.url ?? "";
       const resourceType = p?.resourceType;
+      if (imaReaderCaptureTabs.has(tabId) && isImaReaderRequest(url)) return;
       if (resourceType !== "Document") {
         chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", { requestId }).catch(() => {
         });
@@ -858,7 +1026,16 @@ async function armFetchGuard(tabId, allow, aggressiveRetry = false) {
     await chrome.debugger.sendCommand({ tabId }, "Network.enable").catch(() => {
     });
     await chrome.debugger.sendCommand({ tabId }, "Fetch.enable", {
-      patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }]
+      patterns: [
+        { urlPattern: "*", resourceType: "Document", requestStage: "Request" },
+        ...imaReaderCaptureTabs.has(tabId) ? [{
+          urlPattern: "https://ima.qq.com/cgi-bin/knowledge_tab_reader/*",
+          requestStage: "Request"
+        }, {
+          urlPattern: "https://ima.qq.com/cgi-bin/activity_tab/get_available_activities",
+          requestStage: "Request"
+        }] : []
+      ]
     });
   } catch (e) {
     fetchGuards.delete(tabId);
@@ -891,6 +1068,8 @@ async function detach(tabId) {
   clearFrameTargetsForTab(tabId);
   clearChildSessionsForTab(tabId);
   networkCaptures.delete(tabId);
+  imaReaderCaptureTabs.delete(tabId);
+  imaReaderRequestUrls.delete(tabId);
   uiCaptures.delete(tabId);
   fetchGuards.delete(tabId);
   tabFrameContexts.delete(tabId);
@@ -905,6 +1084,8 @@ function registerListeners() {
   chrome.tabs.onRemoved.addListener((tabId) => {
     attached.delete(tabId);
     networkCaptures.delete(tabId);
+    imaReaderCaptureTabs.delete(tabId);
+    imaReaderRequestUrls.delete(tabId);
     uiCaptures.delete(tabId);
     fetchGuards.delete(tabId);
     tabFrameContexts.delete(tabId);
@@ -915,6 +1096,8 @@ function registerListeners() {
     if (source.tabId) {
       attached.delete(source.tabId);
       networkCaptures.delete(source.tabId);
+      imaReaderCaptureTabs.delete(source.tabId);
+      imaReaderRequestUrls.delete(source.tabId);
       uiCaptures.delete(source.tabId);
       fetchGuards.delete(source.tabId);
       tabFrameContexts.delete(source.tabId);
@@ -973,6 +1156,16 @@ function registerListeners() {
     const sessionId = eventSessionId;
     if (method === "Runtime.bindingCalled") {
       const bp = params;
+      if (bp?.name === IMA_READER_AUTH_BINDING) {
+        if (imaReaderCaptureTabs.has(tabId)) {
+          try {
+            const request = JSON.parse(String(bp.payload ?? ""));
+            imaReaderAuthStore.capture(tabId, request);
+          } catch {
+          }
+        }
+        return;
+      }
       if (bp?.name === UI_BINDING_NAME) {
         const ui = uiCaptures.get(tabId);
         if (ui) {
@@ -990,13 +1183,26 @@ function registerListeners() {
       }
       return;
     }
-    const state = networkCaptures.get(tabId);
-    if (!state) return;
     const eventParams = params;
+    const state = networkCaptures.get(tabId);
     if (method === "Network.requestWillBeSent") {
+      const request = eventParams?.request;
+      if (isImaReaderRequest(request?.url)) {
+        const requestKey = reqKey(sessionId, String(eventParams?.requestId || ""));
+        let requests = imaReaderRequestUrls.get(tabId);
+        if (!requests) {
+          requests = /* @__PURE__ */ new Map();
+          imaReaderRequestUrls.set(tabId, requests);
+        }
+        requests.set(requestKey, request?.url ?? "");
+        if (imaReaderCaptureTabs.has(tabId) && imaReaderAuthStore.capture(tabId, request ?? {})) {
+          requests.delete(requestKey);
+        }
+        return;
+      }
+      if (!state) return;
       if (!isApiResourceType(eventParams?.type)) return;
       const requestId = String(eventParams?.requestId || "");
-      const request = eventParams?.request;
       const entry = getOrCreateNetworkCaptureEntry(tabId, reqKey(sessionId, requestId), {
         url: maskUrlAuthTokens(request?.url),
         method: request?.method,
@@ -1037,6 +1243,16 @@ function registerListeners() {
       }
       return;
     }
+    if (method === "Network.requestWillBeSentExtraInfo") {
+      const requestKey = reqKey(sessionId, String(eventParams?.requestId || ""));
+      const requests = imaReaderRequestUrls.get(tabId);
+      const url = requests?.get(requestKey);
+      if (url && imaReaderCaptureTabs.has(tabId) && imaReaderAuthStore.capture(tabId, { url, headers: eventParams?.headers })) {
+        requests?.delete(requestKey);
+      }
+      return;
+    }
+    if (!state) return;
     if (method === "Network.responseReceived") {
       const requestId = String(eventParams?.requestId || "");
       const response = eventParams?.response;
@@ -2181,6 +2397,14 @@ async function handleCommand(cmd) {
         return await handleNetworkCaptureStart(cmd, leaseKey);
       case "network-capture-read":
         return await handleNetworkCaptureRead(cmd, leaseKey);
+      case "ima-auth-start":
+        return await handleImaAuthStart(cmd, leaseKey);
+      case "ima-auth-read":
+        return await handleImaAuthRead(cmd, leaseKey);
+      case "ima-reader-request":
+        return await handleImaReaderRequest(cmd, leaseKey);
+      case "ima-auth-release":
+        return await handleImaAuthRelease(cmd, leaseKey);
       case "ui-capture-start":
         return await handleUiCaptureStart(cmd, leaseKey);
       case "ui-capture-read":
@@ -2897,6 +3121,33 @@ async function handleNetworkCaptureRead(cmd, leaseKey) {
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
   }
+}
+async function handleImaAuthStart(cmd, leaseKey) {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  await startImaReaderAuthCapture(tabId);
+  return pageScopedResult(cmd.id, tabId, { started: true });
+}
+async function handleImaAuthRead(cmd, leaseKey) {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  return pageScopedResult(cmd.id, tabId, readImaReaderAuth(tabId));
+}
+async function handleImaReaderRequest(cmd, leaseKey) {
+  if (!cmd.authId || !cmd.readerPath || !cmd.readerBody) {
+    return { id: cmd.id, ok: false, error: "Missing ima reader request payload" };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  const data = await requestImaReader(tabId, cmd.authId, cmd.readerPath, cmd.readerBody);
+  return pageScopedResult(cmd.id, tabId, data);
+}
+async function handleImaAuthRelease(cmd, leaseKey) {
+  if (!cmd.authId) return { id: cmd.id, ok: false, error: "Missing ima reader auth ID" };
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  releaseImaReaderAuth(cmd.authId);
+  return pageScopedResult(cmd.id, tabId, { released: true });
 }
 async function handleUiCaptureStart(cmd, leaseKey) {
   const cmdTabId = await resolveCommandTabId(cmd);

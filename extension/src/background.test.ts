@@ -52,6 +52,48 @@ class MockWebSocket {
   }
 }
 
+describe('private ima reader commands', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    MockWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    vi.stubGlobal('__BYCLI_COMPAT_RANGE__', '>=1.7.0');
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.doUnmock('./cdp'); });
+
+  it('returns opaque auth or reader JSON without returning headers', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    const startImaReaderAuthCapture = vi.fn(async () => {});
+    const readImaReaderAuth = vi.fn(() => ({ authId: 'opaque-id' }));
+    const requestImaReader = vi.fn(async () => ({ code: 0, results: [] }));
+    const releaseImaReaderAuth = vi.fn();
+    vi.doMock('./cdp', () => ({
+      registerListeners: vi.fn(), registerFrameTracking: vi.fn(),
+      hasActiveNetworkCapture: vi.fn(() => false), detach: vi.fn(async () => {}),
+      startImaReaderAuthCapture, readImaReaderAuth, requestImaReader, releaseImaReaderAuth,
+    }));
+
+    const mod = await import('./background');
+    mod.__test__.setAutomationWindowId(adapterKey('ima'), 1);
+
+    const started = await mod.__test__.handleCommand({ id: 'start', action: 'ima-auth-start', session: 'ima', surface: 'adapter' });
+    const auth = await mod.__test__.handleCommand({ id: 'read', action: 'ima-auth-read', session: 'ima', surface: 'adapter' });
+    const response = await mod.__test__.handleCommand({
+      id: 'request', action: 'ima-reader-request', session: 'ima', surface: 'adapter',
+      authId: 'opaque-id', readerPath: '/get_knowledge_list', readerBody: { cursor: '' },
+    });
+    await mod.__test__.handleCommand({ id: 'release', action: 'ima-auth-release', session: 'ima', surface: 'adapter', authId: 'opaque-id' });
+
+    expect(started).toMatchObject({ ok: true, data: { started: true } });
+    expect(auth).toMatchObject({ ok: true, data: { authId: 'opaque-id' } });
+    expect(response).toMatchObject({ ok: true, data: { code: 0, results: [] } });
+    expect(JSON.stringify([started, auth, response])).not.toContain('x-ima-cookie');
+    expect(requestImaReader).toHaveBeenCalledWith(1, 'opaque-id', '/get_knowledge_list', { cursor: '' });
+    expect(releaseImaReaderAuth).toHaveBeenCalledWith('opaque-id');
+  });
+});
+
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;

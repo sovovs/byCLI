@@ -18,6 +18,10 @@ export type Action =
   | 'bind'
   | 'network-capture-start'
   | 'network-capture-read'
+  | 'ima-auth-start'
+  | 'ima-auth-read'
+  | 'ima-reader-request'
+  | 'ima-auth-release'
   | 'ui-capture-start'
   | 'ui-capture-read'
   | 'wait-download'
@@ -86,6 +90,12 @@ export interface Command {
   /** embedded_iframe 录制模式:目标 iframe 的 URL。capture read 时据此把噪音过滤到该 iframe(+descendants)子 session,
    *  丢顶层 dashboard 自己的请求/操作。be 在 embedded_iframe 会话的 captureRead 时下发;tab_projection 不带。 */
   targetFrameUrl?: string;
+  /** Opaque short-lived ima reader authorization ID. */
+  authId?: string;
+  /** Allow-listed ima reader endpoint path. */
+  readerPath?: string;
+  /** JSON body for an allow-listed ima reader endpoint. */
+  readerBody?: Record<string, unknown>;
 }
 
 export interface Result {

@@ -1109,6 +1109,14 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleNetworkCaptureStart(cmd, leaseKey);
       case 'network-capture-read':
         return await handleNetworkCaptureRead(cmd, leaseKey);
+      case 'ima-auth-start':
+        return await handleImaAuthStart(cmd, leaseKey);
+      case 'ima-auth-read':
+        return await handleImaAuthRead(cmd, leaseKey);
+      case 'ima-reader-request':
+        return await handleImaReaderRequest(cmd, leaseKey);
+      case 'ima-auth-release':
+        return await handleImaAuthRelease(cmd, leaseKey);
       case 'ui-capture-start':
         return await handleUiCaptureStart(cmd, leaseKey);
       case 'ui-capture-read':
@@ -1991,6 +1999,37 @@ async function handleNetworkCaptureRead(cmd: Command, leaseKey: string): Promise
   } catch (err) {
     return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err), errorCode: errorCodeOf(err) };
   }
+}
+
+async function handleImaAuthStart(cmd: Command, leaseKey: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  await executor.startImaReaderAuthCapture(tabId);
+  return pageScopedResult(cmd.id, tabId, { started: true });
+}
+
+async function handleImaAuthRead(cmd: Command, leaseKey: string): Promise<Result> {
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  return pageScopedResult(cmd.id, tabId, executor.readImaReaderAuth(tabId));
+}
+
+async function handleImaReaderRequest(cmd: Command, leaseKey: string): Promise<Result> {
+  if (!cmd.authId || !cmd.readerPath || !cmd.readerBody) {
+    return { id: cmd.id, ok: false, error: 'Missing ima reader request payload' };
+  }
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  const data = await executor.requestImaReader(tabId, cmd.authId, cmd.readerPath, cmd.readerBody);
+  return pageScopedResult(cmd.id, tabId, data);
+}
+
+async function handleImaAuthRelease(cmd: Command, leaseKey: string): Promise<Result> {
+  if (!cmd.authId) return { id: cmd.id, ok: false, error: 'Missing ima reader auth ID' };
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  executor.releaseImaReaderAuth(cmd.authId);
+  return pageScopedResult(cmd.id, tabId, { released: true });
 }
 
 async function handleUiCaptureStart(cmd: Command, leaseKey: string): Promise<Result> {
