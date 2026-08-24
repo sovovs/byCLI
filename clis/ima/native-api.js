@@ -4,6 +4,10 @@ const MEDIA_TYPE_NAMES = new Map([
     [12, '问答'], [13, 'TXT'], [14, 'XMIND'], [15, '音频'], [16, '视频网站'],
     [19, '播客'], [20, 'HTML'], [21, 'EPUB'], [98, '源代码'], [99, '文件夹'],
 ]);
+const KNOWLEDGE_BASE_TYPE_NAMES = new Map([
+    [1001, '我的知识库'], [1002, '共享知识库'],
+    [1004, '团队知识库'], [1005, '其他知识库'],
+]);
 function field(value, camelName, snakeName) {
     return value?.[camelName] ?? value?.[snakeName];
 }
@@ -20,6 +24,15 @@ function knowledgeBaseFromRaw(raw) {
     };
 }
 
+function knowledgeBaseRow(raw, type) {
+    return {
+        ...knowledgeBaseFromRaw(raw),
+        type,
+        typeName: KNOWLEDGE_BASE_TYPE_NAMES.get(type) ?? String(type),
+        raw,
+    };
+}
+
 function basesFromGroups(response) {
     const groups = field(response, 'results', 'results');
     if (!Array.isArray(groups)) throw new Error('ima API returned malformed knowledge-base groups');
@@ -29,7 +42,17 @@ function basesFromGroups(response) {
     });
 }
 
-export async function findKnowledgeBase(query, request) {
+function entriesFromGroups(response) {
+    const groups = field(response, 'results', 'results');
+    if (!Array.isArray(groups)) throw new Error('ima API returned malformed knowledge-base groups');
+    return groups.flatMap((group) => {
+        const list = field(group, 'knowledgeBaseList', 'knowledge_base_list');
+        const type = Number(field(group, 'type', 'type'));
+        return Array.isArray(list) ? list.map((raw) => ({ raw, type })) : [];
+    });
+}
+
+async function collectKnowledgeBaseEntries(request) {
     const initialGroups = [
         { type: 1001, limit: 20 },
         { type: 1002, limit: 20 },
@@ -47,7 +70,7 @@ export async function findKnowledgeBase(query, request) {
         if (Number(response?.code) !== 0) {
             throw new Error(response?.msg || `ima API error ${response?.code ?? 'unknown'}`);
         }
-        all.push(...basesFromGroups(response));
+        all.push(...entriesFromGroups(response));
         const groups = field(response, 'results', 'results');
         for (const group of groups) {
             const cursor = field(group, 'nextCursor', 'next_cursor');
@@ -61,19 +84,29 @@ export async function findKnowledgeBase(query, request) {
                     throw new Error(`ima API returned a repeated cursor for knowledge-base group ${type}`);
                 }
                 queuedPages.add(pageKey);
-                pendingPages.push({
-                    type,
-                    cursor: String(cursor),
-                    limit: 10,
-                });
+                pendingPages.push({ type, cursor: String(cursor), limit: 10 });
             }
         }
         const next = pendingPages.shift();
         if (!next) break;
-        response = await request('/get_knowledge_base_list', {
-            params: [next],
-        });
+        response = await request('/get_knowledge_base_list', { params: [next] });
     }
+    return all;
+}
+
+export async function listKnowledgeBases(request) {
+    const entries = await collectKnowledgeBaseEntries(request);
+    const unique = new Map();
+    for (const { raw, type } of entries) {
+        const row = knowledgeBaseRow(raw, type);
+        if (!unique.has(row.id)) unique.set(row.id, row);
+    }
+    return [...unique.values()];
+}
+
+export async function findKnowledgeBase(query, request) {
+    const all = (await collectKnowledgeBaseEntries(request))
+        .map(({ raw }) => knowledgeBaseFromRaw(raw));
 
     const matches = all.filter((base) => base.id === query || base.name === query);
     if (matches.length === 0) {
@@ -100,6 +133,30 @@ function articleFromRaw(raw, knowledgeBaseId, knowledgeBaseName, folderPath) {
         addedDate: field(raw, 'timeWording', 'time_wording')
             || field(raw, 'createTime', 'create_time')
             || null,
+        mediaId: field(raw, 'mediaId', 'media_id') ?? null,
+        mediaType,
+        mediaState: field(raw, 'mediaState', 'media_state') ?? null,
+        mediaAuditStatus: field(raw, 'mediaAuditStatus', 'media_audit_status') ?? null,
+        mediaTypeInfo: field(raw, 'mediaTypeInfo', 'media_type_info') ?? null,
+        sourcePath: sourcePath ?? null,
+        jumpUrl: jumpUrl ?? null,
+        createTime: field(raw, 'createTime', 'create_time') ?? null,
+        updateTime: field(raw, 'updateTime', 'update_time') ?? null,
+        lastModifyTime: field(raw, 'lastModifyTime', 'last_modify_time') ?? null,
+        lastOpenTime: field(raw, 'lastOpenTime', 'last_open_time') ?? null,
+        fileSize: field(raw, 'fileSize', 'file_size') ?? null,
+        abstract: field(raw, 'abstract', 'abstract') ?? null,
+        introduction: field(raw, 'introduction', 'introduction') ?? null,
+        tags: Array.isArray(field(raw, 'tags', 'tags')) ? field(raw, 'tags', 'tags') : [],
+        isTop: field(raw, 'isTop', 'is_top') ?? null,
+        accessStatus: field(raw, 'accessStatus', 'access_status') ?? null,
+        accessStatusUpdateTs: field(raw, 'accessStatusUpdateTs', 'access_status_update_ts') ?? null,
+        parseProgress: field(raw, 'parseProgress', 'parse_progress') ?? null,
+        parseErrInfo: field(raw, 'parseErrInfo', 'parse_err_info') ?? null,
+        summaryState: field(raw, 'summaryState', 'summary_state') ?? null,
+        coverUrls: Array.isArray(field(raw, 'coverUrls', 'cover_urls'))
+            ? field(raw, 'coverUrls', 'cover_urls') : [],
+        logo: field(raw, 'logo', 'logo') ?? null,
     };
 }
 

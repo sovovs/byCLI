@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { readKnowledgeBaseFromChrome } from './native-client.js';
+import { readKnowledgeBaseFromChrome, readKnowledgeBasesFromChrome } from './native-client.js';
 
 function readerResponse(path) {
     if (path === '/get_knowledge_base_list') {
@@ -27,6 +27,27 @@ function readerResponse(path) {
 }
 
 describe('readKnowledgeBaseFromChrome', () => {
+    it('lists knowledge bases with an opaque Chrome auth ID and releases it', async () => {
+        const page = {
+            startImaAuthCapture: vi.fn(async () => {}),
+            goto: vi.fn(async () => {}),
+            evaluate: vi.fn(async () => true),
+            readImaAuth: vi.fn(async () => ({ authId: 'opaque-id' })),
+            requestImaReader: vi.fn(async (_authId, path) => readerResponse(path)),
+            releaseImaAuth: vi.fn(async () => {}),
+        };
+
+        await expect(readKnowledgeBasesFromChrome(page)).resolves.toEqual([
+            expect.objectContaining({ id: 'kb-1', name: '工程' }),
+        ]);
+        expect(page.goto).toHaveBeenCalledWith('https://ima.qq.com/wikis');
+        expect(page.evaluate).toHaveBeenCalledOnce();
+        expect(page.requestImaReader).toHaveBeenCalledWith(
+            'opaque-id', '/get_knowledge_base_list', expect.any(Object),
+        );
+        expect(page.releaseImaAuth).toHaveBeenCalledWith('opaque-id');
+    });
+
     it('uses an opaque Chrome auth ID for reader requests and releases it', async () => {
         const page = {
             startImaAuthCapture: vi.fn(async () => {}),

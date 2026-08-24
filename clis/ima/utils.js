@@ -37,6 +37,7 @@ export function normalizeArticleUrl(value) {
 
 export function toKnowledgeRow(item) {
     return {
+        ...item,
         knowledgeBaseId: item.knowledgeBaseId || null,
         knowledgeBase: item.knowledgeBase,
         folderPath: Array.isArray(item.folderPath) ? item.folderPath : [],

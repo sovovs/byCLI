@@ -1,4 +1,4 @@
-import { readKnowledgeBaseFromApi } from './native-api.js';
+import { listKnowledgeBases, readKnowledgeBaseFromApi } from './native-api.js';
 
 const IMA_WIKIS_URL = 'https://ima.qq.com/wikis';
 
@@ -33,7 +33,7 @@ async function triggerImaAuthRequest(page, query) {
     }, query);
 }
 
-export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}) {
+async function acquireImaChromeAuth(page, query, dependencies = {}) {
     if (!page || typeof page.startImaAuthCapture !== 'function'
         || typeof page.readImaAuth !== 'function' || typeof page.requestImaReader !== 'function'
         || typeof page.evaluate !== 'function') {
@@ -44,12 +44,11 @@ export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}
     }
     const timeoutMs = dependencies.timeoutMs ?? 30_000;
     const sleep = dependencies.sleep ?? wait;
-    let authId;
     try {
         await page.startImaAuthCapture();
         await page.goto(IMA_WIKIS_URL);
         await triggerImaAuthRequest(page, query);
-        authId = await waitForImaAuth(page, timeoutMs, sleep);
+        return await waitForImaAuth(page, timeoutMs, sleep);
     } catch (error) {
         if (error?.code === 'IMA_CHROME_AUTH_REQUIRED') throw error;
         throw codedError(
@@ -57,14 +56,31 @@ export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}
             `Chrome Browser Bridge could not acquire ima reader authentication: ${error instanceof Error ? error.message : String(error)}`,
         );
     }
+}
+
+async function releaseImaAuth(page, authId) {
+    if (typeof page.releaseImaAuth === 'function') {
+        await page.releaseImaAuth(authId).catch(() => {});
+    }
+}
+
+export async function readKnowledgeBasesFromChrome(page, dependencies = {}) {
+    const authId = await acquireImaChromeAuth(page, undefined, dependencies);
+    try {
+        return await listKnowledgeBases((path, body) => page.requestImaReader(authId, path, body));
+    } finally {
+        await releaseImaAuth(page, authId);
+    }
+}
+
+export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}) {
+    const authId = await acquireImaChromeAuth(page, query, dependencies);
     try {
         return await readKnowledgeBaseFromApi(
             query,
             (path, body) => page.requestImaReader(authId, path, body),
         );
     } finally {
-        if (typeof page.releaseImaAuth === 'function') {
-            await page.releaseImaAuth(authId).catch(() => {});
-        }
+        await releaseImaAuth(page, authId);
     }
 }

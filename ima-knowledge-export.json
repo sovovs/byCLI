@@ -1,0 +1,2131 @@
+[
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "ClaudeCode 上下文工程中深埋的魔鬼细节",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwNTMxMjUwNg%3D%3D&mid=2247483710&idx=1&sn=8d8a6673dd423b793a867166b6a4149e&chksm=f537d141ee4bec8ca13a3fae150492e7b4d01a31711080f77402783c8e67fc96547fa468a184",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "大多数人误解了企业级 AI Agent 的真正难题",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwNTMxMjUwNg%3D%3D&mid=2247483705&idx=1&sn=1008690ff4b8b91f41447b8903a59984&chksm=f52c282d26e35beaaa05eae501d030cacfa80ddce6eb4ec23e83fc3136ab61b8381e0299f6b3&clicktime=1781231544&enterid=1781231544",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "多智能体协同噩梦与 ByClaw救场的故事",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwNTMxMjUwNg%3D%3D&mid=2247483700&idx=1&sn=dbd54167d555867dc218f405e50e9298&chksm=f5b04260a1a29f1fd11a91b1512cd5d57945f78e1114815e16920f0959a8fb04b4b123fc92db&clicktime=1781231600&enterid=1781231600",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "多智能体协同的扎心现场 当 AI 团队遇上一个真实的店长",
+    "url": "https://mp.weixin.qq.com/s/EfNMEGh3p1Xg_uAOABoWaQ",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "State Engineering才是我们想要的",
+    "url": "https://mp.weixin.qq.com/s/cn_OJiYJp5v4Mwi1g9T3Xg",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "从个人野马到企业龙骑士(openclaw凭什么鸟枪换炮)",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwNTMxMjUwNg%3D%3D&mid=2247483689&idx=1&sn=4460d40352078aca25a124a3c2f36537&chksm=f5dd13e3fac1dfde3d013eb859e652d573c46ea57c6d98dd0f55c40b857f0b23a2bf9903cea3&clicktime=1780214446&enterid=1780214446",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "大话ClaudeCode之State Engineering技术",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwNTMxMjUwNg%3D%3D&mid=2247483694&idx=1&sn=1f3aa2b57c9fd0c9a53e3396f1af48e2&chksm=f51cf8acfd2d697267c5baaee4dfd3df6883fef86e893477831ffaca7d3c13ad91470077e2a4&clicktime=1780214430&enterid=1780214430",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [],
+    "title": "以状态为中心的智能体长啥样",
+    "url": "https://mp.weixin.qq.com/s/7FElWO4Ylimv0bIeXpKfIw",
+    "contentType": "公众号",
+    "addedDate": "6/18"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "YC 合伙人：你寻找创业点子的方式不对丨Y Combinator",
+    "url": "https://mp.weixin.qq.com/s?chksm=f51d2a8dc26aa39bd297e0e03719ec448996df01058c3064fed85a65c0ffab0902dcf87353af&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781919607_3&req_id=1781919729475895&mid=2247488114&sn=13096d17f0baaa840fbd7aab084c33ba&idx=1&__biz=MzcxMDA5NTI0OA%3D%3D&subscene=200&clicktime=1781919932&enterid=1781919932&flutter_pos=62&biz_enter_id=5&jumppath=20020_1781919901902%2CWAWebViewController_1781919913433%2C20020_1781919917979%2C1104_1781919918512&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "面试官皱眉：“Claude Code 你用了半年，CLAUDE.md 平时怎么维护？”我：“呃...没用过”，他：你牛逼",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzY4NTE2NjU5MQ%3D%3D&mid=2247485026&idx=1&sn=32b47b45a7610ae3a9dcaa6d03f6f29f&chksm=f277f0a989321183e606844a329011fc8da621578d320bc045162590a505f2ccf635d0631fd6",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Karpathy 怎么看 AI Agent（三）：怎么给 Agent 搭一个真正能用的上下文？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkzMTEzMzI5Ng%3D%3D&mid=2247496683&idx=1&sn=1d435723180eaae5608a8716c411c81e&chksm=c33808338079106f532e98bb4f31505d2da7bd1cc0150d1e490f650aef08cb13e558fe0d71dc&clicktime=1781933607&enterid=1781933607",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Loop Engineering：AI 编程的难点，正在从提示词转向工作闭环",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485562&idx=1&sn=243e5312502ed2d58fcce65e64601010&chksm=ea178548c233c489708f156237c497554bf1be088a2a39771a02e4b76f930d3ed32c62e2b9b1&clicktime=1781919442&enterid=1781919442",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code Workflow：AI 编程工具开始组建临时工程团队",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485379&idx=1&sn=9fc00d8e3df1796afc0ec035ab54ede9&chksm=eab68b690d94f05aaeda2be10b59dfad62e8b21964d4011473780e86a5f01914972242e7a6a4&clicktime=1781919506&enterid=1781919506",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Loop Engineering 技术拆解：工程师开始编写「工作的运行方式」",
+    "url": "https://mp.weixin.qq.com/s?chksm=c296c52cf5e14c3adb43d3f003cf245dc978da0891428769fd8452d354d483d8d35769512ce5&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781919607_2&req_id=1781919607354013&mid=2247484671&sn=91edfc8e553f49005ec795730360024a&idx=1&__biz=MzkzNjkwODk4OA%3D%3D&subscene=200&clicktime=1781919901&enterid=1781919901&flutter_pos=58&biz_enter_id=5&jumppath=20020_1781919883912%2CWAWebViewController_1781919891450%2C20020_1781919895762%2C1104_1781919896245&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "GBrain 的机会与局限：谁适合现在就装，谁应该先等一等",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485468&idx=1&sn=77c2be862fcb96cbaab344f129e1dc9b&chksm=eab07d10e90099dc9c1e7f7aafe51ff879930995d1d29c07de289f3c9be8ca7bf8e146d2359c&clicktime=1781919491&enterid=1781919491",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "阿里P9问：\"你研究过claude源码，那你说下它的系统提示词怎么写的\"，我说\"静态和动态拼一起\"，他说：\"只对一部分，但实际更复杂......\"",
+    "url": "https://mp.weixin.qq.com/s?chksm=a6ba7ab391cdf3a57bb8a4acfa99b7ed1337c219065011591b376d09b5110d72168be74299e4&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781607139_2&req_id=1781607043136091&mid=2247493448&sn=613b1159e6c56ad9726ef6c18e7a9c6b&idx=1&__biz=MjM5MTIyMjkzMg%3D%3D&subscene=200&clicktime=1781607178&enterid=1781607178&flutter_pos=20&biz_enter_id=5&jumppath=1001_1781607068191%2C1102_1781607070574%2C1001_1781607137787%2C1104_1781607139439&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "业务架构、本体论、知识图谱，到底先做哪个？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485589&idx=1&sn=ca0c51d441de8867e290952c6f578077&chksm=eabb340b7a9675ecf4aab808458c4324d16bc5fe61306ec9c2c302ecea35d358888562a33975&clicktime=1781919387&enterid=1781919387",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "提示词工程已死，Loop Engineering 称王！",
+    "url": "https://mp.weixin.qq.com/s?chksm=c30ab5a3f47d3cb53080f34fef72bdd419b0e17b9e1dd812079ec0f6d067081ec1ffaf56eef6&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781919607_2&req_id=1781919607354013&mid=2247484865&sn=4954eab93bf22721c4895eed73a5ecaf&idx=1&__biz=Mzk0NjA1NTQzNw%3D%3D&subscene=200&clicktime=1781919883&enterid=1781919883&flutter_pos=55&biz_enter_id=5&jumppath=20020_1781919808998%2C1122_1781919809496%2C20020_1781919879453%2C1104_1781919880455&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude code学习_s02 _工具与执行_tool_use",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzUxODMwNDg3Nw%3D%3D&mid=2247483874&idx=1&sn=d035993b9eecb81586acaa39d240b069&chksm=f8c6c23cf2a2358e39f1540696354b1d8114ffa31f6395f045c7c4053c98fa57696a79ed5ab6&clicktime=1781919782&enterid=1781919782",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "我用 OpenClaw + Obsidian,搭了一个每天自动更新的 AI 知识库",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzAxODcwMTEwMg%3D%3D&mid=2456768828&idx=1&sn=fafda4da0e891c49d6154e92b58679d1&chksm=8d0bf7a92135726cd8c638fed4c3d9ef1fdb34b925db992b8a5b4d032f4c5552ca1acb5c3ba3&clicktime=1781726192&enterid=1781726192",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "把错误反馈写进 Harness：我是怎么让 Claude Code 少重复犯错的",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzAxODcwMTEwMg%3D%3D&mid=2456768835&idx=1&sn=ebdea6060d462424176a1e87dbed6338&chksm=8d8c057b095ad9725f8b099027dc8313b80f615e2f4c62978f47e5bdb1d0868abc05dec47cf5&clicktime=1781726220&enterid=1781726220",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "阿里二面：帮我分析下我们这边RAG准确率低于95%的原因，我从这三个维度展开，面试官点头认可",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247493897&idx=1&sn=b0d32de3ba6568d846cac982a8af91fd&chksm=a75584e53c23b89f93cc9733e33557fa172702151aa7a3497733dcb7e6fbaf7d00b7aa73e5c7&clicktime=1781916906&enterid=1781916906",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 原理：从源码看 Agent 设计的核心机制_260620094923_1",
+    "url": "https://mp.weixin.qq.com/s?chksm=f98ba4cdcefc2ddbff9f1419a66a3c7e50a2ca5b66fba60a244a6e160970363fa6ef1f6e7a7d&exptype=unsubscribed_card_recommend_item_heat_tlfeeds&ranksessionid=1781919607_2&req_id=1781919607354013&mid=2247483855&sn=a59779c84d7d8c8f58a69f04d2e3e678&idx=1&__biz=MzUxODMwNDg3Nw%3D%3D&subscene=200&clicktime=1781919730&enterid=1781919730&flutter_pos=54&biz_enter_id=5&jumppath=20020_1781919703273%2C1104_1781919711132%2C20020_1781919720181%2C1104_1781919727476&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "淘天三面：让你现在搞个Agent项目，你怎么设计记忆框架？我说：先找开源最好的先试一下。面试官说我做事的逻辑不对，很多问题没想清楚。",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247494101&idx=1&sn=f9232a1f4af6bdbc4cc7456ce2ee1cca&chksm=a799211e75918c4ea1da8237d86a706923f637f91f0605ac4bb6db36a0d2f7b71c59a729de59&clicktime=1781916871&enterid=1781916871",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "蚂蚁18级说：你的agent虽然跑起来了，但是效率这块你怎么解决，这么慢是无法线上使用的。我说我们对效率没大的需求，够用就好。",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247494004&idx=1&sn=9a37314f286036821a00649cb62a57c6&chksm=a766e8c855da875f740a75f28087419768e243fb73d0c1bea416ba0ab7df861b616f8a58f1da&clicktime=1781916887&enterid=1781916887",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 的 /loop 和 /goal：让 AI 自己转起来、干到底",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzU1OTY2MTQzMw%3D%3D&mid=2247484848&idx=1&sn=d1ab53cf844766b7ab33f0c209bd374b&chksm=fde73ec4d34bab693b3350c78dec3c6915e481e6dcd04aedb8e56e4a294fecaac9cc8b2941d0&xtrack=1&req_id=1781227110706849&subscene=93&clicktime=1781227134&enterid=1781227134&flutter_pos=0&biz_enter_id=4&ranksessionid=1781227110&jumppath=1001_1781227127193%2C1003_1781227128684%2C1001_1781227129978%2C1104_1781227131732&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Loop Engineering，深入了解后的真实认知",
+    "url": "https://mp.weixin.qq.com/s?chksm=83e84e2cb49fc73a693f5597096834b3cd5027f5f558412b4705fbdb1951ce0e787fa5015e4d&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781654380_3&req_id=1781654470413075&mid=2650547164&sn=cf6d1a17961f0e18484f655e91d90fa0&idx=1&__biz=MzAxNzc1MTE5OQ%3D%3D&subscene=200&clicktime=1781654868&enterid=1781654868&flutter_pos=42&biz_enter_id=5&jumppath=20020_1781654472145%2C1104_1781654682456%2C20020_1781654685560%2C1104_1781654864437&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "吴恩达的开源智能体框架，一个接口接入所有大模型",
+    "url": "https://mp.weixin.qq.com/s?chksm=fe7be5fbc90c6ced5fefe5fb59d3bd1d34c880c821f0cc02ab8f9828e8d3b0e390ace5bf7612&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781934117_3&req_id=1781934269347956&mid=2247488072&sn=60648f256e21ef33966adb2fd6759901&idx=1&__biz=MzU5NDg2MjgxMg%3D%3D&subscene=200&clicktime=1781934331&enterid=1781934331&flutter_pos=43&biz_enter_id=5&jumppath=20020_1781934219684%2C1104_1781934241370%2C20020_1781934258587%2C1104_1781934266082&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "字节一面被问：Prompt有哪些让模型听话的技巧？我说：Few-shot或思维链。面试官频频点头，然后他还自己补充了几个。",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247493763&idx=1&sn=0651cf4286a102eef44c11441bf107fd&chksm=a7392d8b838fefc1697a1cddcfdb7ebf087c6e64b1590c9a068f888ee5600f9e965545cbeebd&clicktime=1781916977&enterid=1781916977",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "滴滴二面追问：\"你做了一堆 skill，它们之间怎么传数据的？或者说怎么建立依赖的\"，我一时半会只想到用上下文来做",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247494125&idx=1&sn=7c0f83edb6ec09f80686d3095a3fb300&chksm=a7742d48c3fad12f1863cce2ab384db6ea93f9585163790fede31b60ebedaff8b8c6b362e8c8&clicktime=1781607252&enterid=1781607252",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "别再介绍概念了——手把手教你用Claude Code搭一个真正能跑的Agent Team",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzU1OTY2MTQzMw%3D%3D&mid=2247484856&idx=1&sn=4320501e8431e3d17886e490a40eece6&chksm=fd53e76c575cedf84ef0414225037ba90c810b8ccb0e9a49031851fe43c7109b1156cff5efae&clicktime=1781566784&enterid=1781566784",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "从个人脑到公司脑：GBrain 难在权限、来源和组织边界",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485533&idx=1&sn=cc1c33a1bddf68f42df0290e70b1cf02&chksm=ea9315bc616a1e0be6cc141dfcfcecbb82830bed90ecfb6fbf0eb475ac50cecd29d1d0f1967b&clicktime=1781919476&enterid=1781919476",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 权限配置指南：终于不用每次都 Yes 了",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzU1OTY2MTQzMw%3D%3D&mid=2247484869&idx=1&sn=0ed3edd15574f88a56217f1dc9fe3231&chksm=fd2c4b49815c3ab9f8a791f4089eb52b711d471601db6f1c6e00b1646e34f9d7b454d0617aca&clicktime=1781566753&enterid=1781566753",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 原理：从源码看 Agent 设计的核心机制",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzUxODMwNDg3Nw%3D%3D&mid=2247483855&idx=1&sn=a59779c84d7d8c8f58a69f04d2e3e678&chksm=f8f33f232e0a514ca84b1fc2c657efe89ec7d7dcb62f2489ec0b42bf87af8cc2fb0da59caf70&clicktime=1781919796&enterid=1781919796",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "GBrain 和 Chat with Notes 的差别：Agent 需要会写结论的记忆层",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485592&idx=1&sn=bf12184aed3f0eed6b018a5e7cb32b93&chksm=ea0f1699f23d1f970dd0ceed6f5ffa1cfb5baf24277e41e98ddbd1f2d45da37be64be50cb9a5&xtrack=1&req_id=1781919323177580&subscene=93&clicktime=1781919355&enterid=1781919355&flutter_pos=16&biz_enter_id=4&ranksessionid=1781919323&jumppath=20020_1781919334980%2C1122_1781919341630%2C20020_1781919342496%2C1104_1781919344528&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "9.7 万 Star 的 Claude Code 技能库，源码拆解：架构、设计与可复用模式",
+    "url": "https://mp.weixin.qq.com/s?chksm=f4a3f3a1c3d47ab7fd52a99863ef1ee5368b6bd9bd8e12cd638bef779f1985efbe76628cecfb&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781919607_6&req_id=1781919977674580&mid=2247484182&sn=d7a059bcedac0a1e8cd07d70af1e4f55&idx=1&__biz=MzcwMTI5NTA2NA%3D%3D&subscene=200&clicktime=1781920085&enterid=1781920085&flutter_pos=88&biz_enter_id=5&jumppath=20020_1781920052760%2C1122_1781920053458%2C20020_1781920072107%2C1104_1781920072978&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 权限模式全指南：六种模式怎么选、怎么配？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzU1OTY2MTQzMw%3D%3D&mid=2247484876&idx=1&sn=2600dc7d7a77261d11531424610217b2&chksm=fdce0479536368a057872dd54da231d05d0b92410b0a7a85fa970960adbca192346ab4ad8e8b&clicktime=1781566744&enterid=1781566744",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Google 开源 OKF：企业做 Agent，要先让知识能交接",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI3OTE2MTIyMw%3D%3D&mid=2247485577&idx=1&sn=4f581d1b6a473e8d250f0cf4e7bb385d&chksm=eae53c111d74588ea4531d6f0dba8ef7a4ae34ad3f0cc67f99ead7e4100acdb367d8fdf67324&clicktime=1781919404&enterid=1781919404",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "字节Agent岗三面：你们线上跑了 RAG，那你怎么衡量它的效果好不好？",
+    "url": "https://mp.weixin.qq.com/s?chksm=f3999971c4ee1067dca80ea467ef94ac8621c291716455d4c70ffa2fbac59363ae289372d345&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781919607_5&req_id=1781919956386930&mid=2247484385&sn=d5e8e80330d3c3fa5504d5fb76e61717&idx=1&__biz=MzY4NTE2NjU5MQ%3D%3D&subscene=200&clicktime=1781919979&enterid=1781919979&flutter_pos=82&biz_enter_id=5&jumppath=20020_1781919946124%2C1104_1781919946618%2C20020_1781919970812%2C1104_1781919976142&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "蚂蚁二面：怎么省Claude Code缓存，我说了四点：用Subagent、一次性装好MCP、配好claude.md、开1小时TTL。面试官点头，说我有工程深度.",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247493872&idx=1&sn=d55e7ce96b85b41333d20a1128c5d6b5&chksm=a76e37598a7bea71278968bbad7cccbd3ab00020e13f309bb8781e85a4e749493b47e911e95d&clicktime=1781916961&enterid=1781916961",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Karpathy 怎么看 AI Agent（四）：Agent 比你预期的聪明，也比你预期的蠢？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkzMTEzMzI5Ng%3D%3D&mid=2247496696&idx=1&sn=9b2a86e3166d80ee71400f1d2a330b4c&chksm=c3a6a0d161857204174c0b8a4c59b02e019d3ea384cff879ce8e5b9b15386a08a6b0b72b20fb&clicktime=1781933824&enterid=1781933824",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "阿里二面：\"你8K窗口怎么撑100轮对话，Token不够怎么办？\"。我说截掉或rag？，他说：\"即使不超，这三个怎么分？\"，“这个还真没想过”",
+    "url": "https://mp.weixin.qq.com/s?__biz=MjM5MTIyMjkzMg%3D%3D&mid=2247493297&idx=1&sn=15f601bd926ee1e78e5da65d1fb85e5c&chksm=a7e1cc333053fd42489b77683e310b0063a4feee030761bb8dce25b61974b29d1dc6b44189a1&clicktime=1781916844&enterid=1781916844",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code 的 / 命令到底是什么？一份写给开发者的完全指南",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzU1OTY2MTQzMw%3D%3D&mid=2247484863&idx=1&sn=1639068a46a8614722fe889554368029&chksm=fdc27b47ad3909dc2d52bfa71a3b6a974dd5bdb9c219f5105c5467b7a14a98bdb8382eaa8a13",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude code 源码学习_第一话_agent loop_工具与执行",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzUxODMwNDg3Nw%3D%3D&mid=2247483865&idx=1&sn=2c76fd809f3c51b9ca1f5313287627df&chksm=f838de6c0c77c1840d0f3aceb9e5645a8b481abfeccfd8db6767235047a1c45aa24df999d0ed&clicktime=1781919770&enterid=1781919770",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "高能笔记素材"
+    ],
+    "title": "Claude Code之父说的 “Loop 工程”到底是怎么回事？就问咋变天的？",
+    "url": "https://mp.weixin.qq.com/s?chksm=bec031ac89b7b8ba0d86699381cf552bce68a30fa220eb2d423d6fec918281409e512762e22e&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781227244_3&req_id=1781227321561064&mid=2650734591&sn=ef045317a93d276493335d9084d62f92&idx=1&__biz=MjM5ODQ2MDIyMA%3D%3D&subscene=200&clicktime=1781227399&enterid=1781227399&flutter_pos=44&biz_enter_id=5&jumppath=20020_1781227384942%2CWAWebViewController_1781227393360%2C20020_1781227396230%2C1104_1781227396560&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "逆向深扒Claude Code源码，我发现了什么！？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695110&idx=1&sn=894062c617d73eeda69d379af3a2ea32&chksm=eb3499f73a17889becb0fe26f48d807143bdbd3bfded1954ce34cff61e7c20a8823394beb360",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深度解析 Hermes Agent 如何实现“自进化”及其 Prompt / Context / Harness 的设计实践",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559664&idx=1&sn=2c26ac0a4898e4c986d289a543808dd7",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深入源码：Hermes Agent 如何实现 \"Self-Improving\"",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559661&idx=1&sn=ca9426f948819f172ec44f671127aa29&chksm=e88cc4ac2b4081bc38f603fc95878e9bfca7f236f16187fee8d3777c6905c0572d708cd8808c&clicktime=1780535433&enterid=1780535433",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "一文讲透：Harness Engineering即控制论！",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695294&idx=1&sn=63a246504edde73b337f15ad72bed3b1&chksm=eb5d634808e01150c0b19d817c6e52df9c3bac87c412fdc39e1844d6b87bbe99b73e7adb5cc8",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深入理解OpenClaw技术架构与实现原理（上）",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247558933&idx=1&sn=926e244c855c44c818d83c6c7d57d4d3&chksm=e8b93a9a5ed55322fbc818ddca714088794c852f4a22cc06245e5422e1c1df23c55860774d10&clicktime=1780535233&enterid=1780535233",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深入解析OpenClaw上下文窗口压缩方案 ：一切都是为了效果与省钱",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247694674&idx=1&sn=acae1fec749562f39219e2b13af9f065&chksm=ebbb8953066da2404889facc08a851aa1c6c1df3847aa6a146a2a4072e94773a96ad8db0db53",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "从Prompt、Context到Harness，工程的三次进化与终局之战",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695574&idx=1&sn=5a72299143649e58cc510ab1b50480b4&chksm=eb68e53a06db3ec91a83a2969974ae6c7d863e4f2137ceb4ee743eecc7269a98275da02cfc8a&subscene=7&clicktime=1780535981&enterid=1780535981",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深度解析LLM Wiki / Obsidian-Wiki / GBrain：Agent时代知识的“自组织”与“自进化”",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559971&idx=1&sn=e93c802829515223ad1dbb15de073b59&chksm=e8c5b43f37d4ae6ba66415dc24acdac05bcb24f4ac2087550ecddb359d3030a91ce0b20005cc&clicktime=1780535361&enterid=1780535361",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "一文搞懂Hermes：新顶流Agent如何从经验中自我进化",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695259&idx=1&sn=30ef327bcbbb3e349abd812da627c5f2&chksm=eb605d81578fa33fc40c12186f78497c421ab5aa35805a9bcf08ca32e3e9ff8dd5918d66f88a",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "首个 Java Harness Framework 来了｜AgentScope 把 OpenClaw 带到企业分布式场景",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247560070&idx=1&sn=e1589f74f2fae81901f2dac4b06322c1&chksm=e89c7b6ef1c213994e30b7aab4b952afb737d24364faac72ecb48fe9cfb33f24a1df9c2abbf1&clicktime=1780535330&enterid=1780535330",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "Harness Engineering实践心得：如何高效驾驭AI？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695462&idx=1&sn=639d83e3bacb5cf2e040dad911bbde61&chksm=ebd64d145659a48004ad58901309248f19790c42e14e327472ff585483c14470577adfbb9f67",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深度解析 Claude Code 在 Prompt / Context / Harness 的设计与实践",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=13072148806438893578-1778765558464-8255919627&__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559627&idx=1&sn=7847089f5135e5060953f013fa56fd4f&chksm=e871ca7fe7b3b0dd2bfb71924237aef309fdbcb8bbcdb8f9598666e78c32d886ac4b7e897328&subscene=0&clicktime=1778765558&enterid=1778765558",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "OpenClaw长期记忆：优秀管线与玄学效果",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559607&idx=1&sn=7ed30904fbae35566d9de48ea7adeaa6&chksm=e8057ab06caa7c2ccd32cdb666aaceb8e0fe5ed96f12018a299f9fa1b526635ad35d4bccaa6b&clicktime=1780535460&enterid=1780535460",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深入浅出Harness Engineerring之核心模式与理念",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695469&idx=1&sn=9ba77be5cdb4a9031a708c7361d7a026&chksm=ebadfc87ee9ba4ef7a0f026ee42f8d4c23d06f8d075ab61fe43143b00ba988477f0ae1ffe0c0&clicktime=1780535524&enterid=1780535524",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深度解析 OpenClaw 在 Prompt / Context / Harness 三个维度中的设计哲学与实践",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559511&idx=1&sn=64e933b0264e47f0940e693e315e0c82&chksm=e8975a70b4f30da0d3c2b82d86b5a6bb569f13d2698679910e8be130aa5cb9177ddbe01fe672&clicktime=1780535148&enterid=1780535148",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "万字干货！Harness Engineering如何工程化落地？_260604121221_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695342&idx=1&sn=9e3b38d4ea0d20c2ec1e46aa87a5fba3&chksm=eb451b5aea240068f083b1a2aa61f41a958cdc2790afcab2d482e21d1175fad57714d7617f66",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "万字干货！Harness Engineering如何工程化落地？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695342&idx=1&sn=9e3b38d4ea0d20c2ec1e46aa87a5fba3&chksm=eb451b5aea240068f083b1a2aa61f41a958cdc2790afcab2d482e21d1175fad57714d7617f66",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "从第一性原理思考 Agentic Engineering",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695386&idx=1&sn=7b4ec46bedf2b841680912d6be029a81&chksm=eb7772c2abe312edc772faba63df9571f160fcee239010892115a23ff3ee218729235c49ae6b",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "逆向深扒Claude Code源码，我发现了什么！？_260604121221_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695110&idx=1&sn=894062c617d73eeda69d379af3a2ea32&chksm=eb3499f73a17889becb0fe26f48d807143bdbd3bfded1954ce34cff61e7c20a8823394beb360",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "局中局！给 Agent 装上 OpenViking，它们竟然学会了“记仇”和“伪装”？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI1MzYzMjE0MQ%3D%3D&mid=2247519457&idx=1&sn=6b6a878cf78d9364b77d1073de0e8655&chksm=e804f1d4f50c97bb69d2262075f5b775e832417ed88e0ea6e837b836d16e424a0605951fba70&subscene=7&clicktime=1780535888&enterid=1780535888",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "从架构到代码：深入理解 OpenClaw 的双源记忆系统",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247694887&idx=1&sn=192feccb73717c5ecbd3a2c886c9a5e8&chksm=eb2f3cf0a329b2853b81ca426e71fd03d080fe7a47cb8134504dbd2727e183ef35f370e00a99",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "Claude Code 源码拆解：从启动到多 Agent 扩展层",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=13072148806438893578-1778765295746-7526463499&__biz=MzI3NzE0NjcwMg%3D%3D&mid=2650200489&idx=2&sn=a4241be8e29fce727c3a002bb5c0be65&chksm=f2e6d41e893805458d79db790d5a40f2a951cd398e7b80a425baa4c2119888f900a09349f700&subscene=0&clicktime=1778765295&enterid=1778765295",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "深度解析 Hermes Agent 如何实现“自进化”及其 Prompt / Context / Harness 的设计实践_260604121220_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzOTU0NTQ0MA%3D%3D&mid=2247559664&idx=1&sn=2c26ac0a4898e4c986d289a543808dd7&chksm=e85ff5d60af7f68d306b2e965a0f4de180a11d7a0c1d92d2a769826a274febf0788ad88de4fe&clicktime=1780535446&enterid=1780535446",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "一文讲透如何构建Harness——六大组件全解析",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695065&idx=1&sn=d5b7af6f4c96167e4a57ceb6065b9d5e&chksm=ebb1de6231dfe1882bb1cd1075c735c974f2ec89530f472475c3a1178cdc2ad9dc2d9eba3734",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "一文搞懂Hermes：新顶流Agent如何从经验中自我进化_260604121221_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695259&idx=1&sn=30ef327bcbbb3e349abd812da627c5f2&chksm=eb605d81578fa33fc40c12186f78497c421ab5aa35805a9bcf08ca32e3e9ff8dd5918d66f88a",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "大厂文章(火山，腾讯，阿里)"
+    ],
+    "title": "从第一性原理思考 Agentic Engineering_260604121221_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDU4OTExOQ%3D%3D&mid=2247695386&idx=1&sn=7b4ec46bedf2b841680912d6be029a81&chksm=eb7772c2abe312edc772faba63df9571f160fcee239010892115a23ff3ee218729235c49ae6b",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Mixture of Agents揭秘：Hermes Agent让多模型围坐开会，答案更准了",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484375&idx=1&sn=a84a73fd572aae427c874b8c6bc7d768&chksm=f5296fedc25ee6fb3a321f12380e257e45a6c409aaabf7076ffa10a917fb7040ff7cf92ba07a&cur_album_id=4593457607687815168",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent 上下文压缩机制 · 深度拆解",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484378&idx=1&sn=e2590d2ab8897aa6207ea64512d64a78&chksm=f49d2435fe9306305953bac5b3c38d2f03ada26b930b84b005d5b23cc28b5620f138f66e134f&clicktime=1783559233&enterid=1783559233",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent Skill System 原理深度解析",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484174&idx=1&sn=25c6213aaaeb48f9ff07b163ed990e8a&chksm=f5296f34c25ee62246d919f799ff64945a69912a118ff51c82f84944c6767d7a64b1b0b701d5&cur_album_id=4593457607687815168",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent多层Skills路径机制解读",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484376&idx=1&sn=70abe50659afe05a7f6c7546b67658b6&chksm=f5296fe2c25ee6f410e159524aea755d18f07425f7caf8a46323d61febf2bd872a722848fce1&cur_album_id=4593457607687815168",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Codex的Steer机制分析:让Agent边跑边转向",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484349&idx=1&sn=96bab487f94d1440e1c2eb5d40e0826e&chksm=f4d8904625d53575d0584b8bab92c586e9ed85489a5b6af01078745af32a4093db447fdcdc53&clicktime=1783559268&enterid=1783559268",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent的Steer机制解密",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247484351&idx=1&sn=c78b5c98b15738d7536c1b7c08aa6217&chksm=f5296f85c25ee693c2c58680fa60f409392fc2549d5e5a05095f89c41be88eb91e572a1b2699&cur_album_id=4593457607687815168",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent 自进化原理拆解",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwOTMyODIxMw%3D%3D&mid=2247483986&idx=1&sn=8728c8e44248663aaa0027374bbf4f09&chksm=f5296e68c25ee77eb31d63ac454a4d27539d51d548ec8c865e75dd954e0adb5f272a9cb6012d&cur_album_id=4593457607687815168",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构解密系列（四）工具系统 —— Agent 的双手",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484121&idx=1&sn=3b05db893ade72cc3ec019d857081f97&chksm=964c348729c5679bf0929dfbad0d76d08b795b00b7075217485fe23e4bdd73d5ec88eefa2bf9&clicktime=1781041284&enterid=1781041284",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude 多 Agent 架构全解析：从单体智能到协作智能的范式跃迁",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI4MDAzNTU5Ng%3D%3D&mid=2650345171&idx=1&sn=380e9a34a7ddf33128fbd0af86d80bf2&chksm=f21e7074a65a61bdf8353870971b31082d363a98aed3d43a5fcc2db4da119f695345fe987983&clicktime=1779740663&enterid=1779740663",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "AgentScope 2.0 深度解读：从架构原理到多智能体协作的生产级 Agent 框架",
+    "url": "https://mp.weixin.qq.com/s?chksm=f3b30753c4c48e45c0018f1dfcf3fb8018a2f3d456a1df880db19fc0b15bb4b65f86cf4ba409&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781052510_3&req_id=1781052531562430&mid=2650345264&sn=808e32bcb636768cfdc3a55e857d9ed9&idx=1&__biz=MzI4MDAzNTU5Ng%3D%3D&subscene=200&clicktime=1781052597&enterid=1781052597&flutter_pos=40&biz_enter_id=5&jumppath=1001_1781052472935%2C1104_1781052474678%2C20020_1781052566245%2C1104_1781052595457&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构解密系列（五）权限与安全 —— Agent 的缰绳",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484122&idx=1&sn=edd15aa906f5063471ff7a9f0f8f30ae&chksm=96ece45e75d9466bc029dbb7fca59d0a6273738651cddef01fb386750c6825de07175173905b&clicktime=1781041293&enterid=1781041293",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构拆解系列（一）从一条消息看 AI Agent 的完整生命周期",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484118&idx=1&sn=344442f655faaa491a2d189ef981f5ba&chksm=96ce6a759bae959501d9105f87cb0c841b258d9a9fdcf50ff4b6f51c4f9ebb8555e6dba32eb0&clicktime=1781041183&enterid=1781041183",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "AI Agent最大的短板，被这个工具补上了",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=3052094596046596168-1779720510196-7125659811&__biz=MzYzNDI4NzkzOQ%3D%3D&mid=2247483795&idx=1&sn=df251f3423c2bf49a512d57ccf5f5f74&chksm=f1cee41f2f35fb47dc601d6ee81d85b399bba26cd42ec5a75f08b261f9ed0f72378cfbe8b22f&subscene=0&clicktime=1779720510&enterid=1779720510",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Agent Harness 架构全面解读：模型是司机，Harness 才是车",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI4MDAzNTU5Ng%3D%3D&mid=2650345153&idx=1&sn=525db9529dc7091de90a6005bdd0d34c&chksm=f2503edf6cbcb24da6586171d0925164d7b2dcda35153d4b40364ba86f14938a4d126f3095bc&clicktime=1779740676&enterid=1779740676",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Harness Engineering 深度剖析：AI Agent 从「能跑」到「能治」的工程革命",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjMwMTk4MQ%3D%3D&mid=2247485126&idx=1&sn=b56999d3c19a9c9e8efed491be8408f0&chksm=9a1c86ec585d49db77e9250df320d515804b3de92f1db20ff4a5c12dc12c029fcd40cc1bf9a8&clicktime=1779111722&enterid=1779111722&clicktag=bar_profile&clickpos=11691&from_safari=1",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code 架构详解",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2ODYyODkzMA%3D%3D&mid=2247484334&idx=1&sn=b2aa7be58e281e77e09fa5407deb277f&chksm=eb5bf4eb105f88a4e1321f7449fee07758d87874526d08ca6a27a727d8d0303eb7eb65da6765&xtrack=1&req_id=1779740335148064&subscene=93&clicktime=1779740388&enterid=1779740388&flutter_pos=10&biz_enter_id=4&ranksessionid=1779740335&jumppath=20020_1779740357143%2C1104_1779740357679%2C20020_1779740379294%2C1104_1779740384117&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent：GitHub 184k Star 的 AI Agent 凭什么这么火?",
+    "url": "https://mp.weixin.qq.com/s?chksm=c1734d76f604c460afdb1c12c601deadd75a8abc024cd1e56310b7c97b126c05d24c11cfb891&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1781227244_6&req_id=1781227435356684&mid=2247484094&sn=97d0c90fd769b958ae0c79b445c9a531&idx=1&__biz=MzkxNDIwMTI1NQ%3D%3D&subscene=200&clicktime=1781227453&enterid=1781227453&flutter_pos=73&biz_enter_id=5&jumppath=20020_1781227422548%2CWAWebViewController_1781227427622%2C20020_1781227430492%2C1104_1781227430839&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Hermes Agent 架构详解",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzI2ODYyODkzMA%3D%3D&mid=2247484293&idx=1&sn=c494a70c99e5e9624499fda5db83e3e3&chksm=eb8d6412a84ad08582a751c18d75dd5177196edd0042beaf48f27efcc65dc154b51e3194b71f&clicktime=1779740435&enterid=1779740435",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构解密系列（三）上下文管理",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484120&idx=1&sn=15aa37c53de335bc3a9f7c53f0a86a9b&chksm=9659d0a4c20cab0d830169e95815f2c34b73ea7a620f0adcdf8e410ab7098fa28e84b6e5c83c&clicktime=1781041274&enterid=1781041274",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构解密系列（二）Agent 引擎的五层架构",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484119&idx=1&sn=c3346267f843c01faaddcc3d67e0740b&chksm=960aa928ea8f990916cffebf54a3a5dc3719a578c21d5e604d0c9cf5ef6cf107b62e02393901&clicktime=1781041261&enterid=1781041261",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code 上下文管理深度解析：Prompt Caching、Compaction 与记忆体系",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2664445420265073674-1780459546891-5552391405&__biz=MzI4MDAzNTU5Ng%3D%3D&mid=2650345204&idx=1&sn=581f63631197f769ae3c10995c4d4c9a&chksm=f2ce04acdfef7cd4f2eaae180f75318ab46c4bcfb94b61bfd1216dae6990bb340ba6528382f9&subscene=0&clicktime=1780459546&enterid=1780459546",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "优秀模版"
+    ],
+    "title": "Claude Code架构解密系列（六）多 Agent 协作 —— Swarm、Worktree 与远程编排",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIxODgwOTg5MA%3D%3D&mid=2247484135&idx=1&sn=343d82810392d9fb7fbca0aa51e68ec4&chksm=9688e92b7ce2943a2d4dd9a168cd46b3429bb8975fb0f8bed008c4d4044e030c6441b6327c3c&clicktime=1781041304&enterid=1781041304",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Superlog：让 bugfix 有迹可循",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MjI4Nzc3Mw%3D%3D&mid=2247490547&idx=1&sn=ab88443ff3138839d2d24f6598226d10&chksm=c39b12299748fd887ed254cabe6fc468c6a9e831ca7aa967036b1bf63bcf2c8e46fb3a8ea546&clicktime=1781934814&enterid=1781934814",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "啥是 Loop？要怎么玩？",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MjI4Nzc3Mw%3D%3D&mid=2247490562&idx=1&sn=ae5ffc9bdac1f223507ab43a1ec6bf02&chksm=c35812a309f7328d9048280adc567b2357e0391d18e872d8f00b034277abbbb38d55d748f9fb&clicktime=1781934766&enterid=1781934766",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "别再用模糊提示词折磨 Codex",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNDg3NDg2OQ%3D%3D&mid=2247484737&idx=1&sn=13c8e7e99112fc05b6f45c8618bd2070&chksm=f10da8205239e7347d202702cbc9df670e28a6a084ef8e82e8ede1359639783d7c5a334e40b2&clicktime=1781937100&enterid=1781937100",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude动态工作流来袭，效率革命从此开始！",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484625&idx=1&sn=7fd972edb69eccd9df0fd36d618193cf&chksm=cfb0f62fa97e04d0eb0a5c61b73fcc538569f5b4e1cf4d751abec45b9e8689a800dac3230895&clicktime=1781936627&enterid=1781936627",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Code新推出的动态Workflows是个啥？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486555&idx=1&sn=ac450a224a8e4fb89fc7714fbe5df509&chksm=9661a3b41b02092585513c037db60bbec1e12a387a53219480adf7d5bb321f72ddc6ca760356&clicktime=1781935131&enterid=1781935131",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "如何用好 AGENTS.md，提升 AI 执行效果",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484676&idx=1&sn=9c4e4542c77c2b4a17167f4f70aa6f9f&chksm=cfb4fcd3f2c99dd554113478884fc543f2e97897ffcf7645015c68af265d6b331cae73849ccb&clicktime=1781936581&enterid=1781936581",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Prompt时代已过去，下一站Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486631&idx=1&sn=613ebc29917e97deb89e0f4b8bd26060&chksm=9645179da5683240a220265cc30b3d4c96472d935a72a9e08157abf7302e636caa77e4497126&clicktime=1781935090&enterid=1781935090",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构解析：平台接入与学习闭环_260621024622_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484201&idx=1&sn=f2dcf2d9965759946806f55e73f8cf90&chksm=cf50cf93ce6e93df9f57fa81a38c845aa2210080287fe44f23eae4f2435549fd575649ec9a21&clicktime=1781936866&enterid=1781936866",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构解析：平台接入与学习闭环",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484201&idx=1&sn=f2dcf2d9965759946806f55e73f8cf90&chksm=cf50cf93ce6e93df9f57fa81a38c845aa2210080287fe44f23eae4f2435549fd575649ec9a21&clicktime=1781936834&enterid=1781936834",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AI Coding 从写 Prompt 升级到写 Loop",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484776&idx=1&sn=fe9e885c09c10c2eeb15cf0fc259d71b&chksm=cfa680badca099b502f9c4549f7d47c533a797a9da80b5a19bd60815c65d6f69cfce5c12fd46&clicktime=1781936535&enterid=1781936535",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Workflows 不是更大的 Skills",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484713&idx=1&sn=0f419c19ca5f58bbd9a4ba34e0e88827&chksm=cf1f5213f7f1b2dcd26ceced8e3c9e35271c880ac683af503b2d485a125969e1ab2016b79983&clicktime=1781936552&enterid=1781936552",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Palantir不是神话，是现场与平台的复利",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484401&idx=1&sn=2537b030baa0493bd3372cef3a27dc3b&chksm=f5d6600bd5ed25311d01f5f8c9ca5ed47c7bf5dc447e541ac4b2b384fb8b02d492b7a90435e1&clicktime=1781935853&enterid=1781935853",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes 与 OpenClaw：扩展方式对比",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484392&idx=1&sn=229a6415094626b75a01dcf628f4545e&chksm=cf5f6d4b2748c2639828949c7e6ed6c1376d629db677f693a6ce3df7fe5ef32a00ade269669c&clicktime=1781936802&enterid=1781936802",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Palantir启示：企业AI不能只靠模型",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247483939&idx=1&sn=d17d98545d54aef2ed64dca39045d27c&chksm=f5836c6f3b13d37f255f31ee70e5236962c78614cd45e1bae28029df0b61052a3b5dfde87587&clicktime=1781936036&enterid=1781936036",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "看懂Palantir：从数据平台到 AI 行动系统",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484156&idx=1&sn=a9a155ddce8547f77027089b564fae7d&chksm=f50f75684347bce057c78523093e024ca607fd78870ef6a234ebaa179f0fc9a88677c6ed0ff0&clicktime=1781935967&enterid=1781935967",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "企业存量大仓库如何用好 Claude Code",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484458&idx=1&sn=2314d897edfe317f69107a468efe94f4&chksm=cf52727060ab2cdccb269c45cb6c11e47005256d37be8cb30bf83f82c23af45d42202797c14d&clicktime=1781936729&enterid=1781936729",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Orchestrator-SubAgent长任务",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MzQ2Nzk0NQ%3D%3D&mid=2247483723&idx=1&sn=3964db55d78585292d14e335a3b7a1ae&chksm=c3323d8df445b49b72d7aa8b3b4e5a22ec3d59712d3023bf2d7cf97bbec647c7b2a37deb3cc9&exptype=servicebox_1781937435676990&subscene=0&clicktime=1781937442&enterid=1781937442&flutter_pos=163&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Palantir Ontology 到底是什么？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484327&idx=1&sn=d06e98c05bc1aad12c7ca3414e04ab4d&chksm=f570d07d49408d2ff15e9c54670297c30dd3de79127bfcada9c61cd8af82e5c74f94c3a58e44&clicktime=1781935892&enterid=1781935892",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Codex Goal：AI 开始会交账了",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484544&idx=1&sn=7f66238dd8b48bc53162cebc7c2ff634&chksm=cf34ad1239b848bdf9d9192a7ed64a52305b322bbc710ef1ae7d6a54e3ef1c3f229155b4a42a&clicktime=1781936712&enterid=1781936712",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构拆解：请求如何跑起来",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247483896&idx=1&sn=2beb042cb4fac075185bfe03b4bcda6e&chksm=cfd19e62cfe8b63b4115e2844f32ad39667589a35a672a07abb0e39e198f3b3a5843f68d5fad&clicktime=1781937015&enterid=1781937015",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "重新理解 Palantir",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484237&idx=1&sn=d7521d0768e7ac8728b53625fda83732&chksm=f50e4c2fe10c727e4cfabf01e8a20c10ed286ac22d2b1943360a2321a7e43c801764cb3f40df&clicktime=1781935912&enterid=1781935912",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes 与 OpenClaw：架构边界对比",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484305&idx=1&sn=9b9ee68acf6cda258dfe0dfa6099fad7&chksm=cfb65120af23dac46628cf4491362d597b383143a41afc5173a709ce106c61cf821ce0ea0a29&clicktime=1781936819&enterid=1781936819",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AWS + LangSmith的深度Agent评估路线_260621024804_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484624&idx=1&sn=3b97465c46e999789153013ffdf7e4e7&chksm=cfcfe4f1a4f4d3276b9ff9945750dcfe8e725f7e93a8c52b1de180506de3dce3433438e42f81&clicktime=1781936655&enterid=1781936655",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Palantir AIP 到底是什么？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484377&idx=1&sn=b86eee74618cb6d885b17a28414c61c7&chksm=f4b0984ec3c7115819d4266a488a03205761afa90f4f74f3606adef327c2e496cb8537ef1c23&exptype=servicebox_1781935531420920&subscene=0&clicktime=1781935541&enterid=1781935541&flutter_pos=44&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "企业AI落地真相",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247483814&idx=1&sn=b77353d6c7116749f12ae1962ea2cd62&chksm=f5f6bb93953fabb9c0dd89304a756711fe6c6192bcc62723cee4771f0f07908ef93c6a4975d0&clicktime=1781936069&enterid=1781936069",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构解析：上下文、模型与工具",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247483932&idx=1&sn=bd79c02cb8e897e5698af3f69ca93eba&chksm=cf7997c92f9fea96975cd17b2f0c54fef1da51a60bef08369b541110e01c0a8eefb2862a15f6&clicktime=1781936964&enterid=1781936964",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Agent 应用如何保持长时间运行？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486491&idx=1&sn=f38db2158183903b06479235db3d86a4&chksm=9693747aabba18f490b20bfca507794fc874c2d37919c836140f548dcc97d6c70cabeb50ec17&clicktime=1781935158&enterid=1781935158",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "OpenAI Symphony：AI 编程下半场是任务编排",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2MjkwNzY4OA%3D%3D&mid=2247495567&idx=1&sn=eea36c41ae935ce1b675b46030bdd4f3&chksm=ce0213c8f9759adee9e8093df39ce87866bbf8414cdeb6b4a49091930726e1b0451458efa486&exptype=servicebox_1781937507744813&subscene=0&clicktime=1781937515&enterid=1781937515&flutter_pos=182&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "mempalace：AI 的本地记忆宫殿",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MjI4Nzc3Mw%3D%3D&mid=2247490200&idx=1&sn=719ef3b68b88e94aa86cb29838236822&chksm=c3ca67faaaa452bd45bc25305a43859bbb9cb304185ff0fadb3fd1841196ced16297f2173262&clicktime=1781934873&enterid=1781934873",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "硅谷又造新词：Loop Engineering到底是啥？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938190786-6594617410&__biz=MzkxMTE5NjA3Ng%3D%3D&mid=2247485841&idx=1&sn=dc177365d74e5fb0a7676e5bc4043262&chksm=c0400ed099493d0556b46ab8948d7a9ed3710b996c6284fe20877a4c39653b1cd720b6d9c654&subscene=90&clicktime=1781938190&enterid=1781938190",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes 与 OpenClaw：安全治理对比",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484393&idx=1&sn=c5d75476abcc9b330fad890db5bd1189&chksm=cf3231fb085e8693adee0b1c5e1166f3ab62b1dd1f0589a54523cc9ffef90fd1858098bfbacf&clicktime=1781936760&enterid=1781936760",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "agent-browser：为AI Agent 写的浏览器CLI",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486082&idx=1&sn=68860cb626f874e6753331df42a06452&chksm=96cc8e795ffb8e09fed2f2701db11aaf6a29184612dd8b6fb64cdc8a0ccfaada2a74872384be&clicktime=1781935318&enterid=1781935318",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "硅谷炒的火热的“Loop”是什么？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNDg3NDg2OQ%3D%3D&mid=2247484787&idx=1&sn=a3ec2c4109f9bc8dd583fa556bddfe7b&chksm=f0997be9c7eef2ffd76c7bc6738c1fbde9ef2d96f46da8d97e13b685fb1f649c5354719e58e0&exptype=servicebox_1781935439753000&subscene=0&clicktime=1781937067&enterid=1781937067&flutter_pos=38&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构解析：扩展、记忆与会话",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484192&idx=1&sn=4b47ae7bdf2d4283d5ec68170bc9fe50&chksm=cfb0c88a891d62f82b4fbec1094a3d63aec05aece4fc5dfb96fa2ce7793edcdd35154df1c7ae&clicktime=1781936937&enterid=1781936937",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "PageIndex：告别向量数据库，用推理定义RAG",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486274&idx=1&sn=b02fd6f08c7731916ffd5fb29271bcf1&chksm=9694d4d94099637b667166941e0f9b4c967130cf435cdef023a8a3388761eb5387ffe96d2999&clicktime=1781935198&enterid=1781935198",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "万物皆可 Markdown，微软开源 MarkItDown",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MjI4Nzc3Mw%3D%3D&mid=2247489883&idx=1&sn=7832f567af4324b8109e859669221f1f&chksm=c318abc58c6e76d90cf53e44c400c322e2d965c1ed2558d34c4b8ee71353bce757a41c7eb1d7&clicktime=1781934920&enterid=1781934920",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "腾讯云轻量服务器，可秒级部署WeKnora",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNjk1ODg5Mw%3D%3D&mid=2247483663&idx=1&sn=a5da1e7cd2cac61cb4352fb170e48e24&chksm=f0f920cdc78ea9db21bcb2df18f78154ccc3e35950545b86c8fa30f2ec029f9fe94ea34efd1b&exptype=servicebox_1781937556786725&subscene=0&clicktime=1781937562&enterid=1781937562&flutter_pos=218&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Prompt 之后，轮到 Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484803&idx=1&sn=c9cbed47aae9c102ca7eeb3f6c1d55b6&chksm=cf31d7334102b158d78eb666eadd44297efce346cedb5e812e8a0da289a14da8f1d593e00d6a&clicktime=1781936472&enterid=1781936472",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "GenericAgent：能自己长出技能树的开源框架",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzA3OTIwMDY0MQ%3D%3D&mid=2247485416&idx=1&sn=99baa3530c817ad0c675532701aa1d7a&chksm=9fb66f06a8c1e6105dc8a3fef6bd442089afa87f730814995da4cb501814ed74d0bf5cdcf620&exptype=servicebox_1781935425433966&subscene=0&clicktime=1781935444&enterid=1781935444&flutter_pos=25&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "如何有效构建你的Agent Harness",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484636&idx=1&sn=3c74152291ef0be01b1c94a1d18be760&chksm=cf8c0d3f326d7214925340dde311b22ed857d2610c93647c44e5c3dcc862d6d662f9242324c6&clicktime=1781936613&enterid=1781936613",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "LLM+｜Presidio：微软开源的数据脱敏工具",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzk0MjI4Nzc3Mw%3D%3D&mid=2247490110&idx=1&sn=dc852bc0f55f8bc58191fc1eb4f59bb3&chksm=c2c424ccf5b3adda6dcf40d83aa4e967a1e93a47d69ce0fe8f17df55ed646d221e4d682432a9&exptype=servicebox_1781935531420920&subscene=0&clicktime=1781936274&enterid=1781936274&flutter_pos=47&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Grep 搜索竟然比 RAG 还好用？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486515&idx=1&sn=1b3b03be77b9f6d640b3acdff4813bc0&chksm=97114585a066cc932dd3261734aa1fa9e35e6745b2bde0cf7463dafee34ee6bcee195fbf4f9b&exptype=servicebox_1781934645229715&subscene=0&clicktime=1781935025&enterid=1781935025&flutter_pos=10&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Browser Harness 592 行 Python接管浏览器",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486017&idx=1&sn=97a5e15a2c3dcae780016a473735752a&chksm=96001e5ccca4d77b40a0f4b6df8a8308a4fc542de55136089df9d7c48740e9a4eb9afb049abf&clicktime=1781935359&enterid=1781935359",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Agent不是模型，而是企业AI系统设计",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484015&idx=1&sn=a671d239248fff103457ea2cae99521f&chksm=f5b3e9b3d77114ca2391d7544cf1eb60aa744dadf884a3dd197be19e0458c1bd81611463f6b1&clicktime=1781936000&enterid=1781936000",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Anthropic的危险信号：AI已开始自己造自己",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484786&idx=1&sn=0c3a5730a5d650e3c02a003ff24f8e46&chksm=cf8d33f7f5f7bff5c92b60331c459aabeb8d4a8750a0a8a289c2661ae25003fdd6ab48d83dde&clicktime=1781936502&enterid=1781936502",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "用好Codex关键组合，从一次性到持续工作流",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484556&idx=1&sn=0b817a1ca654031a5853c1016cd7962a&chksm=cfeb86160f13f4e381d3ecced42d48c670ce3768a1aa9184247913a5040707bd72af895b1821&clicktime=1781936686&enterid=1781936686",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AWS + LangSmith的深度Agent评估路线",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484624&idx=1&sn=3b97465c46e999789153013ffdf7e4e7&chksm=ceb0e713f9c76e05b7d4f2ada4cb4acbc0ce91ffd5c9aaffe9297e556f329f2e8f5757df035b&exptype=servicebox_1781936411684706&subscene=0&clicktime=1781936440&enterid=1781936440&flutter_pos=65&biz_enter_id=5",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "从吴恩达谈 AI Engineer，看企业 AI 执行化",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzcwMDMwNTE0NA%3D%3D&mid=2247484194&idx=1&sn=13c0cec6af93b70361459cda9c5b00e4&chksm=f51d4e005c285bbaf9ebf7c8b710463d9e026bdf0b120afc464185099174420b7c275f9889a2&clicktime=1781935935&enterid=1781935935",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Agent架构解析：执行、治理与安全",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484200&idx=1&sn=4db11f5da9978a672e284d596e41f0d7&chksm=cfc16842f4527cc739286e24e6bc95fa13969e5c7932b8cc6e67f90d96422f17375c1413d0bb&clicktime=1781936912&enterid=1781936912",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Hermes Kanban不只是看板，而是Agent调度层",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484574&idx=1&sn=84b6f880b2e0a76a9b617afe0de6b4fc&chksm=cf140ac783427c8ce01bf371287019a74d05395327fee304fce1bea92105bdae424896ecf51e&clicktime=1781936671&enterid=1781936671",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "企业版OpenClaw来了：goose 开源43k star",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIwNzU5MzY4OQ%3D%3D&mid=2247486168&idx=1&sn=6048332dfe9f2397f328f91d20a92750&chksm=96ea37570df54712f1561e90481ac1d862b5a30b945fe8261a60159bb611571ee1c77ed4ae13&clicktime=1781935270&enterid=1781935270",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Dynamic Workflows的差异与落地场景",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2ODA4NzQ2OA%3D%3D&mid=2247484669&idx=1&sn=6f492a514f91990f7d7351bbe77061f4&chksm=cf2a782a578ae75482e514c6c0aff64acf0739a46e504b5f9f7b7dc113839a4e773b33dd4987&clicktime=1781936596&enterid=1781936596",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "硅谷 AI 新词：Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939335478-4423473539&__biz=Mzg2NTYzNDYxOQ%3D%3D&mid=2247483880&idx=1&sn=259e73a590d35e73c568e0dfed9600e7&chksm=cf6fc7a98b72a7ce0de733bdf91c7ae32f096817c013f497abf8e1ffa4a7f8667a07db99ed3b&subscene=90&clicktime=1781939335&enterid=1781939335",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering先让 Agent 学会用文件",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938750073-2299843209&__biz=MzcwNTEyNDcwNg%3D%3D&mid=2247485928&idx=1&sn=5b0546415da2ddec1d6e7d4d0e814abb&chksm=f53fb3affc62c6b96a671ce539db4f708e88b10818e118c8f6c168caef3cb1ae25be263dea3d&subscene=90&clicktime=1781938750&enterid=1781938750",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "30 秒画完一张架构图，Skill 开源给你",
+    "url": "https://mp.weixin.qq.com/s?chksm=9ff252f8a885dbee3e9dd4fe69746b501cbe0556fe56ca14489950d0d695a63fa0e75e70df9c&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1782139054_11&req_id=1782139619531186&mid=2247491687&sn=ae7dbea140438ff2079c6451fce9d52c&idx=1&__biz=MzA4Mzc5ODAwMA%3D%3D&subscene=200&clicktime=1782139858&enterid=1782139858&flutter_pos=106&biz_enter_id=5&jumppath=20020_1782139827188%2C1122_1782139828365%2C20020_1782139851376%2C1104_1782139854409&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "一图看懂 Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939988971-9543091552&__biz=MzA3NTgwOTQyOA%3D%3D&mid=2648131747&idx=1&sn=9127b0d9e0eaa2b20901c942d5dabee7&chksm=8697e6d792aa5e94eb332ae7b852642c11f73adb8daf0bbc4643f5645ffd20ec5f3cc657d443&subscene=90&clicktime=1781939988&enterid=1781939988",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "一张图讲透多智能体系统",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNzg5OTk2NQ%3D%3D&mid=2247484306&idx=1&sn=ab5f9906c35b169aa94721989408c4e0&chksm=f1c800bb9eb9b2718e8166e1d6a799cf9e025126f90f89f6d01b10407fdcf917de6317db7776&clicktime=1781939214&enterid=1781939214",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering能否终结提示词工程",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938979091-2617300344&__biz=MzkxNDU5ODg5Nw%3D%3D&mid=2247483712&idx=1&sn=be71215fad86ac1afbdf1b41876610e9&chksm=c0e18f89d1bb24d6ccc3534f13fa881712798316f602ff0a3a7656bb4c26605f7527cbe125f4&subscene=90&clicktime=1781938979&enterid=1781938979",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "我把同事蒸馏成了一个AI插件",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzMzI3NDQzNQ%3D%3D&mid=2247485446&idx=1&sn=5f0dcf43a1f7f04ea62ee17a412ac5d1&chksm=e98a70f4b42dd918997e28082bd58f4219ef00ae23951413df4ef782e8d0cebc7193bbb762b5&clicktime=1781938452&enterid=1781938452",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering 是 AI Agent 的范式跃迁",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939007463-7337794176&__biz=MzYzOTg4MTM5MQ%3D%3D&mid=2247484214&idx=1&sn=a2b5ee9813af144eae85bfb2455afdf4&chksm=f1490f3d3da89b4ad3d9d1540d148d0187e3575d6bd8de820de26be90f683804dbb7f58babcd&subscene=90&clicktime=1781939007&enterid=1781939007",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "“Loop Engineering” 又有新词？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939057200-4608469163&__biz=Mzg3NTcyNzI5Mg%3D%3D&mid=2247484301&idx=1&sn=cf223a3d211b522b903c417dc07a4786&chksm=cee0083a8b3df1de88766210a6946640b0371e84e4d3e1f8550b29a42f533ef099cb1f9d08b5&subscene=90&clicktime=1781939057&enterid=1781939057",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AI Agent如何完成自我进化？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkzMDk5MjY2NQ%3D%3D&mid=2247484811&idx=1&sn=b7890dbc2bc6fff131acc7205bbfd048&chksm=c3ed3d3e27d5db7d2c74f85ddd639ef542643850c19d6bfd4e145825ae5cb9fe25944676f85c&xtrack=1&req_id=1782024601048400&subscene=93&clicktime=1782027432&enterid=1782027432&flutter_pos=10&biz_enter_id=4&ranksessionid=1782027415&jumppath=20020_1782027407909%2C1104_1782027412306%2C1001_1782027415189%2C1104_1782027421043&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering：程序员的下一个身份转变",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938926340-8544763173&__biz=MzA5MDQ0MTY4Nw%3D%3D&mid=2247484004&idx=1&sn=b2a2c9ba89c4a228d5e0871e40e4db71&chksm=9160cc6d8e468e4e5bcde8edea44cdbcdc41a9df42ccfd9fc8265c3f6d048bbe1f05ae41d7eb&subscene=90&clicktime=1781938926&enterid=1781938926",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AI新词又来了——Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939482921-2829305887&__biz=MzkzNzk1NTI0MA%3D%3D&mid=2247484086&idx=1&sn=da78c0bb730438d499cba6fca15d54ed&chksm=c3af0d4a7c19d0a46cb41ee2e455aebe2e7363d1b8ca04be151e201e74677291fc5623ef2ad7&subscene=90&clicktime=1781939482&enterid=1781939482",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AI 底层科技通识｜小白听得懂的 AI 技术课",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzY5NTM1NTMwMA%3D%3D&mid=2247483732&idx=1&sn=3eb4af1878f671ec35ef83aed292d592&chksm=f5399d77c71daa0f5ed2349fb9e38c47bbcbe06051386e7aa14616d9187385fc7bfffa0e1651&clicktime=1782140638&enterid=1782140638",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "6分钟快速了解Loop Engineering工程",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938874551-7016020576&__biz=Mzg4NzEwMTU3MA%3D%3D&mid=2247484754&idx=1&sn=26729d893d5d6b0bbb492ac1dcdfb213&chksm=cea92946df5cb19a7bcfa7048f7fa048a906f6af2c92ba1805fc5687c641e111353d9ce0ef2b&subscene=90&clicktime=1781938874&enterid=1781938874",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "爆火的 Loop Engineering，到底解决了什么",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939436656-5863675294&__biz=MzIwMDE2MzkwMg%3D%3D&mid=2653361518&idx=1&sn=8c60173a2702250c4c235a31aed1417a&chksm=8c4ce145310463b16e509d1d7adae1371b95557cdd649d55d124b4f0c8ced1f1c84b79dc03b8&subscene=90&clicktime=1781939436&enterid=1781939436",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "图解 “Loop Engineering” | 智能体的四层循环",
+    "url": "https://mp.weixin.qq.com/s?chksm=c3315136f446d8202614fae8f8c9c97bdfcfdcb66391067ae5ddf10d377c14bdcbc52ccc3325&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1782026761_1&req_id=1782026761185071&mid=2247484210&sn=dfe605ed1064e79701a6c48c109b7410&idx=1&__biz=Mzk0MzY4NzUzMQ%3D%3D&subscene=200&clicktime=1782026790&enterid=1782026790&flutter_pos=28&biz_enter_id=5&jumppath=20020_1782026741989%2C1104_1782026743519%2C20020_1782026769723%2C1104_1782026786120&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "【码】Loop Engineering 到底是什么？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938906535-6863806918&__biz=MzA4NTM2MDMzOQ%3D%3D&mid=2649879826&idx=1&sn=01f7c844006cdaa2f3f02696ddb6374a&chksm=86ad775ba6dbf96e88d4637139afd2c1a96af984b4a565f1b5d323783e8f4182bbdedd1c63b9&subscene=90&clicktime=1781938906&enterid=1781938906",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "从执行到进化：看懂智能体四层闭环设计",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939142109-8245944296&__biz=MzYzNzg5OTk2NQ%3D%3D&mid=2247484652&idx=1&sn=b1a9a5443ad37f2768a2cfa67edcf72b&chksm=f1c1b4ff3b93cf6cf8e3ecc30168c5e8fa0eb8334494404f6e6ac6b1f7a913741f0574a65cad&subscene=90&clicktime=1781939142&enterid=1781939142",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Obsidian最强插件合集（建议收藏）",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzY4OTM1NTc0OA%3D%3D&mid=2247483690&idx=1&sn=53b036b24b1255b6dfaef691d68c6845&chksm=f2a57859d5df755e9a6d1f59cb47ce5aefc301d29987bbc64915e161b22d282f004611c0f9eb&clicktime=1781938824&enterid=1781938824",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering 是什么｜8 张图讲透",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939460133-4706774967&__biz=MzYzODg3NTkwNQ%3D%3D&mid=2247484001&idx=1&sn=4b72f69cedd987b7de80157da36eb870&chksm=f1b325caf4ad3c4bef93ee88936aebae1b2a17d667f7d3078066323f545a1b0ed72cf5d8ce04&subscene=90&clicktime=1781939460&enterid=1781939460",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "KDNA Skills（开源）：给 KDNA 配上 Skills，让 AI Agent 不只会判断，还能真正用起来",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzA4NzI0ODgwNw%3D%3D&mid=2653280486&idx=1&sn=fbdb0623fe91a561990a5f15b05f6ee5&chksm=8a1fed0d314eac39a4c6351419d604da5c70b73a3ba90e055f2ac1a1f2e0354b1ca2f138ab1a&clicktime=1782159347&enterid=1782159347",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "最近爆火的Loop Engineering，到底是什么？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938957532-9534348450&__biz=MzU2Mzg2NDcxNg%3D%3D&mid=2247483907&idx=1&sn=607fe144ace36dbcf16d9f944d365f47&chksm=fd053b409c1bf5ce2ef2891624044fc19e95e13d185b90aa89546d0d4cf25062e1690acc1e47&subscene=90&clicktime=1781938957&enterid=1781938957",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "5 分钟看懂 Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938690426-0799121087&__biz=MjM5NjE3NjYzMw%3D%3D&mid=2247497099&idx=1&sn=84ae9e441b2fcf84eff80eb221411a29&chksm=a7fb24b5cea12008b09fce0e383905af93733ae8717dedd16b68052631d50c5526ba82e85b66&subscene=90&clicktime=1781938690&enterid=1781938690",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Prompt 已死，Loop Engineering 当道！",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938328839-6630483933&__biz=MzIzMzI3NDQzNQ%3D%3D&mid=2247486598&idx=1&sn=bae33d81e78afbc434b8e53e88b57dc7&chksm=e9a81e65dbff111e8089a4dee90bd9f66d1b71e7a6358ca0a34172a1de57fe4b441d2e8236e1&subscene=90&clicktime=1781938328&enterid=1781938328",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "✨Loop Engineering 2026最大范式转变来了",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939309072-9549351041&__biz=Mzk4ODA3MjQwMA%3D%3D&mid=2247484281&idx=1&sn=dc003706c33560527f6469a75aeaf7e1&chksm=c4b5ac4c8f6bf74364c00d258482a1be31a50bd24065d02fc5d7e42e9e7d4b806f98c61a77b2&subscene=90&clicktime=1781939309&enterid=1781939309",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "你会写 Prompt，还是会设计 Loop？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938234567-1565679643&__biz=MzkwNzcxMzc4Mg%3D%3D&mid=2247483813&idx=1&sn=02c98ad37a13c1b94f49cda76bbc846d&chksm=c189243d30ac60de807edae7b7c86fa5a868b7ecda53b1faeda8e350d52505b77e7330a97527&subscene=90&clicktime=1781938234&enterid=1781938234",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "harness之后，Loop Engineer又是啥？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939837893-1773389083&__biz=Mzg5NzA1NDU4Mw%3D%3D&mid=2247484035&idx=1&sn=ec404abf3f5a3ad44713185ff2ae5d47&chksm=c1c248ba179f42232a0773b425b4f6813192f6c8040ada7634870e1ba088ea76a6330f4dd802&subscene=90&clicktime=1781939837&enterid=1781939837",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "三大Agent开发运营产品升级，帮企业建好“1+N+X”Agent体系",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=18314787875886153841-1782354405219-7654270961&__biz=MzI0NzU1NzI5NQ%3D%3D&mid=2247542262&idx=1&sn=a8050b3eb77783b95572919a007f4a47&chksm=e83908b5401706d8e7a8dad564f1e2c853bc6daa8ec71940ec6499a73bf5065d11356cd91c55&subscene=0&clicktime=1782354405&enterid=1782354405",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "从Prompt 到Loop：AI 正在换一套工作方式",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939115430-1754569866&__biz=MzY5ODMzODUyOA%3D%3D&mid=2247483880&idx=1&sn=3372411778bbb5a123d8a1bf17a7ef7a&chksm=f5783246134c9c4c12a5256b07e4087990c41c95b40e07a9868a40c6725be11836f630fd2d78&subscene=90&clicktime=1781939115&enterid=1781939115",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering又来了！",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939884776-1631771828&__biz=Mzk2NDI1NjE5OA%3D%3D&mid=2247484568&idx=1&sn=a7a0f28a40987645bb94d73023ae43bf&chksm=c5aae07ba2944f4c591b3c9c1ef0ef58d8395065da42df2837079b1a7aecdad69c9bdb661818&subscene=90&clicktime=1781939884&enterid=1781939884",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Fable5：怪物来了，你会用吗？",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzIzMzI3NDQzNQ%3D%3D&mid=2247486586&idx=1&sn=2117cb5a660d70be16b5351a1f9bd649&chksm=e97d9ec519c0c63694cf63f7031a79575965f6d3821f7888c4b8566cd3bce2ed447eb51c57fc&clicktime=1781938354&enterid=1781938354",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering｜02 /loop 与 /goal——Claude Code 新原语加持久化状态",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkzODk3MTIwMQ%3D%3D&mid=2247489561&idx=1&sn=98ace81e4e9ed34a3a3711a6d1e7f9d1&chksm=c2f94137f58ec821dbb0d3a8f8a8a6b85cda9a4567a029d4c16be5d9121f09850f77352bcfbd&cur_album_id=4553682403625680898",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Harness 之后，AI 圈又来了新词：Loop",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939033723-1089191242&__biz=MzI3NzE1MDM2NQ%3D%3D&mid=2649625856&idx=1&sn=9bfd5b2a841e8269d929c4b93eb984eb&chksm=f264809ef58c69f2605357a2c083729b9fc0847072b6fe2771288f0e0c9809275511d7473297&subscene=90&clicktime=1781939033&enterid=1781939033",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "KDNA（开源）：AI Agent 的“领域认知层”，帮你真正实现从知识到判断",
+    "url": "https://mp.weixin.qq.com/s?chksm=8bed2229bc9aab3fde58748612e6ff4f1649721f0a786acf54bd6bef5aae8eabb8f90c2766bc&exptype=unsubscribed_card_recommend_article_u2i_mainprocess_coarse_sort_tlfeeds&ranksessionid=1782156996_8&req_id=1782158835560633&mid=2653280481&sn=6373c2a90802fe8d5244f1b892687079&idx=1&__biz=MzA4NzI0ODgwNw%3D%3D&subscene=200&clicktime=1782158930&enterid=1782158930&flutter_pos=71&biz_enter_id=5&jumppath=20020_1782158259697%2C1104_1782158832063%2C20020_1782158837413%2C1104_1782158910050&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "一张图告诉你AI 从Prompt到Loop的进化历程_260621024619_1",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938551474-6573080933&__biz=MzA5MDg1NDY4OQ%3D%3D&mid=2649374063&idx=1&sn=97ae1feab2749149e1c8d8196c3914ae&chksm=89b7fde1e32d904286a1a023a497085fc6eab2c9e7bdfa6485a6c89f77cd8b8ba44d2583d940&subscene=90&clicktime=1781938551&enterid=1781938551",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Fable 5 到底强在哪？一文深度拆解",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkwNzcxMzc4Mg%3D%3D&mid=2247483722&idx=1&sn=8d39b0c4178bcf97485e92dc1f3dbc05&chksm=c1682f94372325b1c846d5cc451526516f455afd68a7f63cc322a89f7d34ff2acaf40b2d03f5&clicktime=1781938297&enterid=1781938297",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering 实战：用 opencode-loop 搭一个能自我修正的 AI 开发循环",
+    "url": "https://mp.weixin.qq.com/s?chksm=f5280d82c25f8494bda1275fb5aba16f88842e7da95345da3ca5600a7dfae369ddd8046cda81&exptype=unsubscribed_card_recommend_item_heat_tlfeeds&ranksessionid=1782677174_1&req_id=1782677174615228&mid=2247484000&sn=6a475a0189fdbfa4ef4ede0cfbd4c686&idx=1&__biz=MzcwOTI1Mzc3Mw%3D%3D&subscene=200&clicktime=1782677186&enterid=1782677186&flutter_pos=50&biz_enter_id=5&jumppath=20020_1782677142441%2C1104_1782677160933%2C20020_1782677169619%2C1104_1782677170952&jumppathdepth=4",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "从写出 Skill，到用好 Skill",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNzg5OTk2NQ%3D%3D&mid=2247484133&idx=1&sn=ee89a79bda0152829e3594f705877a5f&chksm=f11dd7e5963abd0bf85a03be1be4faec9b21c4069eb7fc3ad58ecf504edb58530e8112552823&clicktime=1781939244&enterid=1781939244",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "两种 Agent Runtime 的设计哲学",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNzg5OTk2NQ%3D%3D&mid=2247484067&idx=1&sn=6d41a327363ce9df8566da60d1eafe61&chksm=f1ee2cffd4e9dbe6120d49d1dad6c0c08a7d6eff7a91be08e7587066b915174ede5bf57bef4d&clicktime=1781939264&enterid=1781939264",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "2026年AI编程范式演进：Loop Engineering",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938488608-7941556978&__biz=MzcwNTEyNDcwNg%3D%3D&mid=2247485883&idx=1&sn=55c7c2ffb0f423ad288afa5488541de6&chksm=f5e0de80c016e12e8f5541c20324bee0f76607310e4b633158986aa0df567664d46641e28fd6&subscene=90&clicktime=1781938488&enterid=1781938488",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "硅谷又有造新词了，Loop Engineering是什么",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938852356-3052574740&__biz=Mzg4MDg0ODg5OQ%3D%3D&mid=2247486937&idx=1&sn=695d7c097cd378b88161e8059afcbd5d&chksm=ceadacec8cf2853f9c533b1bc2a8bfec02956249a3687210988bfb0be6b933bc0ab9c8ff5ef0&subscene=90&clicktime=1781938852&enterid=1781938852",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering｜01 自治触发与退出条件——当你不在场时，循环怎么知道该启动和该停",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzkzODk3MTIwMQ%3D%3D&mid=2247489554&idx=1&sn=857e6b5885575a6ef464fff9cb4ea6b3&chksm=c2f9413cf58ec82a618b5b1c756b4b8d5042212fbd1c3ffc2a62466cd0cb4508412194c546bf&cur_album_id=4553682403625680898",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Claude Code高级玩家指南：可编排AI军团",
+    "url": "https://mp.weixin.qq.com/s?__biz=Mzg2NTYzNDYxOQ%3D%3D&mid=2247483809&idx=1&sn=539159e7219e985d6bb32c7ed34c4098&chksm=cfa4dcc8031f7687dc9382a958f4058797c2f60818a968088c5d74e8734cd124694ed92088c7&clicktime=1781939408&enterid=1781939408",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Harness之后，是Loop Engineering ？",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939953471-9863623733&__biz=MzIwNjQ1NzQxNA%3D%3D&mid=2247484425&idx=1&sn=80935f3a4cb2ca6231c1392ac178365f&chksm=96a033065dc28c6e3b724fd7fc7fa03f00bffb2e5cdcdc9b6a3006cd2fc0d38690c11608be89&subscene=90&clicktime=1781939953&enterid=1781939953",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "skill推荐系列-YC CEO 开源的 Agent 大脑",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=6749090124781381938-1781987966693-7178758607&__biz=MzA4NjgzMzg0Ng%3D%3D&mid=2649231752&idx=1&sn=e3e3172b5df561ca0f13bb5bf4e142e0&chksm=8632c7d6a53e88270a320ab3285ad4fce6cde34e67729e23933f223ce49a84f0089369f72c63&subscene=90&clicktime=1781987966&enterid=1781987966",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "别只会写Prompt，Loop Engineering才是重点",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938792021-3014034038&__biz=MzY4OTM1NTc0OA%3D%3D&mid=2247483730&idx=1&sn=164b2ee6ae5369be7eed5cee3e0a169a&chksm=f24bf2044e82eefe39585c4c61740f7332c2a521bd02559594ae7ef670984dd8f9a8bf331f17&subscene=90&clicktime=1781938792&enterid=1781938792",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "上下文工程：让大模型从会回答走向可靠执行",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzYzNzg5OTk2NQ%3D%3D&mid=2247484464&idx=1&sn=d00a17f881cedcefb144bd6651aff61a&chksm=f1600dad6fb3bc5adfd967639ed52d80dfb9ca8db760d83e7b6189b92d018e9f5463d69ba162&clicktime=1781939178&enterid=1781939178",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "AI 底层科技通识｜小白听得懂的 AI 技术课_260703134001_1",
+    "url": "https://mp.weixin.qq.com/s?__biz=MzY5NTM1NTMwMA%3D%3D&mid=2247483743&idx=1&sn=8d2d805e01047dc45da8ed698dd6764f&chksm=f5a4d5f28ef568eead68e7c4601f0bad50d5ef5b28835eadae385008a3253833bea9f514f415&clicktime=1782140628&enterid=1782140628",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "一张图告诉你AI 从Prompt到Loop的进化历程",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781938719500-2080909231&__biz=MzA5MDg1NDY4OQ%3D%3D&mid=2649374063&idx=1&sn=97ae1feab2749149e1c8d8196c3914ae&chksm=89b7fde1e32d904286a1a023a497085fc6eab2c9e7bdfa6485a6c89f77cd8b8ba44d2583d940&subscene=90&clicktime=1781938719&enterid=1781938719",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  },
+  {
+    "knowledgeBaseId": "7473122676592270",
+    "knowledgeBase": "企业级AI应用落地实践",
+    "folderPath": [
+      "Loop Engineering"
+    ],
+    "title": "Loop Engineering颠覆人机协作",
+    "url": "https://mp.weixin.qq.com/s?search_click_id=2585270727595660485-1781939499799-1158684530&__biz=MzYzNTkxNzQ2NA%3D%3D&mid=2247484045&idx=1&sn=c934abd99899802fdeb7c36a940431c8&chksm=f16f8191036ff2b491daeb0cbc74583bb6516aa9f7b0d417ad9b38e111ed330cbcf465265117&subscene=90&clicktime=1781939499&enterid=1781939499",
+    "contentType": "公众号",
+    "addedDate": "7/12"
+  }
+]

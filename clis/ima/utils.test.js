@@ -27,7 +27,7 @@ describe('normalizeArticleUrl', () => {
 });
 
 describe('toKnowledgeRow', () => {
-    it('builds deterministic columns and preserves nested folder paths', () => {
+    it('builds deterministic columns, preserves nested folder paths, and retains metadata', () => {
         expect(toKnowledgeRow({
             knowledgeBaseId: 'kb1',
             knowledgeBase: 'KB',
@@ -36,6 +36,10 @@ describe('toKnowledgeRow', () => {
             url: null,
             contentType: 'PDF',
             addedDate: '8/20',
+            mediaId: 'media-1',
+            sourcePath: 'https://example.com/source',
+            fileSize: 123,
+            tags: ['AI'],
         })).toEqual({
             knowledgeBaseId: 'kb1',
             knowledgeBase: 'KB',
@@ -44,6 +48,10 @@ describe('toKnowledgeRow', () => {
             url: null,
             contentType: 'PDF',
             addedDate: '8/20',
+            mediaId: 'media-1',
+            sourcePath: 'https://example.com/source',
+            fileSize: 123,
+            tags: ['AI'],
         });
     });
 });

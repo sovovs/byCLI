@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     collectKnowledgeTree,
     findKnowledgeBase,
+    listKnowledgeBases,
     readKnowledgeBaseFromApi,
 } from './native-api.js';
 
@@ -137,6 +138,35 @@ describe('collectKnowledgeTree', () => {
 });
 
 describe('findKnowledgeBase', () => {
+    it('lists every knowledge-base group with raw metadata and deduplicates IDs', async () => {
+        const primary = {
+            id: 'kb-1',
+            basic_info: { name: '工程' },
+            creator_info: { nick_name: '创建者' },
+            access_status: 1,
+        };
+        const request = vi.fn(async (_path, body) => {
+            if (body.params.length > 1) {
+                return {
+                    code: 0,
+                    results: [
+                        { type: 1001, knowledge_base_list: [primary], is_end: true },
+                        { type: 1002, knowledge_base_list: [{ ...primary }], is_end: true },
+                    ],
+                };
+            }
+            return { code: 0, results: [{ type: body.params[0].type, knowledge_base_list: [], is_end: true }] };
+        });
+
+        await expect(listKnowledgeBases(request)).resolves.toEqual([{
+            id: 'kb-1',
+            name: '工程',
+            type: 1001,
+            typeName: '我的知识库',
+            raw: primary,
+        }]);
+    });
+
     it('finds an exact knowledge-base name across paginated groups', async () => {
         const request = vi.fn(async (_path, body) => {
             const mine = body.params.find((item) => item.type === 1001);
@@ -269,6 +299,19 @@ describe('readKnowledgeBaseFromApi', () => {
                     media_id: 'article-1',
                     title: '文章',
                     jump_url: 'https://example.com/article',
+                    source_path: 'https://example.com/source',
+                    create_time: 10,
+                    update_time: 20,
+                    last_modify_time: 30,
+                    last_open_time: 40,
+                    file_size: 50,
+                    abstract: '摘要',
+                    introduction: '简介',
+                    tags: ['AI'],
+                    is_top: true,
+                    access_status: 2,
+                    parse_progress: 100,
+                    summary_state: 1,
                 }],
                 is_end: true,
             };
@@ -281,6 +324,21 @@ describe('readKnowledgeBaseFromApi', () => {
                 knowledgeBase: '工程',
                 title: '文章',
                 url: 'https://example.com/article',
+                mediaId: 'article-1',
+                mediaType: 2,
+                sourcePath: 'https://example.com/source',
+                createTime: 10,
+                updateTime: 20,
+                lastModifyTime: 30,
+                lastOpenTime: 40,
+                fileSize: 50,
+                abstract: '摘要',
+                introduction: '简介',
+                tags: ['AI'],
+                isTop: true,
+                accessStatus: 2,
+                parseProgress: 100,
+                summaryState: 1,
             })],
         });
     });

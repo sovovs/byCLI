@@ -14,7 +14,12 @@ describe('ima knowledge command contract', () => {
         expect(knowledgeCommand.defaultFormat).toBe('json');
         expect(knowledgeCommand.columns).toEqual([
             'knowledgeBaseId', 'knowledgeBase', 'folderPath', 'title',
-            'url', 'contentType', 'addedDate',
+            'url', 'contentType', 'addedDate', 'mediaId', 'mediaType',
+            'mediaState', 'mediaAuditStatus', 'mediaTypeInfo', 'sourcePath',
+            'jumpUrl', 'createTime', 'updateTime', 'lastModifyTime', 'lastOpenTime',
+            'fileSize', 'abstract', 'introduction', 'tags', 'isTop', 'accessStatus',
+            'accessStatusUpdateTs', 'parseProgress', 'parseErrInfo', 'summaryState',
+            'coverUrls', 'logo',
         ]);
     });
 });
@@ -44,11 +49,13 @@ describe('runKnowledgeCommand', () => {
             items: [{
                 knowledgeBaseId: 'kb-1', knowledgeBase: '工程', folderPath: ['AI'],
                 title: '文章', url: 'https://example.com/a', contentType: '网页', addedDate: '8/24',
+                mediaId: 'article-1', sourcePath: 'https://example.com/source', fileSize: 42, tags: ['AI'],
             }],
         }));
         await expect(runKnowledgeCommand({ knowledgeBase: ' 工程 ' }, read)).resolves.toEqual([{
             knowledgeBaseId: 'kb-1', knowledgeBase: '工程', folderPath: ['AI'], title: '文章',
             url: 'https://example.com/a', contentType: '网页', addedDate: '8/24',
+            mediaId: 'article-1', sourcePath: 'https://example.com/source', fileSize: 42, tags: ['AI'],
         }]);
         expect(read).toHaveBeenCalledWith('工程');
     });
