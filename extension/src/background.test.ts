@@ -1388,7 +1388,7 @@ describe('background tab isolation', () => {
     });
   });
 
-  it('advertises the focus-window capability in the daemon hello', async () => {
+  it('advertises the Browser Bridge capabilities in the daemon hello', async () => {
     const { chrome } = createChromeMock();
     vi.stubGlobal('chrome', chrome);
     vi.stubGlobal('__BYCLI_COMPAT_RANGE__', '>=2');
@@ -1403,8 +1403,43 @@ describe('background tab isolation', () => {
     expect(socket.sent.map((message) => JSON.parse(message))).toContainEqual(expect.objectContaining({
       type: 'hello',
       version: 'test-version',
-      capabilities: expect.arrayContaining(['focus-window-v1']),
+      capabilities: expect.arrayContaining(['focus-window-v1', 'ima-reader-v1']),
     }));
+  });
+
+  it('returns a correlated error when command handling throws', async () => {
+    const { chrome } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await import('./background');
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const socket = MockWebSocket.instances[0];
+    socket.readyState = MockWebSocket.OPEN;
+
+    await socket.onmessage?.({
+      data: JSON.stringify({
+        id: 'throwing-command',
+        action: 'tabs',
+        op: 'list',
+        surface: 'browser',
+      }),
+    });
+
+    expect(socket.sent.map((message) => JSON.parse(message))).toContainEqual({
+      id: 'throwing-command',
+      ok: false,
+      error: 'Browser session is required.',
+    });
+
+    const responseCount = socket.sent
+      .map((message) => JSON.parse(message))
+      .filter((message) => typeof message.ok === 'boolean').length;
+    await socket.onmessage?.({ data: '{malformed' });
+    expect(socket.sent
+      .map((message) => JSON.parse(message))
+      .filter((message) => typeof message.ok === 'boolean')).toHaveLength(responseCount);
   });
 
   it('coalesces concurrent daemon connection attempts while the probe is in flight', async () => {

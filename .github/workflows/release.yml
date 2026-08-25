@@ -16,6 +16,8 @@ jobs:
       WEBSITE_DEPLOY_TOKEN: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v6
         with:
@@ -50,6 +52,10 @@ jobs:
 
       - name: Install extension dependencies
         run: npm ci
+        working-directory: extension
+
+      - name: Verify extension release version
+        run: node scripts/check-release-version.mjs
         working-directory: extension
 
       - name: Build extension

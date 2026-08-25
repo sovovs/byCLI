@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { spawn, type ChildProcess } from 'node:child_process';
+import WebSocket from 'ws';
 
 import {
   COMMAND_RESULT_UNKNOWN_CODE,
@@ -34,6 +35,75 @@ describe('getResponseCorsHeaders', () => {
 });
 
 describe('daemon command dispatch', () => {
+  it('rejects private ima commands before dispatch when the extension lacks ima-reader-v1', async () => {
+    const probe = createServer();
+    probe.listen(0, '127.0.0.1');
+    await once(probe, 'listening');
+    const address = probe.address();
+    if (address === null || typeof address === 'string') throw new Error('failed to reserve daemon port');
+    const port = address.port;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+    const daemon: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'src/daemon.ts'], {
+      cwd: process.cwd(),
+      env: { ...process.env, BYCLI_DAEMON_HOST: '127.0.0.1', BYCLI_DAEMON_PORT: String(port) },
+      stdio: 'ignore',
+    });
+    let extension: WebSocket | undefined;
+    try {
+      await expect.poll(async () => (await fetch(`http://127.0.0.1:${port}/ping`)).status, {
+        timeout: 10_000,
+      }).toBe(200);
+
+      extension = new WebSocket(`ws://127.0.0.1:${port}/ext`);
+      await once(extension, 'open');
+      const extensionMessages: unknown[] = [];
+      extension.on('message', (data) => extensionMessages.push(JSON.parse(data.toString())));
+      extension.send(JSON.stringify({
+        type: 'hello',
+        contextId: 'legacy-ima-profile',
+        version: '2.1.20',
+        capabilities: ['focus-window-v1'],
+      }));
+
+      await expect.poll(async () => {
+        const status = await fetch(`http://127.0.0.1:${port}/status`, {
+          headers: { 'X-byCLI': '1' },
+        });
+        const body = await status.json() as { profiles?: Array<{ contextId?: string }> };
+        return body.profiles?.some((profile) => profile.contextId === 'legacy-ima-profile') ?? false;
+      }).toBe(true);
+
+      const response = await fetch(`http://127.0.0.1:${port}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-byCLI': '1' },
+        body: JSON.stringify({
+          id: 'ima-capability-command',
+          action: 'ima-auth-start',
+          contextId: 'legacy-ima-profile',
+          session: 'ima',
+          surface: 'adapter',
+        }),
+      });
+
+      expect(response.status).toBe(412);
+      await expect(response.json()).resolves.toMatchObject({
+        id: 'ima-capability-command',
+        ok: false,
+        errorCode: 'extension_capability_missing',
+        error: expect.stringContaining('ima-reader-v1'),
+        errorHint: expect.stringMatching(/update.*reload/i),
+      });
+      expect(extensionMessages).not.toContainEqual(
+        expect.objectContaining({ id: 'ima-capability-command' }),
+      );
+    } finally {
+      extension?.close();
+      daemon.kill('SIGTERM');
+      await once(daemon, 'exit');
+    }
+  });
+
   it('starts the configured browser recovery command through the restricted recovery endpoint', async () => {
     const probe = createServer();
     probe.listen(0, '127.0.0.1');

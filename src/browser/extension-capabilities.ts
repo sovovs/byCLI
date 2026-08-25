@@ -1,6 +1,14 @@
 export const FOCUS_WINDOW_CAPABILITY = 'focus-window-v1';
+export const IMA_READER_CAPABILITY = 'ima-reader-v1';
 export const EXTENSION_CAPABILITY_MISSING_ERROR_CODE = 'extension_capability_missing';
 export const EXTENSION_CAPABILITY_MISSING_HTTP_STATUS = 412;
+
+const IMA_READER_ACTIONS = new Set([
+  'ima-auth-start',
+  'ima-auth-read',
+  'ima-reader-request',
+  'ima-auth-release',
+]);
 
 export function normalizeExtensionCapabilities(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -8,8 +16,9 @@ export function normalizeExtensionCapabilities(value: unknown): string[] {
 }
 
 export function requiredExtensionCapability(command: { action?: unknown; op?: unknown }): string | undefined {
-  return command.action === 'tabs' && command.op === 'focus'
-    ? FOCUS_WINDOW_CAPABILITY
+  if (command.action === 'tabs' && command.op === 'focus') return FOCUS_WINDOW_CAPABILITY;
+  return typeof command.action === 'string' && IMA_READER_ACTIONS.has(command.action)
+    ? IMA_READER_CAPABILITY
     : undefined;
 }
 
@@ -22,7 +31,11 @@ export function missingRequiredExtensionCapability(
 }
 
 export function extensionCapabilityHint(capability: string): string {
-  return capability === FOCUS_WINDOW_CAPABILITY
-    ? 'Update and reload the byCLI Browser Bridge extension, then retry the login flow.'
-    : 'Update and reload the byCLI Browser Bridge extension, then retry.';
+  if (capability === FOCUS_WINDOW_CAPABILITY) {
+    return 'Update and reload the byCLI Browser Bridge extension, then retry the login flow.';
+  }
+  if (capability === IMA_READER_CAPABILITY) {
+    return 'Update and reload the byCLI Browser Bridge extension with private ima reader support, then retry.';
+  }
+  return 'Update and reload the byCLI Browser Bridge extension, then retry.';
 }

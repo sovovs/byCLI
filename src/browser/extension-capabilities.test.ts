@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   EXTENSION_CAPABILITY_MISSING_HTTP_STATUS,
   FOCUS_WINDOW_CAPABILITY,
+  IMA_READER_CAPABILITY,
+  extensionCapabilityHint,
   missingRequiredExtensionCapability,
   normalizeExtensionCapabilities,
   requiredExtensionCapability,
@@ -28,5 +30,20 @@ describe('extension capability negotiation', () => {
     expect(missingRequiredExtensionCapability({ action: 'tabs', op: 'focus' }, [])).toBe(FOCUS_WINDOW_CAPABILITY);
     expect(missingRequiredExtensionCapability({ action: 'tabs', op: 'focus' }, [FOCUS_WINDOW_CAPABILITY])).toBeUndefined();
     expect(missingRequiredExtensionCapability({ action: 'navigate' }, [])).toBeUndefined();
+  });
+
+  it.each([
+    'ima-auth-start',
+    'ima-auth-read',
+    'ima-reader-request',
+    'ima-auth-release',
+  ])('requires ima-reader-v1 for %s', (action) => {
+    expect(requiredExtensionCapability({ action })).toBe(IMA_READER_CAPABILITY);
+    expect(missingRequiredExtensionCapability({ action }, [])).toBe(IMA_READER_CAPABILITY);
+    expect(missingRequiredExtensionCapability({ action }, [IMA_READER_CAPABILITY])).toBeUndefined();
+  });
+
+  it('provides an ima-specific update hint', () => {
+    expect(extensionCapabilityHint(IMA_READER_CAPABILITY)).toMatch(/private ima reader/i);
   });
 });

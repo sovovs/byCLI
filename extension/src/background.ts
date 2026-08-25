@@ -7,7 +7,7 @@
 
 declare const __BYCLI_COMPAT_RANGE__: string;
 
-const EXTENSION_CAPABILITIES = ['focus-window-v1'] as const;
+const EXTENSION_CAPABILITIES = ['focus-window-v1', 'ima-reader-v1'] as const;
 
 import type { Command, Result } from './protocol';
 import { DAEMON_HOST, DAEMON_PORT, DAEMON_WS_URL, DAEMON_PING_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
@@ -159,13 +159,22 @@ async function connectAttempt(): Promise<void> {
 
   thisWs.onmessage = async (event) => {
     if (ws !== thisWs) return;
+    let commandId: string | undefined;
     try {
-      const command = JSON.parse(event.data as string) as Command;
-      const result = await handleCommand(command);
+      const parsed = JSON.parse(event.data as string) as { id?: unknown };
+      commandId = typeof parsed.id === 'string' ? parsed.id : undefined;
+      const result = await handleCommand(parsed as Command);
       if (ws !== thisWs) return;
       safeSend(thisWs, result);
     } catch (err) {
       console.error('[bycli] Message handling error:', err);
+      if (ws === thisWs && commandId) {
+        safeSend(thisWs, {
+          id: commandId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   };
 

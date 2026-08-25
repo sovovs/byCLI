@@ -1540,7 +1540,7 @@ function checkUrlSyntax(input, opts = {}) {
   return { ok: true, url: parsed.toString(), hostname, isIpLiteral: false };
 }
 
-const EXTENSION_CAPABILITIES = ["focus-window-v1"];
+const EXTENSION_CAPABILITIES = ["focus-window-v1", "ima-reader-v1"];
 let ws = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
@@ -1669,13 +1669,22 @@ async function connectAttempt() {
   };
   thisWs.onmessage = async (event) => {
     if (ws !== thisWs) return;
+    let commandId;
     try {
-      const command = JSON.parse(event.data);
-      const result = await handleCommand(command);
+      const parsed = JSON.parse(event.data);
+      commandId = typeof parsed.id === "string" ? parsed.id : void 0;
+      const result = await handleCommand(parsed);
       if (ws !== thisWs) return;
       safeSend(thisWs, result);
     } catch (err) {
       console.error("[bycli] Message handling error:", err);
+      if (ws === thisWs && commandId) {
+        safeSend(thisWs, {
+          id: commandId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
     }
   };
   thisWs.onclose = () => {
