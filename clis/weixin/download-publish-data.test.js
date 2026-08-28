@@ -4,12 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { getRegistry } from '@sovovs/bycli/registry';
+import { withAdapterResourceLocks } from '@sovovs/bycli/adapter-coordination';
 import * as auth from './_wechat/auth-session.js';
 import * as publishAnalysis from './_wechat/publish-analysis.js';
 import * as publishDownload from './_wechat/publish-download.js';
 import * as publishRecords from './_wechat/publish-records.js';
 
 vi.mock('./_wechat/auth-session.js');
+vi.mock('@sovovs/bycli/adapter-coordination', () => ({
+  assertCurrentAdapterLease: vi.fn(),
+  withAdapterResourceLocks: vi.fn((_keys, operation) => operation()),
+}));
 vi.mock('./_wechat/publish-analysis.js');
 vi.mock('./_wechat/publish-download.js');
 vi.mock('./_wechat/publish-records.js', async importOriginal => ({
@@ -112,6 +117,7 @@ function arrangeSuccess(overrides = {}) {
 describe('weixin download-publish-data command', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
+    withAdapterResourceLocks.mockImplementation((_keys, operation) => operation());
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'bycli-publish-command-'));
     dataPath = join(temporaryDirectory, 'data.xls');
     markdownPath = join(temporaryDirectory, 'data.md');
@@ -131,6 +137,7 @@ describe('weixin download-publish-data command', () => {
       strategy: 'intercept',
       browser: true,
       navigateBefore: false,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
       columns: [
         'title', 'publishedAt', 'url', 'status',
         'readUsers', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
@@ -147,6 +154,31 @@ describe('weixin download-publish-data command', () => {
       { name: 'max-pages', type: 'int', default: 5, help: 'Maximum published-record pages to scan' },
       { name: 'timeout', type: 'int', default: 60, help: 'Maximum seconds for page capture' },
     ]);
+  });
+
+  it('holds shared article, data-artifact, and output locks across artifact production', async () => {
+    arrangeSuccess();
+
+    await command.func({}, { query: 'Ontology Weekly', output: temporaryDirectory, timeout: 12, 'max-pages': 3 });
+
+    expect(withAdapterResourceLocks).toHaveBeenCalledWith([
+      expect.stringMatching(/^article:[a-f0-9]{64}$/),
+      expect.stringMatching(/^data:[a-f0-9]{64}$/),
+      expect.stringMatching(/^output:[a-f0-9]{64}$/),
+    ], expect.any(Function));
+  });
+
+  it('propagates authentication and rate-limit STOP errors from artifact helpers', async () => {
+    arrangeSuccess();
+    publishDownload.downloadPublishData.mockRejectedValueOnce(Object.assign(new Error('login'), { code: 'AUTH_REQUIRED' }));
+    await expect(command.func({}, { query: 'Ontology Weekly', output: temporaryDirectory }))
+      .rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    expect(publishAnalysis.collectPublishAnalysis).not.toHaveBeenCalled();
+
+    arrangeSuccess();
+    publishAnalysis.collectPublishAnalysis.mockRejectedValueOnce(Object.assign(new Error('limited'), { code: 'RATE_LIMITED' }));
+    await expect(command.func({}, { query: 'Ontology Weekly', output: temporaryDirectory }))
+      .rejects.toMatchObject({ code: 'RATE_LIMITED' });
   });
 
   it('trims the query, collects analysis, and returns only public fields', async () => {
@@ -191,10 +223,12 @@ describe('weixin download-publish-data command', () => {
       title: 'Ontology Weekly',
       outputDir: '/exports',
       timeoutSeconds: 12,
+      beforePublish: expect.any(Function),
     });
     expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith(page, {
       detailUrl: 'https://mp.weixin.qq.com/misc/appmsganalysis?private=1',
       title: 'Ontology Weekly', publishedAt: '2026-08-07', outputDir: '/exports', timeoutSeconds: 12,
+      beforePublish: expect.any(Function),
     });
     expect(publishDownload.downloadPublishData.mock.invocationCallOrder[0])
       .toBeLessThan(publishAnalysis.collectPublishAnalysis.mock.invocationCallOrder[0]);
@@ -229,6 +263,7 @@ describe('weixin download-publish-data command', () => {
     expect(publishDownload.downloadPublishData).toHaveBeenCalledWith({}, expect.objectContaining({
       outputDir: './weixin-publish-data',
       timeoutSeconds: 60,
+      beforePublish: expect.any(Function),
     }));
     expect(publishAnalysis.collectPublishAnalysis).toHaveBeenCalledWith({}, expect.objectContaining({
       outputDir: './weixin-publish-data', timeoutSeconds: 60, publishedAt: '2026-08-07',
@@ -284,6 +319,7 @@ describe('weixin download-publish-data command', () => {
       publishedAt: '2026-08-07',
       outputDir: './weixin-publish-data',
       timeoutSeconds: 60,
+      beforePublish: expect.any(Function),
     });
     expect(publishDownload.downloadPublishData.mock.invocationCallOrder[0])
       .toBeLessThan(publishAnalysis.collectPublishAnalysis.mock.invocationCallOrder[0]);

@@ -29080,7 +29080,11 @@
     "type": "js",
     "modulePath": "weixin/download.js",
     "sourceFile": "weixin/download.js",
-    "navigateBefore": "https://mp.weixin.qq.com"
+    "navigateBefore": "https://mp.weixin.qq.com",
+    "adapterConcurrency": {
+      "isolatedTabs": true,
+      "maxParallel": 3
+    }
   },
   {
     "site": "weixin",
@@ -29159,7 +29163,11 @@
     "type": "js",
     "modulePath": "weixin/download-publish-data.js",
     "sourceFile": "weixin/download-publish-data.js",
-    "navigateBefore": false
+    "navigateBefore": false,
+    "adapterConcurrency": {
+      "isolatedTabs": true,
+      "maxParallel": 3
+    }
   },
   {
     "site": "weixin",

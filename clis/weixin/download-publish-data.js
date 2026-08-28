@@ -3,6 +3,7 @@ import { access, stat } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { ArgumentError, CommandExecutionError } from '@sovovs/bycli/errors';
 import { cli, Strategy } from '@sovovs/bycli/registry';
+import { assertCurrentAdapterLease, withAdapterResourceLocks } from '@sovovs/bycli/adapter-coordination';
 import { resolveBrowserCredentials } from './_wechat/auth-session.js';
 import { buildSecretSet, redactText } from './_wechat/redact.js';
 import { collectPublishAnalysis } from './_wechat/publish-analysis.js';
@@ -15,6 +16,7 @@ import {
   validatePublishDate,
   validatePublishedQuery,
 } from './_wechat/publish-records.js';
+import { canonicalWechatArticleIdentity, hashResourceValue } from './_wechat/article-identity.js';
 
 const METRIC_COLUMNS = [
   'readUsers', 'avgReadMinutes', 'finishedReadRatio', 'newFollowers', 'listenUsers',
@@ -33,6 +35,13 @@ function sanitizedError(error, secrets, fallback) {
   const message = error instanceof Error ? error.message : fallback;
   return redactText(message, secrets)
     .replace(/https?:\/\/mp\.weixin\.qq\.com\/\S*/giu, '[REDACTED]');
+}
+
+function rethrowStopError(error) {
+  const code = error && typeof error === 'object' ? error.code : undefined;
+  if (code === 'AUTH_REQUIRED' || code === 'RATE_LIMITED' || code === 'CAPTCHA' || code === 'MFA_REQUIRED' || code === 'ADAPTER_LEASE_LOST') {
+    throw error;
+  }
 }
 
 async function validateArtifact(result, { label, expectedStatus, expectedExtension }) {
@@ -71,6 +80,7 @@ export const downloadPublishDataCommand = cli({
   strategy: Strategy.INTERCEPT,
   browser: true,
   navigateBefore: false,
+  adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
   args: [
     { name: 'query', positional: true, required: true, help: 'Exact article URL or title text' },
     { name: 'date', help: 'Optional publication date in YYYY-MM-DD' },
@@ -104,8 +114,15 @@ export const downloadPublishDataCommand = cli({
       title: record.title,
       outputDir,
       timeoutSeconds,
+      beforePublish: assertCurrentAdapterLease,
     };
     const secrets = buildSecretSet({ token, cookie });
+
+    return withAdapterResourceLocks([
+      `article:${canonicalWechatArticleIdentity(record.url)}`,
+      `data:${hashResourceValue(`${record.msgid}:${record.publishDate ?? record.publishedAt}`)}`,
+      `output:${hashResourceValue(resolve(outputDir))}`,
+    ], async () => {
 
     let dataResult = null;
     let markdownResult = null;
@@ -118,6 +135,7 @@ export const downloadPublishDataCommand = cli({
         expectedExtension: '.xls',
       });
     } catch (error) {
+      rethrowStopError(error);
       errors.push(`Excel download failed: ${sanitizedError(error, secrets, 'Excel download failed')}`);
     }
     try {
@@ -131,6 +149,7 @@ export const downloadPublishDataCommand = cli({
         expectedExtension: '.md',
       });
     } catch (error) {
+      rethrowStopError(error);
       errors.push(`Markdown analysis failed: ${sanitizedError(error, secrets, 'Markdown analysis failed')}`);
     }
 
@@ -175,5 +194,6 @@ export const downloadPublishDataCommand = cli({
       detailLikes: metrics?.likes ?? null,
       detailComments: metrics?.comments ?? null,
     }];
+    });
   },
 });

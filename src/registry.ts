@@ -39,6 +39,11 @@ export type NonBrowserCommandFunc = (kwargs: CommandArgs, debug?: boolean) => Pr
 export type CommandAccess = 'read' | 'write';
 export type SiteSessionMode = 'ephemeral' | 'persistent';
 
+export interface AdapterConcurrency {
+  isolatedTabs: true;
+  maxParallel: number;
+}
+
 /**
  * 所有已注册 adapter command 的共享元数据和运行选项。
  *
@@ -93,6 +98,8 @@ interface BaseCliCommand {
   navigateBefore?: boolean | string;
   /** adapter 浏览器站点 session 生命周期：临时 session 或持久 session。 */
   siteSession?: SiteSessionMode;
+  /** Opt-in authorization for isolated persistent Adapter tabs. */
+  adapterConcurrency?: AdapterConcurrency;
   /** 用户没有传 `-f/--format` 时使用的默认输出格式。 */
   defaultFormat?: 'table' | 'plain' | 'json' | 'yaml' | 'yml' | 'md' | 'markdown' | 'csv';
 }
@@ -276,6 +283,7 @@ function rawCommandBase(opts: CliOptions): RawCliCommandBase {
     validateArgs: opts.validateArgs,
     navigateBefore: opts.navigateBefore,
     siteSession: opts.siteSession,
+    adapterConcurrency: opts.adapterConcurrency,
     defaultFormat: opts.defaultFormat,
   };
 }
@@ -389,6 +397,31 @@ function assertSiteSession(cmd: Pick<BaseCliCommand, 'site' | 'name'> & { siteSe
   }
 }
 
+function assertAdapterConcurrency(cmd: Pick<BaseCliCommand, 'site' | 'name'> & {
+  browser?: unknown;
+  strategy?: unknown;
+  adapterConcurrency?: unknown;
+}): void {
+  if (cmd.adapterConcurrency === undefined) return;
+  const key = `${cmd.site}/${cmd.name}`;
+  if (!cmd.adapterConcurrency || typeof cmd.adapterConcurrency !== 'object') {
+    throw new Error(`Command ${key} adapterConcurrency must be an object`);
+  }
+  const metadata = cmd.adapterConcurrency as Record<string, unknown>;
+  if (metadata.isolatedTabs !== true) {
+    throw new Error(`Command ${key} adapterConcurrency.isolatedTabs must be true`);
+  }
+  if (!Number.isInteger(metadata.maxParallel)
+    || (metadata.maxParallel as number) < 1
+    || (metadata.maxParallel as number) > 3) {
+    throw new Error(`Command ${key} adapterConcurrency.maxParallel must be an integer between 1 and 3`);
+  }
+  if (cmd.browser === false
+    || (cmd.browser === undefined && (cmd.strategy === Strategy.PUBLIC || cmd.strategy === Strategy.LOCAL))) {
+    throw new Error(`Command ${key} adapterConcurrency requires browser capability`);
+  }
+}
+
 export function registerCommand(cmd: RawConditionalBrowserCliCommand): void;
 export function registerCommand(cmd: RawNonBrowserCliCommand): void;
 export function registerCommand(cmd: RawBrowserCliCommand): void;
@@ -401,6 +434,7 @@ function registerCommandInput(cmd: RawCliCommand | CliCommand): void {
   withRegistryMutationGroup(() => {
     assertCommandAccess(cmd);
     assertSiteSession(cmd);
+    assertAdapterConcurrency(cmd);
 
     if (cmd.browser === 'conditional') {
       if (typeof cmd.requiresBrowser !== 'function') {

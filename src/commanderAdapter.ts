@@ -67,6 +67,11 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
       .option('--site-session <mode>', 'Adapter site session lifecycle: ephemeral or persistent')
       .option('--keep-tab <bool>', 'Keep the browser tab lease after the command finishes');
   }
+  if (cmd.adapterConcurrency?.isolatedTabs === true) {
+    subCmd
+      .option('--adapter-session <name>', 'Named persistent Adapter tab session')
+      .option('--adapter-queue-timeout <seconds>', 'Seconds to wait for an Adapter command lease');
+  }
 
   const originalHelpInformation = subCmd.helpInformation.bind(subCmd);
   subCmd.helpInformation = ((contextOptions?: unknown) => {
@@ -121,6 +126,12 @@ export function registerCommandToProgram(siteCmd: Command, cmd: CliCommand): voi
         ...(hasBrowserCapability(cmd) && typeof optionsRecord.window === 'string' ? { windowMode: optionsRecord.window } : {}),
         ...(hasBrowserCapability(cmd) && typeof optionsRecord.siteSession === 'string' ? { siteSession: optionsRecord.siteSession } : {}),
         ...(hasBrowserCapability(cmd) && typeof optionsRecord.keepTab === 'string' ? { keepTab: optionsRecord.keepTab } : {}),
+        ...(cmd.adapterConcurrency?.isolatedTabs === true && typeof optionsRecord.adapterSession === 'string'
+          ? { adapterSession: optionsRecord.adapterSession }
+          : {}),
+        ...(cmd.adapterConcurrency?.isolatedTabs === true && typeof optionsRecord.adapterQueueTimeout === 'string'
+          ? { adapterQueueTimeout: optionsRecord.adapterQueueTimeout }
+          : {}),
       });
       if (result === null || result === undefined) {
         return;

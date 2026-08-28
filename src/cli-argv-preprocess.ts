@@ -140,6 +140,7 @@ export interface DashPositionalManifestEntry {
   name: string;
   args?: Array<{ name: string; positional?: boolean; required?: boolean; valueRequired?: boolean; default?: unknown }>;
   browser?: boolean;
+  adapterConcurrency?: { isolatedTabs?: boolean };
 }
 
 type OptionValueMode = 'none' | 'required' | 'optional';
@@ -159,6 +160,10 @@ function knownCommandOptions(cmd: DashPositionalManifestEntry): Map<string, Opti
     options.set('--window', 'required');
     options.set('--site-session', 'required');
     options.set('--keep-tab', 'required');
+  }
+  if (cmd.adapterConcurrency?.isolatedTabs === true) {
+    options.set('--adapter-session', 'required');
+    options.set('--adapter-queue-timeout', 'required');
   }
   for (const arg of cmd.args ?? []) {
     if (arg.positional) continue;

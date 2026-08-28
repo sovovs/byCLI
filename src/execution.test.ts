@@ -16,6 +16,8 @@ import * as runtime from './runtime.js';
 import * as capRouting from './capabilityRouting.js';
 import { clearAllHooks, onAfterExecute, onBeforeExecute, type HookContext } from './hooks.js';
 import { registryMutationKeys } from './registry-transaction.js';
+import * as adapterCoordination from './adapter-coordination.js';
+import * as daemonClient from './browser/daemon-client.js';
 
 describe('executeCommand — conditional browser routing', () => {
   it('keeps ordinary static manifest commands on the lazy run path', async () => {
@@ -1554,6 +1556,74 @@ describe('executeCommand — non-browser timeout', () => {
     expect(sessionOpts[0]?.idleTimeout).toBeUndefined();
     expect(sessionOpts[1]?.idleTimeout).toBeUndefined();
     expect(closeWindow).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('uses a distinct persistent browser session for a valid named Adapter session', async () => {
+    const mockPage = {
+      closeWindow: vi.fn().mockResolvedValue(undefined),
+      setContextId: vi.fn(),
+    } as any;
+    const sessions: string[] = [];
+    vi.spyOn(capRouting, 'shouldUseBrowserSession').mockReturnValue(true);
+    vi.spyOn(daemonClient, 'resolveAdapterLeaseContextId').mockResolvedValue('actual-profile');
+    const coordination = vi.spyOn(adapterCoordination, 'withAdapterCommandLease').mockImplementation(async (_request, operation) => operation());
+    vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn, opts) => {
+      sessions.push(opts?.session ?? '');
+      return fn(mockPage);
+    });
+    const cmd = cli({
+      site: 'weixin',
+      name: 'named-session',
+      access: 'read',
+      browser: true,
+      strategy: Strategy.PUBLIC,
+      siteSession: 'persistent',
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      func: async () => [{ ok: true }],
+    });
+
+    await executeCommand(cmd, {}, false, { adapterSession: 'worker-a' });
+
+    expect(sessions).toEqual(['site:weixin:worker-a']);
+    expect(mockPage.setContextId).toHaveBeenCalledWith('actual-profile');
+    expect(coordination).toHaveBeenCalledWith(expect.objectContaining({
+      contextId: 'actual-profile',
+      site: 'weixin',
+      adapterSession: 'worker-a',
+      sessionKey: 'site:weixin:worker-a',
+      queueTimeoutMs: 300_000,
+      maxParallel: 3,
+    }), expect.any(Function), expect.objectContaining({ onLeaseLost: expect.any(Function) }));
+    vi.restoreAllMocks();
+  });
+
+  it('rejects invalid or unsupported named Adapter sessions before browser activity', async () => {
+    const browserSessionSpy = vi.spyOn(runtime, 'browserSession');
+    vi.spyOn(capRouting, 'shouldUseBrowserSession').mockReturnValue(true);
+    const supported = cli({
+      site: 'weixin', name: 'supported-session', access: 'read', browser: true,
+      siteSession: 'persistent', adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      func: async () => [],
+    });
+    const unsupported = cli({
+      site: 'weixin', name: 'unsupported-session', access: 'read', browser: true,
+      siteSession: 'persistent', func: async () => [],
+    });
+
+    await expect(executeCommand(supported, {}, false, { adapterSession: '../secret' }))
+      .rejects.toMatchObject({ code: 'INVALID_ADAPTER_SESSION' });
+    await expect(executeCommand(unsupported, {}, false, { adapterSession: 'worker-a' }))
+      .rejects.toMatchObject({ code: 'ADAPTER_SESSION_NOT_SUPPORTED' });
+    await expect(executeCommand(supported, {}, false, {
+      siteSession: 'ephemeral', adapterSession: 'worker-a',
+    })).rejects.toMatchObject({ code: 'ADAPTER_SESSION_REQUIRES_PERSISTENT' });
+    await expect(executeCommand(supported, {}, false, { adapterQueueTimeout: '30' }))
+      .rejects.toMatchObject({ code: 'INVALID_ADAPTER_QUEUE_TIMEOUT' });
+    await expect(executeCommand(supported, {}, false, {
+      adapterSession: 'worker-a', adapterQueueTimeout: '0',
+    })).rejects.toMatchObject({ code: 'INVALID_ADAPTER_QUEUE_TIMEOUT' });
+    expect(browserSessionSpy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 

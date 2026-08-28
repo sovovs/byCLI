@@ -427,7 +427,7 @@ function safeFilename(title) {
   return `${name}.md`;
 }
 
-async function publishMarkdown(outputDir, filename, content) {
+async function publishMarkdown(outputDir, filename, content, beforePublish) {
   await mkdir(outputDir, { recursive: true });
   const temporary = resolve(outputDir, `.bycli-publish-analysis-${randomUUID()}.tmp`);
   await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' });
@@ -436,13 +436,17 @@ async function publishMarkdown(outputDir, filename, content) {
     const stem = filename.slice(0, -extension.length);
     for (let index = 0; index <= 9999; index += 1) {
       const path = resolve(outputDir, index === 0 ? filename : `${stem}-${index}${extension}`);
-      try { await link(temporary, path); return path; } catch (error) { if (error?.code !== 'EEXIST') throw error; }
+      try {
+        await beforePublish?.();
+        await link(temporary, path);
+        return path;
+      } catch (error) { if (error?.code !== 'EEXIST') throw error; }
     }
     throw new CommandExecutionError('WeChat publish analysis could not allocate a report filename');
   } finally { await unlink(temporary).catch(() => {}); }
 }
 
-export async function collectPublishAnalysis(page, { detailUrl, title, publishedAt, outputDir }) {
+export async function collectPublishAnalysis(page, { detailUrl, title, publishedAt, outputDir, beforePublish }) {
   if (typeof page?.goto !== 'function' || typeof page?.readNetworkCapture !== 'function') {
     throw new CommandExecutionError('WeChat publish analysis requires browser network capture support');
   }
@@ -480,7 +484,7 @@ export async function collectPublishAnalysis(page, { detailUrl, title, published
   }
   if (Object.keys(data).length === 0) throw new CommandExecutionError('WeChat publish analysis returned no readable analysis data');
   const content = formatAnalysisMarkdown({ title, publishedAt, data });
-  const path = await publishMarkdown(resolve(outputDir), safeFilename(title), content);
+  const path = await publishMarkdown(resolve(outputDir), safeFilename(title), content, beforePublish);
   const info = await stat(path);
   return { status: 'saved', path, size: info.size, metrics };
 }

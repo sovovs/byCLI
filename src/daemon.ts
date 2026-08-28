@@ -50,6 +50,13 @@ import {
   getResponseCorsHeaders,
 } from './daemon-utils.js';
 import { resolveDaemonHost } from './daemon-config.js';
+import {
+  AdapterScheduler,
+  AdapterSchedulerError,
+  type AdapterLease,
+  type AdapterLeaseRelease,
+  type AdapterLeaseRequest,
+} from './adapter-scheduler.js';
 
 const PORT = parseInt(process.env.BYCLI_DAEMON_PORT ?? String(DEFAULT_DAEMON_PORT), 10);
 const HOST = resolveDaemonHost();
@@ -86,6 +93,9 @@ type ExtensionProfileConnection = {
 };
 
 const extensionProfiles = new Map<string, ExtensionProfileConnection>();
+const adapterScheduler = new AdapterScheduler();
+const adapterSchedulerSweep = setInterval(() => adapterScheduler.sweepExpired(), 5_000);
+adapterSchedulerSweep.unref?.();
 const pending = new Map<string, {
   contextId: string;
   action: string;
@@ -430,6 +440,90 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
+  if (req.method === 'POST' && pathname.startsWith('/v1/adapter-leases/')) {
+    try {
+      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      if (pathname === '/v1/adapter-leases/acquire') {
+        const request = body as unknown as AdapterLeaseRequest;
+        let clientGone = false;
+        const onClose = () => {
+          if (res.writableEnded) return;
+          clientGone = true;
+          adapterScheduler.cancel(request.requestId);
+        };
+        res.once('close', onClose);
+        const lease = await adapterScheduler.acquire(request);
+        res.off('close', onClose);
+        if (clientGone || res.destroyed) {
+          adapterScheduler.release({ ...lease, reason: 'cancelled' });
+          return;
+        }
+        jsonResponse(res, 200, { ok: true, data: lease });
+        return;
+      }
+      if (pathname === '/v1/adapter-leases/heartbeat') {
+        const lease = adapterScheduler.heartbeat(body as unknown as AdapterLease);
+        jsonResponse(res, 200, { ok: true, data: lease });
+        return;
+      }
+      if (pathname === '/v1/adapter-leases/release') {
+        const released = adapterScheduler.release(body as unknown as AdapterLeaseRelease);
+        jsonResponse(res, 200, { ok: true, data: { released } });
+        return;
+      }
+      if (pathname === '/v1/adapter-leases/cancel') {
+        const requestId = typeof body.requestId === 'string' ? body.requestId : '';
+        const cancelled = requestId ? adapterScheduler.cancel(requestId) : false;
+        jsonResponse(res, 200, { ok: true, data: { cancelled } });
+        return;
+      }
+      jsonResponse(res, 404, { ok: false, errorCode: 'ADAPTER_QUEUE_RESET', error: 'Unknown Adapter lease operation' });
+    } catch (error) {
+      if (res.destroyed) return;
+      const schedulerError = error instanceof AdapterSchedulerError ? error : null;
+      const status = schedulerError?.code === 'ADAPTER_QUEUE_TIMEOUT' ? 408
+        : schedulerError?.code === 'ADAPTER_LEASE_LOST' ? 409
+          : schedulerError?.code === 'ADAPTER_POOL_AUTH_GATE' || schedulerError?.code === 'ADAPTER_POOL_RATE_LIMITED' ? 409
+            : 400;
+      jsonResponse(res, status, {
+        ok: false,
+        errorCode: schedulerError?.code ?? 'ADAPTER_QUEUE_RESET',
+        error: error instanceof Error ? error.message : 'Adapter scheduler request failed',
+      });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && pathname.startsWith('/v1/adapter-resources/')) {
+    try {
+      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      const lease = body.lease as AdapterLease;
+      if (pathname === '/v1/adapter-resources/acquire') {
+        const keys = Array.isArray(body.keys) ? body.keys.filter((key): key is string => typeof key === 'string') : [];
+        const timeoutMs = typeof body.timeoutMs === 'number' ? body.timeoutMs : 0;
+        const grant = await adapterScheduler.acquireResources(lease, keys, timeoutMs);
+        jsonResponse(res, 200, { ok: true, data: grant });
+        return;
+      }
+      if (pathname === '/v1/adapter-resources/release') {
+        const grantId = typeof body.grantId === 'string' ? body.grantId : '';
+        const released = adapterScheduler.releaseResources(lease, grantId);
+        jsonResponse(res, 200, { ok: true, data: { released } });
+        return;
+      }
+      jsonResponse(res, 404, { ok: false, errorCode: 'ADAPTER_QUEUE_RESET', error: 'Unknown Adapter resource operation' });
+    } catch (error) {
+      const schedulerError = error instanceof AdapterSchedulerError ? error : null;
+      const status = schedulerError?.code === 'ADAPTER_RESOURCE_TIMEOUT' ? 408 : 409;
+      jsonResponse(res, status, {
+        ok: false,
+        errorCode: schedulerError?.code ?? 'ADAPTER_LEASE_LOST',
+        error: error instanceof Error ? error.message : 'Adapter resource request failed',
+      });
+    }
+    return;
+  }
+
   if (req.method === 'GET' && pathname === '/status') {
     const uptime = process.uptime();
     const mem = process.memoryUsage();
@@ -459,6 +553,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       profileDisconnected: route.errorCode === 'profile_disconnected',
       profiles,
       pending: pending.size,
+      adapterLeases: adapterScheduler.snapshot(),
+      adapterResources: adapterScheduler.resourceSnapshot(),
       commandResultUnknown: commandResultUnknownCount,
       memoryMB: Math.round(mem.rss / 1024 / 1024 * 10) / 10,
       port: PORT,
@@ -502,6 +598,35 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       if (!body.id) {
         jsonResponse(res, 400, { ok: false, error: 'Missing command id' });
         return;
+      }
+
+      const namedAdapterSession = body.surface === 'adapter'
+        && body.siteSession === 'persistent'
+        && typeof body.session === 'string'
+        && /^site:[^:\s]+:[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(body.session);
+      if (namedAdapterSession && !body.adapterLease) {
+        throw new DaemonCommandFailure(
+          'Named Adapter browser commands require an active lease',
+          'ADAPTER_LEASE_LOST',
+          undefined,
+          409,
+        );
+      }
+      if (body.adapterLease) {
+        try {
+          const lease = adapterScheduler.assertLease(body.adapterLease as AdapterLease);
+          if (body.contextId !== lease.contextId
+            || body.surface !== 'adapter'
+            || body.siteSession !== 'persistent'
+            || body.session !== lease.sessionKey) {
+            throw new AdapterSchedulerError('ADAPTER_LEASE_LOST', 'Adapter browser command does not match its lease scope');
+          }
+        } catch (error) {
+          if (error instanceof AdapterSchedulerError) {
+            throw new DaemonCommandFailure(error.message, error.code, undefined, 409);
+          }
+          throw error;
+        }
       }
 
       const route = resolveExtensionConnection(typeof body.contextId === 'string' ? body.contextId : undefined);
@@ -769,6 +894,8 @@ function shutdown(): void {
     p.reject(new Error('Daemon shutting down'));
   }
   pending.clear();
+  clearInterval(adapterSchedulerSweep);
+  adapterScheduler.reset();
   for (const profile of extensionProfiles.values()) profile.ws.close();
   httpServer.close();
   process.exit(EXIT_CODES.SUCCESS);

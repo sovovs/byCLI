@@ -94,6 +94,71 @@ describe('commanderAdapter conditional browser options', () => {
 
     expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false, { prepared: true });
   });
+
+  it('exposes and forwards named adapter session options only for opted-in commands', async () => {
+    const optedIn = cli({
+      site: 'wechat',
+      name: 'download',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      args: [],
+      func: async () => [],
+    });
+    const legacy = cli({
+      site: 'wechat',
+      name: 'legacy',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      args: [],
+      func: async () => [],
+    });
+    const program = new Command();
+    const siteCmd = program.command('wechat');
+    registerCommandToProgram(siteCmd, optedIn);
+    registerCommandToProgram(siteCmd, legacy);
+
+    const download = siteCmd.commands.find(command => command.name() === 'download')!;
+    const legacyCommand = siteCmd.commands.find(command => command.name() === 'legacy')!;
+    expect(download.options.map(option => option.long)).toEqual(expect.arrayContaining([
+      '--adapter-session',
+      '--adapter-queue-timeout',
+    ]));
+    expect(legacyCommand.options.map(option => option.long)).not.toContain('--adapter-session');
+
+    await program.parseAsync([
+      'node', 'bycli', 'wechat', 'download',
+      '--adapter-session', 'worker-a',
+      '--adapter-queue-timeout', '120',
+    ]);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(
+      optedIn,
+      {},
+      false,
+      {
+        prepared: true,
+        adapterSession: 'worker-a',
+        adapterQueueTimeout: '120',
+      },
+    );
+  });
+
+  it('does not forward the queue-timeout default when a named session is omitted', async () => {
+    const cmd = cli({
+      site: 'wechat', name: 'legacy-compatible-download', access: 'read',
+      strategy: Strategy.INTERCEPT,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      args: [], func: async () => [],
+    });
+    const program = new Command();
+    const siteCmd = program.command('wechat');
+    registerCommandToProgram(siteCmd, cmd);
+
+    await program.parseAsync(['node', 'bycli', 'wechat', 'legacy-compatible-download']);
+
+    expect(mockExecuteCommand).toHaveBeenCalledWith(cmd, {}, false, { prepared: true });
+  });
 });
 
 describe('commanderAdapter arg passing', () => {

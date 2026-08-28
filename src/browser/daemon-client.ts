@@ -8,6 +8,14 @@ import { sleep } from '../utils.js';
 import { resolveDaemonPort } from './daemon-config.js';
 import { classifyBrowserError } from './errors.js';
 import { resolveProfileContextId } from './profile.js';
+import { AdapterCoordinationError } from '../errors.js';
+import type {
+  AdapterLease,
+  AdapterLeaseRelease,
+  AdapterLeaseRequest,
+  AdapterResourceGrant,
+} from '../adapter-scheduler.js';
+import { getAdapterExecutionContext } from '../adapter-execution-context.js';
 
 const BYCLI_HEADERS = { 'X-byCLI': '1' };
 
@@ -62,6 +70,8 @@ export interface DaemonCommand {
   frameIndex?: number;
   /** Browser profile/context to route the command to. */
   contextId?: string;
+  /** Active Adapter lease used by the daemon to fence every browser action. */
+  adapterLease?: AdapterLease;
 }
 
 export interface DaemonResult {
@@ -147,6 +157,72 @@ async function requestDaemon(pathname: string, init?: RequestInit & { timeout?: 
   return consumeDaemonResponse(pathname, init, async (response) => response);
 }
 
+async function postAdapterLease<T>(pathname: string, body: unknown, timeout: number): Promise<T> {
+  const response = await requestDaemon(pathname, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    timeout,
+  });
+  const envelope = await response.json() as {
+    ok?: boolean;
+    data?: T;
+    error?: string;
+    errorCode?: string;
+  };
+  if (!response.ok || envelope.ok !== true || envelope.data === undefined) {
+    throw new AdapterCoordinationError(
+      envelope.errorCode ?? 'ADAPTER_QUEUE_RESET',
+      envelope.error ?? 'Adapter scheduler request failed',
+      true,
+    );
+  }
+  return envelope.data;
+}
+
+export function acquireAdapterLease(request: AdapterLeaseRequest): Promise<AdapterLease> {
+  return postAdapterLease<AdapterLease>(
+    '/v1/adapter-leases/acquire',
+    request,
+    request.queueTimeoutMs + 5_000,
+  );
+}
+
+export function heartbeatAdapterLease(lease: AdapterLease): Promise<AdapterLease> {
+  return postAdapterLease<AdapterLease>('/v1/adapter-leases/heartbeat', lease, 5_000);
+}
+
+export async function releaseAdapterLease(release: AdapterLeaseRelease): Promise<boolean> {
+  const data = await postAdapterLease<{ released: boolean }>('/v1/adapter-leases/release', release, 5_000);
+  return data.released;
+}
+
+export async function cancelAdapterLease(requestId: string): Promise<boolean> {
+  const data = await postAdapterLease<{ cancelled: boolean }>('/v1/adapter-leases/cancel', { requestId }, 5_000);
+  return data.cancelled;
+}
+
+export function acquireAdapterResources(
+  lease: AdapterLease,
+  keys: string[],
+  timeoutMs: number,
+): Promise<AdapterResourceGrant> {
+  return postAdapterLease<AdapterResourceGrant>(
+    '/v1/adapter-resources/acquire',
+    { lease, keys, timeoutMs },
+    timeoutMs + 5_000,
+  );
+}
+
+export async function releaseAdapterResources(lease: AdapterLease, grantId: string): Promise<boolean> {
+  const data = await postAdapterLease<{ released: boolean }>(
+    '/v1/adapter-resources/release',
+    { lease, grantId },
+    5_000,
+  );
+  return data.released;
+}
+
 function errorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined;
   const candidate = error as { code?: unknown; cause?: unknown };
@@ -203,6 +279,22 @@ export async function getDaemonHealth(opts?: { timeout?: number; contextId?: str
   return { state: 'ready', status };
 }
 
+/** Resolve the concrete daemon profile used to key Adapter scheduler pools. */
+export async function resolveAdapterLeaseContextId(requestedContextId?: string): Promise<string> {
+  const health = await getDaemonHealth({ contextId: requestedContextId });
+  if (health.state === 'ready' && health.status.contextId) {
+    return health.status.contextId;
+  }
+  throw new AdapterCoordinationError(
+    'ADAPTER_PROFILE_UNAVAILABLE',
+    'The browser daemon could not identify the authenticated profile for this Adapter session.',
+    true,
+    requestedContextId
+      ? `Check that profile "${requestedContextId}" is connected.`
+      : 'Connect exactly one browser profile or pass --profile explicitly.',
+  );
+}
+
 export async function requestDaemonShutdown(opts?: { timeout?: number }): Promise<boolean> {
   try {
     const res = await requestDaemon('/shutdown', { method: 'POST', timeout: opts?.timeout ?? 5000 });
@@ -235,7 +327,13 @@ async function sendCommandRaw(
       : undefined;
     const contextId = params.contextId ?? resolveProfileContextId();
     const windowMode = params.windowMode ?? envWindowMode;
-    const command: DaemonCommand = { id, action, ...params, ...(contextId && { contextId }), ...(windowMode && { windowMode }) };
+    const adapterLease = getAdapterExecutionContext()?.lease;
+    const command: DaemonCommand = {
+      id, action, ...params,
+      ...(contextId && { contextId }),
+      ...(windowMode && { windowMode }),
+      ...(adapterLease && { adapterLease }),
+    };
     try {
       const res = await requestDaemon('/command', {
         method: 'POST',

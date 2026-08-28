@@ -190,6 +190,42 @@ describe('strategyLabel', () => {
 });
 
 describe('registerCommand', () => {
+  it('rejects invalid adapter concurrency metadata', () => {
+    const base = {
+      site: 'test-registry',
+      access: 'read',
+      description: '',
+      args: [],
+      browser: true,
+    };
+
+    expect(() => registerCommand({
+      ...base,
+      name: 'invalid-isolation',
+      adapterConcurrency: { isolatedTabs: false, maxParallel: 3 },
+    } as never)).toThrow('adapterConcurrency.isolatedTabs must be true');
+    expect(() => registerCommand({
+      ...base,
+      name: 'invalid-limit',
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 4 },
+    } as never)).toThrow('adapterConcurrency.maxParallel must be an integer between 1 and 3');
+    expect(() => registerCommand({
+      ...base,
+      name: 'non-browser-isolation',
+      browser: false,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+    } as never)).toThrow('adapterConcurrency requires browser capability');
+    expect(() => registerCommand({
+      site: 'test-registry',
+      name: 'implicit-non-browser-isolation',
+      access: 'read',
+      description: '',
+      args: [],
+      strategy: Strategy.PUBLIC,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+    } as never)).toThrow('adapterConcurrency requires browser capability');
+  });
+
   it('registers a pre-built command', () => {
     const cmd: CliCommand = {
       site: 'test-registry',

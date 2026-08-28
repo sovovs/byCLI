@@ -157,6 +157,29 @@ adapter site tab and keeps that tab open until it is explicitly closed. Users
 can override the adapter default with `--site-session ephemeral` or force
 persistence with `--site-session persistent`.
 
+Commands that have been validated for concurrent isolated tabs may opt in with
+registry metadata:
+
+```typescript
+cli({
+  site: 'mysite',
+  name: 'download',
+  browser: true,
+  adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+  // ...
+});
+```
+
+These commands expose `--adapter-session <name>` and
+`--adapter-queue-timeout <seconds>`. A named session requires
+`--site-session persistent`; the same name reuses one Adapter tab and executes
+serially, while different names receive different tabs. The daemon permits no
+more than three running named commands per browser profile and site, so the
+fourth waits for a lease. Adapter session names isolate tabs only: cookies,
+login identity, account state, and server-side rate limits remain shared by the
+Chrome profile. Commands without `adapterConcurrency.isolatedTabs: true` do not
+accept named Adapter sessions.
+
 ## The `page` Object
 
 The `page` parameter provides browser interaction methods:

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { convertArticleHtmlToMarkdown, downloadArticle } from './article-download.js';
 
 const tempDirs: string[] = [];
@@ -88,6 +88,21 @@ describe('downloadArticle', () => {
     expect(path.extname(result[0].saved)).toBe('.md');
     expect(fs.existsSync(result[0].saved)).toBe(true);
     expect(fs.readFileSync(result[0].saved, 'utf8')).toContain('Hello world');
+  });
+
+  it('runs the lease fencing hook before publishing Markdown', async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-article-'));
+    tempDirs.push(tempDir);
+    const beforePublish = vi.fn(async () => undefined);
+
+    const [result] = await downloadArticle({ title: 'Fenced', contentHtml: '<p>body</p>' }, {
+      output: tempDir,
+      downloadImages: false,
+      beforePublish,
+    });
+
+    expect(beforePublish).toHaveBeenCalledOnce();
+    expect(fs.existsSync(result.saved)).toBe(true);
   });
 
   it('escapes untrusted header fields when secure Markdown is enabled', async () => {
@@ -471,6 +486,25 @@ describe('downloadArticle', () => {
 
       // Every file on disk is referenced by the rewritten Markdown.
       for (const file of files) expect(markdown).toContain(`images/${file}`);
+    });
+
+    it('keeps localized images staged when lease fencing rejects publication', async () => {
+      await withImageServer(async origin => {
+        const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bycli-images-'));
+        tempDirs.push(tempDir);
+        await expect(downloadArticle({
+          title: 'FencedImages',
+          contentHtml: `<p><img src="${origin}/pic.png"></p>`,
+          imageUrls: [`${origin}/pic.png`],
+        }, {
+          output: tempDir,
+          downloadImages: true,
+          beforePublish: async () => { throw new Error('lease lost'); },
+        })).rejects.toThrow('lease lost');
+
+        expect(fs.readdirSync(tempDir).some(name => name.startsWith('.bycli-article-'))).toBe(false);
+        expect(fs.existsSync(path.join(tempDir, 'FencedImages', 'images'))).toBe(false);
+      });
     });
 
     it('uses a fresh name on each run', async () => {

@@ -136,6 +136,7 @@ export async function loadFromManifest(manifestPath: string, clisDir: string): P
         source: entry.sourceFile ? path.resolve(clisDir, entry.sourceFile) : modulePath,
         navigateBefore: entry.navigateBefore,
         siteSession: entry.siteSession,
+        adapterConcurrency: entry.adapterConcurrency,
         _lazy: true,
         _modulePath: modulePath,
       };

@@ -75,6 +75,20 @@ const BROWSER_COMMON_OPTIONS = [
   },
 ] as const;
 
+const ADAPTER_SESSION_OPTIONS = [
+  {
+    flags: '--adapter-session <name>',
+    name: 'adapter-session',
+    help: 'Named persistent Adapter tab session',
+  },
+  {
+    flags: '--adapter-queue-timeout <seconds>',
+    name: 'adapter-queue-timeout',
+    help: 'Seconds to wait for an Adapter command lease',
+    default: 300,
+  },
+] as const;
+
 function normalizeStructuredHelpFormat(value: string | undefined): StructuredHelpFormat | undefined {
   const normalized = value?.toLowerCase();
   if (normalized === 'yaml' || normalized === 'yml') return 'yaml';
@@ -194,7 +208,7 @@ function compactArg(arg: Arg): Record<string, unknown> {
   };
 }
 
-function compactCommonOption(option: typeof COMMON_OPTIONS[number] | typeof BROWSER_COMMON_OPTIONS[number]): Record<string, unknown> {
+function compactCommonOption(option: typeof COMMON_OPTIONS[number] | typeof BROWSER_COMMON_OPTIONS[number] | typeof ADAPTER_SESSION_OPTIONS[number]): Record<string, unknown> {
   return {
     name: option.name,
     flags: option.flags,
@@ -465,6 +479,12 @@ function compactCommand(cmd: CliCommand): Record<string, unknown> {
     positionals: positionals(cmd).map(compactArg),
     command_options: commandOptions(cmd).map(compactArg),
     ...(hasBrowserCapability(cmd) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(cmd.adapterConcurrency?.isolatedTabs === true
+      ? {
+          adapterConcurrency: cmd.adapterConcurrency,
+          adapter_common_options: ADAPTER_SESSION_OPTIONS.map(compactCommonOption),
+        }
+      : {}),
     example: formatCommandExample(cmd),
     ...(cmd.siteSession ? { siteSession: cmd.siteSession } : {}),
     ...(cmd.defaultFormat ? { defaultFormat: cmd.defaultFormat } : {}),
@@ -516,6 +536,9 @@ export function siteHelpData(site: string, commands: readonly CliCommand[]): Rec
     commands: unique.map(cmd => compactCommand(cmd)),
     common_options: COMMON_OPTIONS.map(compactCommonOption),
     ...(unique.some(hasBrowserCapability) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(unique.some(cmd => cmd.adapterConcurrency?.isolatedTabs === true)
+      ? { adapter_common_options: ADAPTER_SESSION_OPTIONS.map(compactCommonOption) }
+      : {}),
     next: [
       `bycli ${site} <command> --help -f yaml`,
       `bycli ${site} <command> -f yaml`,
@@ -529,6 +552,12 @@ export function commandHelpData(cmd: CliCommand): Record<string, unknown> {
     ...compactCommand(cmd),
     common_options: COMMON_OPTIONS.map(compactCommonOption),
     ...(hasBrowserCapability(cmd) ? { browser_common_options: BROWSER_COMMON_OPTIONS.map(compactCommonOption) } : {}),
+    ...(cmd.adapterConcurrency?.isolatedTabs === true
+      ? {
+          adapterConcurrency: cmd.adapterConcurrency,
+          adapter_common_options: ADAPTER_SESSION_OPTIONS.map(compactCommonOption),
+        }
+      : {}),
     output_formats: ['table', 'plain', 'yaml', 'json', 'md', 'csv'],
   };
 }
@@ -566,6 +595,15 @@ export function formatBrowserCommonOptionsHelpText(): string {
   return ['Browser common options:', ...formatRows(rows)].join('\n');
 }
 
+export function formatAdapterSessionOptionsHelpText(): string {
+  const rows = ADAPTER_SESSION_OPTIONS.map(option => {
+    const details: string[] = [option.help];
+    if ('default' in option) details.push(`default: ${option.default}`);
+    return [option.flags, details.join('  ')] as [string, string];
+  });
+  return ['Adapter session options:', ...formatRows(rows)].join('\n');
+}
+
 export function formatSiteHelpText(site: string, commands: readonly CliCommand[]): string {
   const unique = [...new Map(commands.map(cmd => [fullName(cmd), cmd])).values()]
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -579,6 +617,7 @@ export function formatSiteHelpText(site: string, commands: readonly CliCommand[]
     '',
     formatCommonOptionsHelpText(),
     ...(unique.some(hasBrowserCapability) ? ['', formatBrowserCommonOptionsHelpText()] : []),
+    ...(unique.some(cmd => cmd.adapterConcurrency?.isolatedTabs === true) ? ['', formatAdapterSessionOptionsHelpText()] : []),
     '',
     `Agent tip: use 'bycli ${site} --help -f yaml' to get all command args/options in one structured response.`,
     '',
@@ -612,6 +651,7 @@ export function formatCommandHelpText(cmd: CliCommand): string {
 
   lines.push(formatCommonOptionsHelpText(), '');
   if (hasBrowserCapability(cmd)) lines.push(formatBrowserCommonOptionsHelpText(), '');
+  if (cmd.adapterConcurrency?.isolatedTabs === true) lines.push(formatAdapterSessionOptionsHelpText(), '');
 
   const meta: string[] = [];
   meta.push(`Access: ${cmd.access}`);

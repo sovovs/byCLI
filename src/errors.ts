@@ -137,6 +137,12 @@ export class ArgumentError extends CliError {
   }
 }
 
+export class AdapterCoordinationError extends CliError {
+  constructor(code: string, message: string, temporary = false, hint?: string) {
+    super(code, message, hint, temporary ? EXIT_CODES.TEMPFAIL : EXIT_CODES.USAGE_ERROR);
+  }
+}
+
 export class EmptyResultError extends CliError {
   constructor(command: string, hint?: string) {
     super(

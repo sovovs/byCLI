@@ -9,6 +9,8 @@
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { downloadArticle } from '@sovovs/bycli/download/article-download';
 import { AuthRequiredError } from '@sovovs/bycli/errors';
+import { assertCurrentAdapterLease, withAdapterResourceLocks } from '@sovovs/bycli/adapter-coordination';
+import { resolve } from 'node:path';
 import { buildExtractWechatArticleContentJs } from './_wechat/article-content.js';
 import {
     isTrustedSogouRedirectUrl,
@@ -16,6 +18,8 @@ import {
     normalizeWechatUrl,
     resolveWechatArticleUrl,
 } from './_wechat/article-link.js';
+import { canonicalWechatArticleIdentity, hashResourceValue } from './_wechat/article-identity.js';
+import { validateDownloadedArticleRows } from './_wechat/article-artifact.js';
 export { extractWechatArticleContent } from './_wechat/article-content.js';
 export {
     isTrustedSogouRedirectUrl,
@@ -152,6 +156,7 @@ cli({
     description: '下载微信公众号文章为 Markdown 格式',
     domain: 'mp.weixin.qq.com',
     strategy: Strategy.COOKIE,
+    adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
     args: [
         { name: 'url', required: true, help: 'WeChat article URL (mp.weixin.qq.com/s/xxx)' },
         { name: 'output', default: './weixin-articles', help: 'Output directory' },
@@ -160,6 +165,11 @@ cli({
     columns: ['title', 'author', 'publish_time', 'status', 'size', 'saved', 'source_url', 'resolved_url'],
     func: async (page, kwargs) => {
         const { sourceUrl, resolvedUrl, alreadyNavigated } = await resolveWechatArticleUrl(page, kwargs.url);
+        const outputDir = resolve(kwargs.output ?? './weixin-articles');
+        return withAdapterResourceLocks([
+            `article:${canonicalWechatArticleIdentity(resolvedUrl)}`,
+            `output:${hashResourceValue(outputDir)}`,
+        ], async () => {
         // Navigate and wait for content to load. Sogou resolution already lands on the article.
         if (!alreadyNavigated)
             await page.goto(resolvedUrl);
@@ -235,7 +245,7 @@ cli({
             codeBlocks: data?.codeBlocks,
             imageUrls: data?.imageUrls,
         }, {
-            output: kwargs.output,
+            output: outputDir,
             downloadImages: kwargs['download-images'],
             imageHeaders: { Referer: 'https://mp.weixin.qq.com/' },
             frontmatterLabels: { author: '公众号' },
@@ -244,7 +254,10 @@ cli({
                 return m ? m[1] : 'png';
             },
             secureMarkdown: true,
+            beforePublish: assertCurrentAdapterLease,
         });
-        return rows.map(row => ({ ...row, source_url: sourceUrl, resolved_url: resolvedUrl }));
+        const validatedRows = await validateDownloadedArticleRows(rows, outputDir);
+        return validatedRows.map(row => ({ ...row, source_url: sourceUrl, resolved_url: resolvedUrl }));
+        });
     },
 });

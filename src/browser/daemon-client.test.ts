@@ -4,10 +4,15 @@ import {
   BrowserCommandError,
   fetchDaemonStatus,
   getDaemonHealth,
+  resolveAdapterLeaseContextId,
+  acquireAdapterLease,
+  heartbeatAdapterLease,
+  releaseAdapterLease,
   requestDaemonShutdown,
   sendCommand,
 } from './daemon-client.js';
 import * as daemonClientModule from './daemon-client.js';
+import { runWithAdapterExecutionContext } from '../adapter-execution-context.js';
 
 type DetailedProbe = (opts?: { timeout?: number }) => Promise<
   | { kind: 'status'; status: unknown }
@@ -57,6 +62,72 @@ describe('daemon-client', () => {
         headers: expect.objectContaining({ 'X-byCLI': '1' }),
       }),
     );
+  });
+
+  it('acquires, heartbeats, and releases Adapter command leases through daemon endpoints', async () => {
+    const request = {
+      requestId: 'request-a', contextId: 'profile-a', surface: 'adapter' as const,
+      site: 'weixin', adapterSession: 'worker-a', sessionKey: 'site:weixin:worker-a',
+      queueTimeoutMs: 300_000, maxParallel: 3,
+    };
+    const lease = {
+      ...request,
+      leaseId: 'lease-a', poolKey: 'pool-a', generation: 1,
+      grantedAt: 100, heartbeatDeadline: 45_100,
+    };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ ok: true, data: lease }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ ok: true, data: lease }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ ok: true, data: { released: true } }) } as Response);
+
+    await expect(acquireAdapterLease(request)).resolves.toEqual(lease);
+    await expect(heartbeatAdapterLease(lease)).resolves.toEqual(lease);
+    await expect(releaseAdapterLease({ ...lease, reason: 'success' })).resolves.toBe(true);
+
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringMatching(/\/v1\/adapter-leases\/acquire$/),
+      expect.stringMatching(/\/v1\/adapter-leases\/heartbeat$/),
+      expect.stringMatching(/\/v1\/adapter-leases\/release$/),
+    ]);
+  });
+
+  it('preserves typed Adapter scheduler errors from the daemon', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 408,
+      json: () => Promise.resolve({
+        ok: false,
+        errorCode: 'ADAPTER_QUEUE_TIMEOUT',
+        error: 'queue expired',
+      }),
+    } as Response);
+
+    await expect(acquireAdapterLease({
+      requestId: 'request-a', contextId: 'profile-a', surface: 'adapter',
+      site: 'weixin', adapterSession: 'worker-a', sessionKey: 'site:weixin:worker-a',
+      queueTimeoutMs: 1, maxParallel: 3,
+    })).rejects.toMatchObject({ code: 'ADAPTER_QUEUE_TIMEOUT' });
+  });
+
+  it('attaches the active Adapter lease to every browser command for daemon fencing', async () => {
+    const lease = {
+      requestId: 'request-a', contextId: 'profile-a', surface: 'adapter' as const,
+      site: 'weixin', adapterSession: 'worker-a', sessionKey: 'site:weixin:worker-a',
+      queueTimeoutMs: 300_000, maxParallel: 3, leaseId: 'lease-a', poolKey: 'pool-a',
+      generation: 1, grantedAt: 100, heartbeatDeadline: 45_100,
+    };
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'server', ok: true, data: [] }),
+    } as Response);
+
+    await runWithAdapterExecutionContext({ lease }, () => sendCommand('tabs', {
+      contextId: 'profile-a', surface: 'adapter', session: 'site:weixin:worker-a',
+    }));
+
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+    expect(body.adapterLease).toMatchObject({ leaseId: 'lease-a', contextId: 'profile-a' });
   });
 
   it('exports a detailed passive daemon status probe', () => {
@@ -212,6 +283,32 @@ describe('daemon-client', () => {
     } as Response);
 
     await expect(getDaemonHealth()).resolves.toEqual({ state: 'ready', status });
+  });
+
+  it('resolves the canonical daemon profile for Adapter lease pooling', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        ok: true, pid: 123, uptime: 10, extensionConnected: true,
+        contextId: 'actual-profile', pending: 0, memoryMB: 32, port: 19825,
+      }),
+    } as Response);
+
+    await expect(resolveAdapterLeaseContextId()).resolves.toBe('actual-profile');
+  });
+
+  it('rejects Adapter lease pooling when the daemon cannot identify a profile', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        ok: true, pid: 123, uptime: 10, extensionConnected: true,
+        pending: 0, memoryMB: 32, port: 19825,
+      }),
+    } as Response);
+
+    await expect(resolveAdapterLeaseContextId()).rejects.toMatchObject({
+      code: 'ADAPTER_PROFILE_UNAVAILABLE',
+    });
   });
 
   it('getDaemonHealth returns profile-required when multiple profiles are connected without a selection', async () => {

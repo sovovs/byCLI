@@ -84,8 +84,9 @@ async function setup(overrides = {}) {
 describe('downloadPublishData', () => {
   it('names a completed spreadsheet after the selected article and reports its size', async () => {
     const context = await setup({ filename: '数据明细.xls', content: 'workbook' });
+    const beforePublish = vi.fn(async () => undefined);
 
-    const result = await downloadPublishData(context.page, context.options);
+    const result = await downloadPublishData(context.page, { ...context.options, beforePublish });
 
     expect(result).toEqual({
       status: 'downloaded',
@@ -104,6 +105,7 @@ describe('downloadPublishData', () => {
       expect.objectContaining({ includeRecent: true, startedAfterMs: expect.any(Number) }),
     );
     expect(context.page.click).not.toHaveBeenCalled();
+    expect(beforePublish).toHaveBeenCalledOnce();
   });
 
   it('sanitizes unsafe article-title characters for the destination filename', async () => {

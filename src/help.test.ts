@@ -20,6 +20,30 @@ const conditional = cli({
 });
 
 describe('conditional browser help metadata', () => {
+  it('exposes named adapter session capability only for opted-in commands', () => {
+    const isolated = cli({
+      site: 'wechat',
+      name: 'download',
+      access: 'read',
+      strategy: Strategy.INTERCEPT,
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      args: [],
+      func: async () => [],
+    });
+
+    expect(commandHelpData(isolated)).toMatchObject({
+      adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+      adapter_common_options: expect.arrayContaining([
+        expect.objectContaining({ name: 'adapter-session' }),
+        expect.objectContaining({ name: 'adapter-queue-timeout', default: 300 }),
+      ]),
+    });
+    expect(commandHelpData(conditional)).not.toHaveProperty('adapterConcurrency');
+    expect(commandHelpData(conditional)).not.toHaveProperty('adapter_common_options');
+    expect(formatCommandHelpText(isolated)).toContain('Adapter session options:');
+    expect(formatCommandHelpText(isolated)).toContain('--adapter-session <name>');
+  });
+
   it('preserves the conditional state in command and site structured help', () => {
     expect(commandHelpData(conditional)).toMatchObject({ browser: 'conditional' });
     expect(commandHelpData(conditional)).not.toHaveProperty('requiresBrowser');

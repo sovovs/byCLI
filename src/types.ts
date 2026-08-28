@@ -148,6 +148,8 @@ export interface IPage {
   /** Focus the browser window containing the active page for interactive login. */
   focusWindow?(): Promise<void>;
   closeWindow?(): Promise<void>;
+  /** Pin subsequent commands to the daemon profile selected for this operation. */
+  setContextId?(contextId: string): void;
   /** Returns the current page URL, or null if unavailable. */
   getCurrentUrl?(): Promise<string | null>;
   /** Returns the active page identity (targetId), or undefined if not yet resolved. */

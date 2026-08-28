@@ -27,10 +27,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getUserClisDir } from './config-paths.js';
 import { executePipeline } from './pipeline/index.js';
-import { adapterLoadError, ArgumentError, CliError, CommandExecutionError, attachTraceReceipt, getErrorMessage } from './errors.js';
+import { AdapterCoordinationError, adapterLoadError, ArgumentError, CliError, CommandExecutionError, TimeoutError, attachTraceReceipt, getErrorMessage } from './errors.js';
 import { shouldUseBrowserSession } from './capabilityRouting.js';
 import { getBrowserFactory, browserSession, runWithTimeout, DEFAULT_BROWSER_COMMAND_TIMEOUT, type BrowserWindowMode } from './runtime.js';
 import { resolveProfileContextId } from './browser/profile.js';
+import { resolveAdapterLeaseContextId } from './browser/daemon-client.js';
 import { emitHook, type HookContext } from './hooks.js';
 import { log } from './logger.js';
 import { isElectronApp } from './electron-apps.js';
@@ -38,6 +39,7 @@ import { probeCDP, resolveElectronEndpoint } from './launcher.js';
 import { ObservationSession, exportObservationSession, type ObservationExportResult, type ObservationExportStatus } from './observation/index.js';
 import { resolveAdapterSourcePath } from './adapter-source.js';
 import { canonicalizeManifestArgSchema, ManifestSchemaError } from './manifest-schema.js';
+import { settleAdapterOperationAfterTimeout, withAdapterCommandLease } from './adapter-coordination.js';
 import {
   capturedRegistryValues,
   closeRegistryTransaction,
@@ -471,6 +473,8 @@ export async function executeCommand(
     keepTab?: string;
     windowMode?: string;
     siteSession?: string;
+    adapterSession?: string;
+    adapterQueueTimeout?: string;
     onTraceExport?: (trace: ObservationExportResult) => void;
   } = {},
 ): Promise<unknown> {
@@ -505,6 +509,8 @@ export async function executeCommand(
   let result: unknown;
   try {
     const resolvedBrowser = resolveBrowserRequirement(cmd, kwargs);
+    const adapterSession = normalizeAdapterSession(cmd, resolvedBrowser, opts.adapterSession);
+    const adapterQueueTimeoutSeconds = normalizeAdapterQueueTimeout(opts.adapterQueueTimeout, adapterSession);
     const userTimeoutSec = readUserTimeoutSeconds(cmd, kwargs);
     if (shouldUseBrowserSession(cmd, resolvedBrowser)) {
       const electron = isElectronApp(cmd.site);
@@ -531,10 +537,18 @@ export async function executeCommand(
       const contextId = resolveProfileContextId(opts.profile);
       const internal = cmd as InternalCliCommand;
       const siteSession = resolveSiteSession(cmd, opts.siteSession);
-      const session = resolveAdapterBrowserSession(cmd, siteSession);
+      assertAdapterSessionLifecycle(siteSession, adapterSession);
+      const session = resolveAdapterBrowserSession(cmd, siteSession, adapterSession);
       const keepTab = resolveKeepTab(siteSession, opts.keepTab);
       const windowMode = resolveBrowserWindowMode('background', opts.windowMode);
-      result = await browserSession(BrowserFactory, async (page) => {
+      const executeInBrowser = () => browserSession(BrowserFactory, async (page) => {
+        // BrowserBridge.connect() has started/probed the daemon by this point. Resolve
+        // the daemon's canonical profile before acquiring a profile-scoped lease.
+        const leaseContextId = adapterSession
+          ? await resolveAdapterLeaseContextId(contextId)
+          : undefined;
+        if (leaseContextId) page.setContextId?.(leaseContextId);
+        const executeOnPage = async () => {
         const observation = traceMode === 'off'
           ? null
           : new ObservationSession({
@@ -607,10 +621,18 @@ export async function executeCommand(
           const browserTimeout = userTimeoutSec !== null
             ? userTimeoutSec + RUNTIME_TIMEOUT_PADDING_SECONDS
             : DEFAULT_BROWSER_COMMAND_TIMEOUT;
-          const result = await runWithTimeout(runCommand(cmd, page, kwargs, debug), {
-            timeout: browserTimeout,
-            label: fullName(cmd),
-          });
+          const commandOperation = runCommand(cmd, page, kwargs, debug);
+          const result = adapterSession
+            ? await settleAdapterOperationAfterTimeout(
+                commandOperation,
+                browserTimeout * 1_000,
+                new TimeoutError(fullName(cmd), browserTimeout),
+                async () => { await page.closeWindow?.().catch(() => {}); },
+              )
+            : await runWithTimeout(commandOperation, {
+                timeout: browserTimeout,
+                label: fullName(cmd),
+              });
           observation?.record({
             stream: 'action',
             name: 'command',
@@ -649,7 +671,22 @@ export async function executeCommand(
           if (!keepTab) await page.closeWindow?.().catch(() => {});
           throw err;
         }
+        };
+        if (!adapterSession) return executeOnPage();
+        return withAdapterCommandLease({
+          requestId: crypto.randomUUID(),
+          contextId: leaseContextId!,
+          surface: 'adapter',
+          site: cmd.site,
+          adapterSession,
+          sessionKey: session,
+          queueTimeoutMs: (adapterQueueTimeoutSeconds ?? 300) * 1_000,
+          maxParallel: cmd.adapterConcurrency?.maxParallel ?? 1,
+        }, executeOnPage, {
+          onLeaseLost: async () => { await page.closeWindow?.().catch(() => {}); },
+        });
       }, { session, cdpEndpoint, contextId, windowMode, surface: 'adapter', siteSession });
+      result = await executeInBrowser();
     } else {
       // Non-browser commands: enforce a timeout only when the command exposes
       // a `--timeout` arg (and the resolved value is positive). Without that
@@ -790,8 +827,61 @@ function resolveSiteSession(cmd: CliCommand, rawOption?: unknown): SiteSessionMo
   return normalizeSiteSession(rawOption) ?? cmd.siteSession ?? 'ephemeral';
 }
 
-function resolveAdapterBrowserSession(cmd: CliCommand, siteSession: SiteSessionMode): string {
-  if (siteSession === 'persistent') return `site:${cmd.site}`;
+function normalizeAdapterSession(
+  cmd: CliCommand,
+  resolvedBrowser: boolean,
+  rawOption?: unknown,
+): string | undefined {
+  if (rawOption === undefined || rawOption === null || rawOption === '') return undefined;
+  if (!resolvedBrowser || cmd.adapterConcurrency?.isolatedTabs !== true) {
+    throw new AdapterCoordinationError(
+      'ADAPTER_SESSION_NOT_SUPPORTED',
+      `${fullName(cmd)} does not support named Adapter sessions`,
+    );
+  }
+  const value = String(rawOption);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value)) {
+    throw new AdapterCoordinationError(
+      'INVALID_ADAPTER_SESSION',
+      '--adapter-session must match [A-Za-z0-9][A-Za-z0-9_-]{0,63}',
+    );
+  }
+  return value;
+}
+
+function normalizeAdapterQueueTimeout(rawOption: unknown, adapterSession: string | undefined): number | undefined {
+  if (rawOption === undefined || rawOption === null || rawOption === '') {
+    return adapterSession ? 300 : undefined;
+  }
+  if (!adapterSession) {
+    throw new AdapterCoordinationError(
+      'INVALID_ADAPTER_QUEUE_TIMEOUT',
+      '--adapter-queue-timeout requires --adapter-session',
+    );
+  }
+  const value = typeof rawOption === 'string' && /^\d+$/.test(rawOption) ? Number(rawOption) : NaN;
+  if (!Number.isInteger(value) || value < 1 || value > 3600) {
+    throw new AdapterCoordinationError(
+      'INVALID_ADAPTER_QUEUE_TIMEOUT',
+      '--adapter-queue-timeout must be an integer between 1 and 3600 seconds',
+    );
+  }
+  return value;
+}
+
+function assertAdapterSessionLifecycle(siteSession: SiteSessionMode, adapterSession: string | undefined): void {
+  if (adapterSession && siteSession !== 'persistent') {
+    throw new AdapterCoordinationError(
+      'ADAPTER_SESSION_REQUIRES_PERSISTENT',
+      '--adapter-session requires --site-session persistent',
+    );
+  }
+}
+
+function resolveAdapterBrowserSession(cmd: CliCommand, siteSession: SiteSessionMode, adapterSession?: string): string {
+  if (siteSession === 'persistent') {
+    return adapterSession ? `site:${cmd.site}:${adapterSession}` : `site:${cmd.site}`;
+  }
   return `site:${cmd.site}:${crypto.randomUUID()}`;
 }
 

@@ -117,7 +117,19 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 
 `collection-detail` returns exactly one row with columns `collectionId`, `title`, `description`, `collectionType`, `coverUrl`, `itemCount`, `createdAt`, `updatedAt`, `settingsJson`, and `itemsJson`. The last two fields are compact JSON strings that can be decoded with `JSON.parse`; this preserves nested business data, including collection settings and ordered content items, while complying with byCLI's row-shape validator.
 
-`download-publish-data` no longer downloads an XLS export. It opens the authenticated content-analysis page and saves a Markdown report under `--output` (default `./weixin-publish-data`). Successful rows return `title`, `publishedAt`, `url`, `status: "saved"`, `markdownPath`, `size`, and `error: null`; a page-analysis failure returns `status: "failed"` with a safe error message and no report path.
+`download-publish-data` saves both the matched article's XLS data export and a Markdown content-analysis report under `--output` (default `./weixin-publish-data`). A `downloaded` row means both artifacts passed validation, `partial` preserves the one validated artifact and the other error, and `failed` means neither artifact passed. All three are terminal outcomes.
+
+`download` and `download-publish-data` support opt-in named Adapter sessions.
+Pass `--site-session persistent --keep-tab true --adapter-session worker-a` to
+bind one command stream to its own Adapter-managed tab. Up to three different
+session names may run in one browser profile/site pool; the fourth command
+waits until a running command releases its daemon lease. Reusing the same name
+always remains serial. Give every concurrent invocation its own output
+directory. The runtime also serializes the same article and the same normalized
+output directory, validates successful Markdown and local image artifacts, and
+does not expose raw article URLs or output paths in scheduler diagnostics.
+Named sessions share the Chrome profile's cookies, login account, and
+rate-limit state.
 
 In browser authentication mode, `save-articles` tries a direct Node download first and automatically falls back to loading the article through the current Browser Bridge page when WeChat redirects direct traffic to a verification page. Environment authentication remains Node-only so CI and browserless use do not launch Chrome implicitly.
 

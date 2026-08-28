@@ -66,6 +66,8 @@ export interface ArticleDownloadOptions {
   stdout?: boolean;
   /** Opt-in hardened Markdown rules used by HTML-focused adapters. */
   secureMarkdown?: boolean;
+  /** Lease fencing check invoked immediately before the final Markdown write. */
+  beforePublish?: () => Promise<void>;
 }
 
 export interface ArticleDownloadResult {
@@ -434,6 +436,7 @@ export async function downloadArticle(
     cleanSelectors,
     stdout = false,
     secureMarkdown = false,
+    beforePublish,
   } = options;
 
   const labels = { ...DEFAULT_LABELS, ...frontmatterLabels };
@@ -470,13 +473,15 @@ export async function downloadArticle(
   );
 
   const safeTitle = sanitizeFilename(data.title, maxTitleLength);
+  const stagingDir = !stdout && beforePublish
+    ? path.join(output, `.bycli-article-${crypto.randomUUID()}.tmp`)
+    : undefined;
 
   // Download images only when writing to disk. In stdout mode remote URLs
   // stay intact so the piped output is self-contained.
   if (!stdout && shouldDownloadImages && data.imageUrls && data.imageUrls.length > 0) {
     const articleDir = path.join(output, safeTitle);
-    fs.mkdirSync(articleDir, { recursive: true });
-    const imagesDir = path.join(articleDir, 'images');
+    const imagesDir = path.join(stagingDir ?? articleDir, 'images');
     fs.mkdirSync(imagesDir, { recursive: true });
 
     const urlMap = await downloadImages(data.imageUrls, imagesDir, imageHeaders, detectImageExt);
@@ -518,7 +523,29 @@ export async function downloadArticle(
   fs.mkdirSync(articleDir, { recursive: true });
   const filename = `${safeTitle}.md`;
   const filePath = path.join(articleDir, filename);
-  fs.writeFileSync(filePath, fullContent, 'utf-8');
+  if (stagingDir) {
+    fs.mkdirSync(stagingDir, { recursive: true });
+    const stagedMarkdown = path.join(stagingDir, filename);
+    fs.writeFileSync(stagedMarkdown, fullContent, { encoding: 'utf-8', flag: 'wx' });
+    try {
+      await beforePublish?.();
+      const stagedImages = path.join(stagingDir, 'images');
+      if (fs.existsSync(stagedImages)) {
+        const finalImages = path.join(articleDir, 'images');
+        fs.mkdirSync(finalImages, { recursive: true });
+        for (const image of fs.readdirSync(stagedImages)) {
+          fs.linkSync(path.join(stagedImages, image), path.join(finalImages, image));
+        }
+      }
+      // Same-filesystem rename makes the Markdown replacement atomic.
+      fs.renameSync(stagedMarkdown, filePath);
+    } finally {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    }
+  } else {
+    await beforePublish?.();
+    fs.writeFileSync(filePath, fullContent, 'utf-8');
+  }
 
   return [{
     title: data.title,

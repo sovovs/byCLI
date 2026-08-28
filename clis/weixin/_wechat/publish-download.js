@@ -37,7 +37,7 @@ function safeFilename(title) {
   return name;
 }
 
-async function publishExclusively(source, outputDir, filename) {
+async function publishExclusively(source, outputDir, filename, beforePublish) {
   const extension = extname(filename);
   const stem = filename.slice(0, -extension.length);
   const temporary = resolve(outputDir, `.bycli-publish-data-${randomUUID()}.tmp`);
@@ -61,6 +61,7 @@ async function publishExclusively(source, outputDir, filename) {
     for (let index = 0; index <= 9999; index += 1) {
       const candidate = resolve(outputDir, index === 0 ? filename : `${stem}-${index}${extension}`);
       try {
+        await beforePublish?.();
         await link(temporary, candidate);
         return candidate;
       } catch (error) {
@@ -151,6 +152,7 @@ export async function downloadPublishData(page, options) {
     downloaded.filename,
     outputDir,
     safeFilename(options.title),
+    options.beforePublish,
   );
   try {
     await unlink(downloaded.filename);

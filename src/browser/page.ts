@@ -52,13 +52,17 @@ export class Page extends BasePage {
   constructor(
     private readonly session: string,
     idleTimeout?: number,
-    public readonly contextId?: string,
+    public contextId?: string,
     private readonly windowMode?: 'foreground' | 'background',
     private readonly surface: 'browser' | 'adapter' = 'browser',
     private readonly siteSession?: 'ephemeral' | 'persistent',
   ) {
     super();
     this._idleTimeout = idleTimeout;
+  }
+
+  setContextId(contextId: string): void {
+    this.contextId = contextId;
   }
 
   /** Active page identity (targetId), set after navigate and used in all subsequent commands */

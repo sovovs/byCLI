@@ -2,7 +2,16 @@ import { JSDOM } from 'jsdom';
 import { getRegistry } from '@sovovs/bycli/registry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadArticle } from '@sovovs/bycli/download/article-download';
+import { withAdapterResourceLocks } from '@sovovs/bycli/adapter-coordination';
+import { validateDownloadedArticleRows } from './_wechat/article-artifact.js';
 vi.mock('@sovovs/bycli/download/article-download', () => ({ downloadArticle: vi.fn() }));
+vi.mock('@sovovs/bycli/adapter-coordination', () => ({
+  assertCurrentAdapterLease: vi.fn(),
+  withAdapterResourceLocks: vi.fn((_keys, operation) => operation()),
+}));
+vi.mock('./_wechat/article-artifact.js', () => ({
+  validateDownloadedArticleRows: vi.fn(async rows => rows),
+}));
 import {
   detectWechatAccessIssue, extractWechatArticleContent, extractWechatPublishTime,
   isTrustedSogouRedirectUrl, isTrustedWechatArticleUrl, normalizeWechatUrl,
@@ -10,6 +19,8 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  withAdapterResourceLocks.mockImplementation((_keys, operation) => operation());
+  validateDownloadedArticleRows.mockImplementation(async rows => rows);
   downloadArticle.mockResolvedValue([{
     title: 'Article', author: 'Account', publish_time: '2026-08-15',
     status: 'success', size: '1 KB', saved: '/tmp/article.md',
@@ -17,6 +28,10 @@ beforeEach(() => {
 });
 
 describe('weixin download characterization', () => {
+  it('declares isolated Adapter tabs with a maximum of three workers', () => {
+    expect(getRegistry().get('weixin/download').adapterConcurrency)
+      .toEqual({ isolatedTabs: true, maxParallel: 3 });
+  });
   it('keeps URL, publish-time, and access-gate outputs stable', () => {
     expect(normalizeWechatUrl(' <http:\\/\\/mp.weixin.qq.com\\/s\\/x?foo=1&amp;bar=2> '))
       .toBe('https://mp.weixin.qq.com/s/x?foo=1&bar=2');
@@ -59,6 +74,11 @@ describe('weixin download characterization', () => {
     expect(page.goto).toHaveBeenCalledTimes(1);
     expect(page.goto).toHaveBeenCalledWith(url);
     expect(downloadArticle).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: url }), expect.any(Object));
+    expect(withAdapterResourceLocks).toHaveBeenCalledWith([
+      expect.stringMatching(/^article:[a-f0-9]{64}$/),
+      expect.stringMatching(/^output:[a-f0-9]{64}$/),
+    ], expect.any(Function));
+    expect(validateDownloadedArticleRows).toHaveBeenCalledWith(expect.any(Array), '/tmp/out');
   });
 
   it('resolves a Sogou result link before extracting and records both URLs', async () => {

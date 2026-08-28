@@ -39,4 +39,8 @@ export interface ManifestEntry {
   navigateBefore?: boolean | string;
   /** Site session lifecycle defaults — see CliCommand.siteSession */
   siteSession?: 'ephemeral' | 'persistent';
+  adapterConcurrency?: {
+    isolatedTabs: true;
+    maxParallel: number;
+  };
 }
