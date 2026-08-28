@@ -2154,6 +2154,58 @@ cli({
     }
   });
 
+  it('redacts a named Adapter session from trace scope', async () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-adapter-session-trace-'));
+    const previousConfigDir = process.env.BYCLI_CONFIG_DIR;
+    process.env.BYCLI_CONFIG_DIR = baseDir;
+    const rawAdapterSession = 'batch_secretToken_worker_1';
+    const onTraceExport = vi.fn();
+    const mockPage = {
+      closeWindow: vi.fn().mockResolvedValue(undefined),
+      setContextId: vi.fn(),
+      startNetworkCapture: vi.fn().mockResolvedValue(true),
+      readNetworkCapture: vi.fn().mockResolvedValue([]),
+      consoleMessages: vi.fn().mockResolvedValue([]),
+      snapshot: vi.fn().mockResolvedValue('snapshot'),
+      screenshot: vi.fn().mockResolvedValue(undefined),
+      getCurrentUrl: vi.fn().mockResolvedValue('https://mp.weixin.qq.com/'),
+      getActivePage: vi.fn().mockReturnValue('tab-adapter-trace'),
+    } as any;
+
+    vi.spyOn(capRouting, 'shouldUseBrowserSession').mockReturnValue(true);
+    vi.spyOn(daemonClient, 'resolveAdapterLeaseContextId').mockResolvedValue('profile-a');
+    vi.spyOn(adapterCoordination, 'withAdapterCommandLease').mockImplementation(async (_request, operation) => operation());
+    vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn) => fn(mockPage));
+
+    try {
+      const cmd = cli({
+        site: 'weixin',
+        name: 'named-session-trace',
+        access: 'read',
+        browser: true,
+        strategy: Strategy.PUBLIC,
+        siteSession: 'persistent',
+        adapterConcurrency: { isolatedTabs: true, maxParallel: 3 },
+        func: async () => [{ status: 'success' }],
+      });
+
+      await executeCommand(cmd, {}, false, {
+        trace: 'on',
+        adapterSession: rawAdapterSession,
+        onTraceExport,
+      });
+
+      const receipt = onTraceExport.mock.calls[0]?.[0]?.receipt;
+      expect(receipt.scope.session).toMatch(/^site:weixin:adapter-[a-f0-9]{12}$/);
+      expect(JSON.stringify(receipt)).not.toContain(rawAdapterSession);
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.BYCLI_CONFIG_DIR;
+      else process.env.BYCLI_CONFIG_DIR = previousConfigDir;
+      fs.rmSync(baseDir, { recursive: true, force: true });
+      vi.restoreAllMocks();
+    }
+  });
+
   it('keeps the original adapter error when trace export fails', async () => {
     const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bycli-exec-trace-fail-'));
     const blockedPath = path.join(baseDir, 'not-a-dir');

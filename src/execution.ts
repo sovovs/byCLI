@@ -554,7 +554,7 @@ export async function executeCommand(
           : new ObservationSession({
             scope: {
               contextId,
-              session,
+              session: adapterSession ? adapterSessionDiagnosticKey(cmd.site, adapterSession) : session,
               target: page.getActivePage?.(),
               site: cmd.site,
               command: fullName(cmd),
@@ -883,6 +883,11 @@ function resolveAdapterBrowserSession(cmd: CliCommand, siteSession: SiteSessionM
     return adapterSession ? `site:${cmd.site}:${adapterSession}` : `site:${cmd.site}`;
   }
   return `site:${cmd.site}:${crypto.randomUUID()}`;
+}
+
+function adapterSessionDiagnosticKey(site: string, adapterSession: string): string {
+  const digest = crypto.createHash('sha256').update(adapterSession).digest('hex').slice(0, 12);
+  return `site:${site}:adapter-${digest}`;
 }
 
 function normalizeBooleanOption(name: string, raw: unknown): boolean | null {
