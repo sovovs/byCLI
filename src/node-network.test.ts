@@ -1,6 +1,12 @@
+import { createServer } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
-import { decideProxy, hasProxyEnv } from './node-network.js';
+import {
+  createPinnedDispatcher,
+  decideProxy,
+  fetchWithNodeNetwork,
+  hasProxyEnv,
+} from './node-network.js';
 
 describe('node network proxy decisions', () => {
   it('detects common proxy env variables', () => {
@@ -89,5 +95,30 @@ describe('node network proxy decisions', () => {
       mode: 'proxy',
       proxyUrl: 'socks5://127.0.0.1:1080',
     });
+  });
+
+  it('preserves a caller-supplied pinned dispatcher when proxy variables are set', async () => {
+    const server = createServer((_request, response) => response.end('pinned'));
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const dispatcher = createPinnedDispatcher([{ address: '127.0.0.1', family: 4 }]);
+    const proxyKeys = ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'no_proxy', 'NO_PROXY'];
+    const previous = Object.fromEntries(proxyKeys.map(key => [key, process.env[key]]));
+    try {
+      for (const key of proxyKeys) delete process.env[key];
+      process.env.http_proxy = 'http://127.0.0.1:1';
+      const port = (server.address() as { port: number }).port;
+      const response = await fetchWithNodeNetwork(`http://pinned.invalid:${port}/image`, {
+        dispatcher,
+      } as RequestInit & { dispatcher: ReturnType<typeof createPinnedDispatcher> });
+
+      expect(await response.text()).toBe('pinned');
+    } finally {
+      await dispatcher.close();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      for (const key of proxyKeys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+    }
   });
 });

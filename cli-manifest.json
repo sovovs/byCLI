@@ -29021,6 +29021,13 @@
         "help": "浏览器模式：填充并验证正文后停止，不会保存草稿"
       },
       {
+        "name": "allow-private-image-hosts",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "允许下载 localhost/内网 HTTP(S) 正文图片；云元数据地址始终禁止"
+      },
+      {
         "name": "timeout",
         "type": "int",
         "default": 180,

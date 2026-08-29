@@ -24,6 +24,11 @@ export interface ProxyDecision {
   proxyUrl?: string;
 }
 
+export interface PinnedNetworkAddress {
+  address: string;
+  family: 4 | 6;
+}
+
 interface NoProxyEntry {
   host: string;
   port?: string;
@@ -34,6 +39,10 @@ interface ProxyConfig {
   httpsProxy?: string;
   noProxy?: string;
   noProxyEntries: NoProxyEntry[];
+}
+
+interface DispatcherRequestInit extends RequestInit {
+  dispatcher?: Dispatcher;
 }
 
 let installed = false;
@@ -191,7 +200,34 @@ export function getDispatcherForUrl(url: URL, env: NodeJS.ProcessEnv = process.e
   return createProxyDispatcher(config);
 }
 
+export function createPinnedDispatcher(addresses: PinnedNetworkAddress[]): Dispatcher {
+  if (addresses.length === 0) throw new Error('At least one pinned network address is required');
+  return new Agent({
+    connect: {
+      lookup(_hostname, options, callback) {
+        const requestedFamily = Number(options?.family) || 0;
+        const candidates = requestedFamily
+          ? addresses.filter(item => item.family === requestedFamily)
+          : addresses;
+        if (candidates.length === 0) {
+          callback(new Error(`No pinned address for IPv${requestedFamily}`), []);
+          return;
+        }
+        if (options?.all) callback(null, candidates);
+        else callback(null, candidates[0].address, candidates[0].family);
+      },
+    },
+  });
+}
+
 export async function fetchWithNodeNetwork(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const explicitDispatcher = (init as DispatcherRequestInit).dispatcher;
+  if (explicitDispatcher) {
+    return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+      ...init,
+      dispatcher: explicitDispatcher,
+    } as Parameters<typeof undiciFetch>[1])) as unknown as Response;
+  }
   const url = resolveUrl(input);
   if (!url || !hasProxyEnv()) {
     return nativeFetch(input, init);

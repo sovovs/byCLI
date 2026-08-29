@@ -24,6 +24,7 @@
     "./types": "./dist/src/types.js",
     "./utils": "./dist/src/utils.js",
     "./logger": "./dist/src/logger.js",
+    "./node-network": "./dist/src/node-network.js",
     "./launcher": "./dist/src/launcher.js",
     "./browser/cdp": "./dist/src/browser/cdp.js",
     "./browser/page": "./dist/src/browser/page.js",

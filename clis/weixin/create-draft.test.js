@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AuthRequiredError } from '@sovovs/bycli/errors';
@@ -49,11 +49,19 @@ describe('weixin create-draft command', () => {
         expect(command.browser).toBe('conditional');
         expect(command.requiresBrowser({})).toBe(true);
         expect(command.requiresBrowser({ appid: 'wx123', appsecret: 'secret' })).toBe(false);
+        expect(command.requiresBrowser({
+            appid: 'wx123', appsecret: 'secret', 'dry-run': true,
+        })).toBe(true);
         expect(() => command.requiresBrowser({ appid: 'wx123' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
+        expect(() => command.requiresBrowser({
+            appid: 'wx123', 'dry-run': true,
+        })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
         expect(args.content.help).toContain('--content-file');
         expect(args['content-format'].help).toContain('text=纯文本');
         expect(args.appid.help).toContain('不打开浏览器');
         expect(args['dry-run'].help).toContain('不会保存草稿');
+        expect(args['allow-private-image-hosts']).toMatchObject({ type: 'boolean', default: false });
+        expect(args['allow-private-image-hosts'].help).toContain('云元数据');
     });
 
     beforeEach(async () => {
@@ -126,6 +134,22 @@ describe('weixin create-draft command', () => {
             detail: '"title" (media_id: draft-media)',
         }]);
         expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps dry-run in browser mode when API credentials are supplied', async () => {
+        const fetchMock = vi.fn(() => {
+            throw new Error('API must not be called in dry-run');
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const page = scriptedPage(baseEditorSequence());
+
+        await expect(command.func(page, {
+            title: 'title', content: 'body', appid: 'wx123', appsecret: 'secret', 'dry-run': true,
+        })).resolves.toEqual([{
+            status: 'draft ready',
+            detail: '"title" (dry-run)',
+        }]);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('rejects partial API credentials before opening a browser', async () => {
@@ -337,9 +361,9 @@ describe('weixin create-draft command', () => {
                 if (script.includes("textarea#title")) return { ok: true, value: 'title' };
                 if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
                 if (script.includes('#js_editor_insertimage') || script.includes('.js_img_dropdown_menu')) return true;
-                if (script.includes("var editors = document.querySelectorAll('#ueditor_0")) return ['https://mmbiz.qpic.cn/uploaded'];
+                if (script.includes("var editors = document.querySelectorAll('#ueditor_0")) return ['https://mmecoa.qpic.cn/uploaded'];
                 if (script.includes('navigator.clipboard.write')) return { ok: true };
-                if (script.includes('contenteditable')) return { ok: true, html: '<p>Before</p><img src="https://mmbiz.qpic.cn/uploaded"><p>After</p>', text: 'Before After' };
+                if (script.includes('contenteditable')) return { ok: true, html: '<p>Before</p><img src="https://mmecoa.qpic.cn/uploaded"><p>After</p>', text: 'Before After' };
                 return true;
             }),
         };
@@ -354,6 +378,69 @@ describe('weixin create-draft command', () => {
         expect(page.nativeKeyPress).toHaveBeenCalledTimes(3);
         expect(page.nativeKeyPress).toHaveBeenCalledWith('Backspace', []);
         expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
+        const uploadPollScript = page.evaluate.mock.calls
+            .map(([script]) => String(script))
+            .find((script) => script.includes("var editors = document.querySelectorAll('#ueditor_0"));
+        expect(uploadPollScript).toContain('qpic.cn');
+        expect(uploadPollScript).not.toContain('src*="mmbiz"');
+    });
+
+    it('downloads an opted-in private HTTP image, uploads it, and removes the temporary file', async () => {
+        const png = Uint8Array.from([
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x0d,
+        ]);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(png, {
+            headers: { 'content-type': 'image/png', 'content-length': String(png.length) },
+        })));
+        const expectedHtml = '<p>Before</p><img src="https://mmbiz.qpic.cn/uploaded"><p>After</p>';
+        const page = {
+            goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
+            cdp: vi.fn().mockResolvedValue({}),
+            nativeKeyPress: vi.fn().mockResolvedValue(undefined),
+            nativeClick: vi.fn().mockResolvedValue(undefined),
+            focusWindow: vi.fn().mockResolvedValue(undefined),
+            setFileInput: vi.fn().mockResolvedValue(undefined),
+            evaluate: vi.fn().mockImplementation(async (script) => {
+                if (script.includes('window.location.href.match')) return '123456';
+                if (script === '!!document.querySelector("textarea#title")') return true;
+                if (script.includes('textarea#title')) return { ok: true, value: 'title' };
+                if (script.includes('getBoundingClientRect')) return { ok: true, rect: { x: 120, y: 240, width: 600, height: 300 } };
+                if (script.includes('#js_editor_insertimage') || script.includes('.js_img_dropdown_menu')) return true;
+                if (script.includes("var editors = document.querySelectorAll('#ueditor_0")) return ['https://mmbiz.qpic.cn/uploaded'];
+                if (script.includes('navigator.clipboard.write')) return { ok: true };
+                if (script.includes('contenteditable')) return { ok: true, html: expectedHtml, text: 'Before After' };
+                return true;
+            }),
+        };
+
+        await expect(command.func(page, {
+            title: 'title',
+            content: '<p>Before</p><img src="http://127.0.0.1/remote.png"><p>After</p>',
+            'content-format': 'html',
+            'dry-run': true,
+            'allow-private-image-hosts': true,
+        })).resolves.toEqual([{
+            status: 'draft ready',
+            detail: '"title" (dry-run)',
+        }]);
+
+        const [uploadedPath] = page.setFileInput.mock.calls[0][0];
+        expect(uploadedPath).toContain('bycli-weixin-image-');
+        await expect(access(uploadedPath)).rejects.toThrow();
+    });
+
+    it('rejects a private HTTP image before browser navigation unless explicitly enabled', async () => {
+        const page = navigationTrap();
+
+        await expect(command.func(page, {
+            title: 'title',
+            content: '<p>Body</p><img src="http://127.0.0.1/remote.png">',
+            'content-format': 'html',
+            'dry-run': true,
+        })).rejects.toThrow('--allow-private-image-hosts true');
+        expect(page.goto).not.toHaveBeenCalled();
     });
 
     it('accepts HTML from content-file without requiring a positional content argument', async () => {

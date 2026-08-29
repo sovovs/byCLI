@@ -2,6 +2,7 @@ import * as nodeFs from 'node:fs/promises';
 import * as nodePath from 'node:path';
 import { CommandExecutionError } from '@sovovs/bycli/errors';
 import { prepareHtmlContent } from './draft-content.js';
+import { stageDraftHtmlImages } from './draft-image-stage.js';
 
 const API_BASE = 'https://api.weixin.qq.com/cgi-bin';
 
@@ -55,6 +56,18 @@ async function uploadImage(filePath, token, fetchImpl) {
   return payload;
 }
 
+async function uploadContentImage(filePath, token, fetchImpl) {
+  const data = await nodeFs.readFile(filePath);
+  const form = new FormData();
+  form.append('media', new Blob([data], { type: mimeType(filePath) }), nodePath.basename(filePath));
+  const url = new URL(`${API_BASE}/media/uploadimg`);
+  url.searchParams.set('access_token', token);
+  const response = await fetchImpl(url.toString(), { method: 'POST', body: form });
+  const payload = await readJsonResponse(response, '上传正文图片');
+  if (!payload.url) throw new CommandExecutionError('上传正文图片 failed: response did not contain url');
+  return payload.url;
+}
+
 function removeCoverImage(html) {
   return String(html ?? '').replace(/<img\b[^>]*(?:alt|title)=["'][^"']*封面[^"']*["'][^>]*>\s*/giu, '');
 }
@@ -69,6 +82,9 @@ export async function createDraftViaApi({
   html,
   baseDir = process.cwd(),
   fetchImpl = globalThis.fetch,
+  imageFetchImpl = globalThis.fetch,
+  lookupImpl,
+  allowPrivateImageHosts = false,
 } = {}) {
   if (!String(appid ?? '').trim() || !String(appsecret ?? '').trim()) {
     throw new CommandExecutionError('API mode requires both appid and appsecret');
@@ -76,39 +92,48 @@ export async function createDraftViaApi({
   if (typeof fetchImpl !== 'function') throw new CommandExecutionError('API mode requires fetch support');
   if (!coverImage) throw new CommandExecutionError('API mode requires cover-image');
 
-  const token = await getAccessToken(String(appid).trim(), String(appsecret).trim(), fetchImpl);
-  const cover = await uploadImage(nodePath.resolve(coverImage), token, fetchImpl);
-  const prepared = await prepareHtmlContent(removeCoverImage(html), {
+  const bodyHtml = removeCoverImage(html);
+  const staged = await stageDraftHtmlImages(bodyHtml, {
     baseDir,
-    resolveImage: async imagePath => {
-      const uploaded = await uploadImage(imagePath, token, fetchImpl);
-      return uploaded.url || uploaded.media_id;
-    },
+    allowPrivateHosts: allowPrivateImageHosts,
+    fetchImpl: imageFetchImpl,
+    ...(lookupImpl ? { lookupImpl } : {}),
   });
+  try {
+    const token = await getAccessToken(String(appid).trim(), String(appsecret).trim(), fetchImpl);
+    const cover = await uploadImage(nodePath.resolve(coverImage), token, fetchImpl);
+    const prepared = await prepareHtmlContent(staged.html, {
+      baseDir,
+      allowRemoteImages: false,
+      resolveImage: imagePath => uploadContentImage(imagePath, token, fetchImpl),
+    });
 
-  const url = new URL(`${API_BASE}/draft/add`);
-  url.searchParams.set('access_token', token);
-  const body = {
-    articles: [{
-      title: String(title ?? ''),
-      author: String(author ?? ''),
-      digest: String(digest || title || ''),
-      content: prepared.html,
-      content_source_url: '',
-      thumb_media_id: cover.media_id,
-      show_cover_pic: 1,
-      need_open_comment: 0,
-      only_fans_can_comment: 0,
-    }],
-  };
-  const response = await fetchImpl(url.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify(body),
-  });
-  const payload = await readJsonResponse(response, '创建草稿');
-  if (!payload.media_id) throw new CommandExecutionError('创建草稿 failed: response did not contain media_id');
-  return { mediaId: payload.media_id };
+    const url = new URL(`${API_BASE}/draft/add`);
+    url.searchParams.set('access_token', token);
+    const body = {
+      articles: [{
+        title: String(title ?? ''),
+        author: String(author ?? ''),
+        digest: String(digest || title || ''),
+        content: prepared.html,
+        content_source_url: '',
+        thumb_media_id: cover.media_id,
+        show_cover_pic: 1,
+        need_open_comment: 0,
+        only_fans_can_comment: 0,
+      }],
+    };
+    const response = await fetchImpl(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(body),
+    });
+    const payload = await readJsonResponse(response, '创建草稿');
+    if (!payload.media_id) throw new CommandExecutionError('创建草稿 failed: response did not contain media_id');
+    return { mediaId: payload.media_id };
+  } finally {
+    await staged.cleanup();
+  }
 }
 
 export { removeCoverImage };

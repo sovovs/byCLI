@@ -5,6 +5,7 @@ import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs
 import { loadDraftContent, prepareHtmlContent } from './_wechat/draft-content.js';
 import { pasteHtmlThroughClipboard } from './_wechat/html-clipboard.js';
 import { createDraftViaApi } from './_wechat/api-draft.js';
+import { stageDraftHtmlImages } from './_wechat/draft-image-stage.js';
 
 const WEIXIN_DOMAIN = 'mp.weixin.qq.com';
 const WEIXIN_HOME = 'https://mp.weixin.qq.com/';
@@ -52,6 +53,7 @@ function readApiCredentials(kwargs) {
 
 function requiresBrowser(kwargs) {
     const { appid, appsecret } = readApiCredentials(kwargs);
+    if (kwargs['dry-run'] === true) return true;
     return !(appid && appsecret);
 }
 
@@ -77,6 +79,7 @@ function normalizeCreateDraftArgs(kwargs) {
         summary: kwargs.summary == null ? null : String(kwargs.summary).trim(),
         coverImage: validateCoverImage(kwargs['cover-image']),
         dryRun: kwargs['dry-run'] === true,
+        allowPrivateImageHosts: kwargs['allow-private-image-hosts'] === true,
         appid,
         appsecret,
     };
@@ -254,7 +257,7 @@ async function uploadContentImage(page, imagePath) {
             var editors = document.querySelectorAll('#ueditor_0, div[contenteditable="true"]');
             var sources = [];
             editors.forEach(function(editor) {
-                editor.querySelectorAll('img[src*="mmbiz"], img[data-src*="mmbiz"]').forEach(function(image) {
+                editor.querySelectorAll('img[src*=".qpic.cn"], img[data-src*=".qpic.cn"]').forEach(function(image) {
                     var src = image.getAttribute('src') || image.getAttribute('data-src') || '';
                     if (src && !sources.includes(src)) sources.push(src);
                 });
@@ -328,10 +331,10 @@ async function selectCoverFromContent(page) {
             var areas = document.querySelectorAll('#js_cover_area, #js_cover_description_area, #appmsgItem');
             var found = false;
             areas.forEach(function(area) {
-                if (area.querySelector('img[src*="mmbiz"], img[data-src*="mmbiz"]')) found = true;
+                if (area.querySelector('img[src*=".qpic.cn"], img[data-src*=".qpic.cn"]')) found = true;
                 [area].concat(Array.from(area.querySelectorAll('*'))).forEach(function(el) {
                     var bg = window.getComputedStyle(el).backgroundImage;
-                    if (bg && bg.includes('mmbiz')) found = true;
+                    if (bg && bg.includes('.qpic.cn')) found = true;
                 });
             });
             return found;
@@ -384,13 +387,14 @@ export const createDraftCommand = cli({
         { name: 'appid', help: '公众号 AppID；与 --appsecret 同传时走官方 API，不打开浏览器' },
         { name: 'appsecret', help: '公众号 AppSecret；请勿提交到 shell 历史或日志' },
         { name: 'dry-run', type: 'boolean', default: false, help: '浏览器模式：填充并验证正文后停止，不会保存草稿' },
+        { name: 'allow-private-image-hosts', type: 'boolean', default: false, help: '允许下载 localhost/内网 HTTP(S) 正文图片；云元数据地址始终禁止' },
         { name: 'timeout', type: 'int', required: false, default: 180, help: '命令总超时时间（秒，默认 180）' },
     ],
     columns: ['status', 'detail'],
 
     func: async (page, kwargs) => {
         const args = normalizeCreateDraftArgs(kwargs);
-        if (args.appid && args.appsecret) {
+        if (!args.dryRun && args.appid && args.appsecret) {
             const baseDir = args.filePath ? nodePath.dirname(args.filePath) : process.cwd();
             const result = await createDraftViaApi({
                 appid: args.appid,
@@ -401,68 +405,80 @@ export const createDraftCommand = cli({
                 coverImage: args.coverImage,
                 html: args.content,
                 baseDir,
+                allowPrivateImageHosts: args.allowPrivateImageHosts,
             });
             return [{
                 status: 'draft created',
                 detail: `"${args.title}" (media_id: ${result.mediaId})`,
             }];
         }
-        await navigateToEditor(page);
-
-
-        const titleResult = await fillField(page, 'textarea#title', args.title);
-        requirePageResult(titleResult, 'title');
-
-        if (args.author) {
-            const authorResult = await fillField(page, 'input#author', args.author);
-            requirePageResult(authorResult, 'author');
-        }
-
-        await page.wait(10);
-
-        let content = args.content;
-        if (args.format === 'html') {
-            const baseDir = args.filePath ? nodePath.dirname(args.filePath) : process.cwd();
-            const prepared = await prepareHtmlContent(content, {
+        const baseDir = args.filePath ? nodePath.dirname(args.filePath) : process.cwd();
+        const staged = args.format === 'html'
+            ? await stageDraftHtmlImages(args.content, {
                 baseDir,
-                resolveImage: async imagePath => {
-                    const uploaded = await uploadContentImage(page, imagePath);
-                    await removeTemporaryInsertedImage(page);
-                    return uploaded;
-                },
-            });
-            await pasteHtmlThroughClipboard(page, prepared.html, { origin: `https://${WEIXIN_DOMAIN}` });
-        } else {
-            const contentResult = await fillContent(page, content);
-            requirePageResult(contentResult, 'content');
-        }
+                allowPrivateHosts: args.allowPrivateImageHosts,
+            })
+            : null;
+        try {
+            await navigateToEditor(page);
 
-        if (args.dryRun) {
-            return [{
-                status: 'draft ready',
-                detail: `"${args.title}" (dry-run)`,
-            }];
-        }
 
-        if (args.coverImage) {
-            await uploadContentImage(page, args.coverImage);
-            const coverSet = await selectCoverFromContent(page);
-            if (!coverSet) {
-                throw new CommandExecutionError('Failed to set the requested cover image');
+            const titleResult = await fillField(page, 'textarea#title', args.title);
+            requirePageResult(titleResult, 'title');
+
+            if (args.author) {
+                const authorResult = await fillField(page, 'input#author', args.author);
+                requirePageResult(authorResult, 'author');
             }
+
+            await page.wait(10);
+
+            const content = staged?.html ?? args.content;
+            if (args.format === 'html') {
+                const prepared = await prepareHtmlContent(content, {
+                    baseDir,
+                    allowRemoteImages: false,
+                    resolveImage: async imagePath => {
+                        const uploaded = await uploadContentImage(page, imagePath);
+                        await removeTemporaryInsertedImage(page);
+                        return uploaded;
+                    },
+                });
+                await pasteHtmlThroughClipboard(page, prepared.html, { origin: `https://${WEIXIN_DOMAIN}` });
+            } else {
+                const contentResult = await fillContent(page, content);
+                requirePageResult(contentResult, 'content');
+            }
+
+            if (args.dryRun) {
+                return [{
+                    status: 'draft ready',
+                    detail: `"${args.title}" (dry-run)`,
+                }];
+            }
+
+            if (args.coverImage) {
+                await uploadContentImage(page, args.coverImage);
+                const coverSet = await selectCoverFromContent(page);
+                if (!coverSet) {
+                    throw new CommandExecutionError('Failed to set the requested cover image');
+                }
+            }
+
+            if (args.summary) {
+                const summaryResult = await fillField(page, 'textarea#js_description', args.summary);
+                requirePageResult(summaryResult, 'summary');
+            }
+
+            await page.wait(1);
+            await clickSaveDraft(page);
+
+            return [{
+                status: 'draft saved',
+                detail: `"${args.title}"${args.author ? ` by ${args.author}` : ''}${args.coverImage ? ' (with cover)' : ''}`,
+            }];
+        } finally {
+            await staged?.cleanup();
         }
-
-        if (args.summary) {
-            const summaryResult = await fillField(page, 'textarea#js_description', args.summary);
-            requirePageResult(summaryResult, 'summary');
-        }
-
-        await page.wait(1);
-        await clickSaveDraft(page);
-
-        return [{
-            status: 'draft saved',
-            detail: `"${args.title}"${args.author ? ` by ${args.author}` : ''}${args.coverImage ? ' (with cover)' : ''}`,
-        }];
     },
 });

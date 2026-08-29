@@ -85,4 +85,26 @@ describe('weixin draft content preparation', () => {
     expect(resolveImage).toHaveBeenCalledWith('/tmp/article/assets/cover.jpg');
     expect(result.html).toContain('src="https://mmbiz.qpic.cn//tmp/article/assets/cover.jpg"');
   });
+
+  it('replaces an HTTPS image with the resolver result', async () => {
+    const resolveImage = vi.fn(async () => 'https://mmbiz.qpic.cn/https-uploaded.jpg');
+    const result = await prepareHtmlContent(
+      '<p><img src="https://example.com/remote.jpg"></p>',
+      { allowRemoteImages: true, resolveImage },
+    );
+
+    expect(resolveImage).toHaveBeenCalledWith('https://example.com/remote.jpg');
+    expect(result.html).toContain('src="https://mmbiz.qpic.cn/https-uploaded.jpg"');
+  });
+
+  it('replaces an HTTP image with the resolver result', async () => {
+    const resolveImage = vi.fn(async () => 'https://mmbiz.qpic.cn/http-uploaded.jpg');
+    const result = await prepareHtmlContent(
+      '<div><img src="http://example.com/remote.jpg"></div>',
+      { allowRemoteImages: true, resolveImage },
+    );
+
+    expect(resolveImage).toHaveBeenCalledWith('http://example.com/remote.jpg');
+    expect(result.html).toContain('src="https://mmbiz.qpic.cn/http-uploaded.jpg"');
+  });
 });

@@ -101,6 +101,31 @@ function safeUrl(value, { image = false } = {}) {
   return raw;
 }
 
+function validatedImageSource(node, { allowRemoteImages = false } = {}) {
+  const source = attributes(node).find(attr => attr.name === 'src')?.value;
+  const url = safeUrl(source, { image: true });
+  if (!url) throw new CommandExecutionError('HTML contains an unsupported image source');
+  const isHttpsRemote = /^https:\/\//iu.test(url);
+  const isHttpRemote = /^http:\/\//iu.test(url);
+  const isRemote = isHttpsRemote || isHttpRemote;
+  if (isRemote && !allowRemoteImages) {
+    throw new CommandExecutionError('API mode requires HTML images to be local files');
+  }
+  return { url, isRemote };
+}
+
+function validateImageSources(node, options) {
+  if (!node || typeof node !== 'object') return;
+  const tag = String(node.tagName ?? node.nodeName ?? '').toLowerCase();
+  if (tag === 'img') validatedImageSource(node, options);
+  for (const child of node.childNodes ?? []) validateImageSources(child, options);
+}
+
+export function validateHtmlImageSources(html, { allowRemoteImages = false } = {}) {
+  const fragment = parseWechatHtmlFragment(String(html ?? ''));
+  for (const node of fragment.childNodes ?? []) validateImageSources(node, { allowRemoteImages });
+}
+
 function sanitizeAttributes(node) {
   for (const attr of [...attributes(node)]) {
     const name = attr.name.toLowerCase();
@@ -157,11 +182,8 @@ async function sanitizeNode(node, options) {
   convertBackgroundSection(node);
 
   if (tag === 'img') {
-    const source = attributes(node).find(attr => attr.name === 'src')?.value;
-    const url = safeUrl(source, { image: true });
-    if (!url) throw new CommandExecutionError('HTML contains an unsupported image source');
-    const isRemote = /^https?:\/\//iu.test(url);
-    const resolved = isRemote ? url : await options.resolveImage(url);
+    const { url } = validatedImageSource(node, options);
+    const resolved = await options.resolveImage(url);
     if (!resolved) throw new CommandExecutionError(`Could not upload HTML image: ${url}`);
     setAttribute(node, 'src', resolved);
   }
@@ -196,13 +218,23 @@ export function loadDraftContent({ content, contentFile, contentFormat = 'text' 
   };
 }
 
-export async function prepareHtmlContent(html, { baseDir = process.cwd(), resolveImage } = {}) {
+export async function prepareHtmlContent(html, {
+  baseDir = process.cwd(),
+  resolveImage,
+  allowRemoteImages = false,
+} = {}) {
   if (typeof resolveImage !== 'function') throw new ArgumentError('resolveImage is required for HTML content');
   const fragment = parseWechatHtmlFragment(String(html ?? ''));
+  for (const node of fragment.childNodes ?? []) validateImageSources(node, { allowRemoteImages });
   const imageResolver = async source => {
     const absolute = /^https?:\/\//iu.test(source) ? source : nodePath.resolve(baseDir, source);
     return resolveImage(absolute);
   };
-  await Promise.all((fragment.childNodes ?? []).map(node => sanitizeNode(node, { resolveImage: imageResolver })));
+  for (const node of fragment.childNodes ?? []) {
+    await sanitizeNode(node, {
+      resolveImage: imageResolver,
+      allowRemoteImages,
+    });
+  }
   return { html: serializeWechatHtml(fragment) };
 }
