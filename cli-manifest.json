@@ -29457,8 +29457,8 @@
   {
     "site": "weixin",
     "name": "user-growth",
-    "description": "读取公众号用户增长趋势，包括新增、取消、净增和累计关注人数",
-    "access": "read",
+    "description": "读取公众号用户增长趋势，可选返回全部渠道并下载官方“全部来源”XLS",
+    "access": "write",
     "domain": "mp.weixin.qq.com",
     "strategy": "cookie",
     "browser": true,
@@ -29481,6 +29481,12 @@
         "default": "all",
         "required": false,
         "help": "传播渠道名称或代码；多个值用逗号分隔"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "required": false,
+        "help": "可选的官方“全部来源”XLS 保存目录；不传则不下载"
       }
     ],
     "columns": [
@@ -29490,7 +29496,9 @@
       "new_followers",
       "unfollows",
       "net_new_followers",
-      "cumulative_followers"
+      "cumulative_followers",
+      "official_xls_path",
+      "official_xls_size"
     ],
     "type": "js",
     "modulePath": "weixin/user-growth.js",

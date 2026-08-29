@@ -65,16 +65,19 @@ The list response exposes the readable `collectionType`, but the detail endpoint
 
 ## User analysis workflow
 
-`user-growth` and `user-attributes` are read-only and reuse the current logged-in Official Account browser session. They correspond to the **用户增长** and **用户属性** tabs under 用户分析.
+`user-growth` and `user-attributes` reuse the current logged-in Official Account browser session. Both are read-only against WeChat; `user-growth` can optionally write an official workbook to the local filesystem. They correspond to the **用户增长** and **用户属性** tabs under 用户分析.
 
 ```bash
 bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json
+bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all-sources --output ./weixin-user-growth -f json
 bycli weixin user-attributes --date 2026-08-28 --dimension all -f json
 ```
 
-Growth defaults to the 30 calendar days ending yesterday. `--source` accepts one or more comma-separated names or numeric source codes: `all`, `search`, `qr`, `article`, `card`, `mini-program`, `reprint`, `ad`, `channels-live`, `channels`, and `other`. WeChat currently limits one response to at most 91 inclusive days; request smaller windows when exporting longer history.
+Growth defaults to the 30 calendar days ending yesterday. `--source all` returns only WeChat's aggregate source (`99999999`). `--source all-sources` returns that aggregate followed by every available channel. Explicit selection still accepts one or more comma-separated names or numeric source codes: `search`, `qr`, `article`, `card`, `mini-program`, `reprint`, `ad`, `channels-live`, `channels`, and `other`. WeChat currently limits one response to at most 91 inclusive days; request smaller windows when exporting longer history.
 
-Growth rows contain `date`, `source`, `source_code`, `new_followers`, `unfollows`, `net_new_followers`, and `cumulative_followers`. When several sources are requested, sparse source/date combinations are preserved as returned rather than filled with invented zeroes.
+Growth rows contain `date`, `source`, `source_code`, `new_followers`, `unfollows`, `net_new_followers`, `cumulative_followers`, `official_xls_path`, and `official_xls_size`. When several sources are requested, sparse source/date combinations are preserved as returned rather than filled with invented zeroes.
+
+The official XLS is downloaded only when `--output` is provided. It is always the single aggregate “全部来源” workbook shown by WeChat's 下载表格 action, even when the row output uses `all-sources` or another channel. Without `--output`, both artifact fields are `null` and no file is written. A successful download repeats the validated absolute path and byte size on every row. The filename is `weixin-user-growth-<begin>-<end>-all.xls`; an existing file is preserved and the new name receives a numeric suffix.
 
 Attribute `--dimension` accepts `all`, `gender`, `age`, `language`, `region`, `platform`, or `brand`; the default date is yesterday. Rows contain `date`, `dimension`, `name`, `code`, `parent_code`, `count`, and `percent`. Region rows retain WeChat's hierarchical IDs in `code` and `parent_code`, and their `percent` is `null` because the hierarchy has no single valid denominator. Percentages for other dimensions are derived from that dimension's counts.
 
@@ -97,7 +100,7 @@ Command arguments and defaults:
 | `save-articles` | required positional `<fakeid>`; optional `--name <nickname>`, `--limit <positive integer>`, `--max-pages <positive integer>`; `--output <directory>` (default `./weixin-articles`); `--auth-source browser\|env` (default `browser`) |
 | `collections` | `--limit <positive integer>` (default `20`); `--max-pages <positive integer>` (default `5`) |
 | `collection-detail` | required positional `<collectionId>`; `--max-pages <positive integer>` (default `5`) |
-| `user-growth` | optional `--begin YYYY-MM-DD`, `--end YYYY-MM-DD`, and comma-separated `--source` (default `all`) |
+| `user-growth` | optional `--begin YYYY-MM-DD`, `--end YYYY-MM-DD`, `--source` (default `all`; use `all-sources` for aggregate plus all channels), and `--output <directory>` to download the aggregate XLS |
 | `user-attributes` | optional `--date YYYY-MM-DD`; `--dimension all\|gender\|age\|language\|region\|platform\|brand` (default `all`) |
 
 All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. On the authenticated primary path, `--name` remains display metadata. At an eligible browser fallback boundary it becomes mandatory and is the exact account-name filter; it never changes or invents the selected `fakeid`.

@@ -179,17 +179,19 @@ describe('built-in weixin history command release artifacts', () => {
     expect(byName.get('user-growth')).toMatchObject({
       site: 'weixin',
       name: 'user-growth',
-      access: 'read',
+      access: 'write',
       strategy: 'cookie',
       browser: true,
       args: [
         { name: 'begin', type: 'str', required: false },
         { name: 'end', type: 'str', required: false },
         { name: 'source', type: 'str', default: 'all', required: false },
+        { name: 'output', type: 'str', required: false },
       ],
       columns: [
         'date', 'source', 'source_code', 'new_followers', 'unfollows',
         'net_new_followers', 'cumulative_followers',
+        'official_xls_path', 'official_xls_size',
       ],
       modulePath: 'weixin/user-growth.js',
     });
@@ -222,8 +224,11 @@ describe('built-in weixin history command release artifacts', () => {
       'bycli weixin collections --limit 20 --max-pages 5 -f json',
       "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
       'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json',
+      'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all-sources --output ./weixin-user-growth -f json',
       'bycli weixin user-attributes --date 2026-08-28 --dimension all -f json',
       'new_followers', 'cumulative_followers', 'parent_code', 'percent',
+      'all-sources', 'official_xls_path', 'official_xls_size',
+      'only when `--output` is provided', 'aggregate “全部来源” workbook',
       '91', '100', 'brand',
       'collectionId', 'collectionType', 'AUTH_REQUIRED',
       'settingsJson', 'itemsJson', 'compact JSON strings', 'JSON.parse',

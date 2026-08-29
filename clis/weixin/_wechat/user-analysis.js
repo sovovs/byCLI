@@ -79,6 +79,9 @@ export function resolveAttributeDate(value, options = {}) {
 }
 
 export function parseGrowthSources(value = 'all') {
+  if (String(value).trim() === 'all-sources') {
+    return SOURCE_ENTRIES.map(([name, code]) => ({ name, code }));
+  }
   const rawItems = String(value).split(',').map(item => item.trim()).filter(Boolean);
   argument(rawItems.length > 0, 'source must not be empty');
   const seen = new Set();

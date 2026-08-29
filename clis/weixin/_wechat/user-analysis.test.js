@@ -50,6 +50,23 @@ describe('user analysis arguments', () => {
     expect(() => parseGrowthSources('search,nope')).toThrow(ArgumentError);
   });
 
+  it('expands all-sources to the aggregate followed by every channel', () => {
+    expect(parseGrowthSources('all')).toEqual([{ code: 99999999, name: 'all' }]);
+    expect(parseGrowthSources('all-sources')).toEqual([
+      { code: 99999999, name: 'all' },
+      { code: 1, name: 'search' },
+      { code: 30, name: 'qr' },
+      { code: 57, name: 'article' },
+      { code: 17, name: 'card' },
+      { code: 149, name: 'mini-program' },
+      { code: 161, name: 'reprint' },
+      { code: 100, name: 'ad' },
+      { code: 201, name: 'channels-live' },
+      { code: 200, name: 'channels' },
+      { code: 0, name: 'other' },
+    ]);
+  });
+
   it('validates the attribute date and dimension', () => {
     expect(resolveAttributeDate(undefined, { now: () => NOW })).toBe('2026-08-28');
     expect(parseAttributeDimension()).toBe('all');
