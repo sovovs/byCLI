@@ -1,55 +1,59 @@
-# Weixin User Growth XLS Download Design
+# Weixin User Growth All-Sources and Optional XLS Design
 
 ## Goal
 
-Add a built-in command that downloads the official `.xls` workbook behind the WeChat Official Account 用户分析 → 用户增长 → 下载表格 action.
+Extend the existing `bycli weixin user-growth` command so one invocation can return the WeChat aggregate plus every acquisition-source breakdown, and can optionally download the official aggregate `.xls` workbook.
 
 ## Command Interface
 
 ```text
-bycli weixin download-user-growth-data \
+bycli weixin user-growth \
   --begin 2026-07-30 \
   --end 2026-08-28 \
-  --source all \
+  --source all-sources \
   --output ./weixin-user-growth
 ```
 
-Arguments:
+Behavior:
 
-- `--begin` and `--end` reuse the calendar validation and 30-day default window from `user-growth`.
-- `--source` defaults to `all` and accepts one named or numeric source. The official workbook represents the one source selected in the WeChat UI, so comma-separated multi-source exports are rejected instead of being guessed or merged.
-- `--output` defaults to `./weixin-user-growth` and is treated as a directory.
-- `--timeout` defaults to 60 seconds and controls how long the browser download may take.
+- `--source all` remains the WeChat aggregate source (`99999999`) for backward compatibility.
+- `--source all-sources` expands, in stable order, to the aggregate followed by `search`, `qr`, `article`, `card`, `mini-program`, `reprint`, `ad`, `channels-live`, `channels`, and `other`.
+- Existing named, numeric, and comma-separated source selection remains supported.
+- `--output <directory>` is optional and has no default. When absent, the command performs no download and writes no local file.
+- When `--output` is present, the command downloads exactly one official workbook for WeChat's aggregate “全部来源”, regardless of the value passed to `--source`.
 
-The command returns one row:
+The command keeps its growth columns and appends:
 
 ```text
-status, path, size, begin, end, source, source_code
+official_xls_path, official_xls_size
 ```
 
-`status` is `downloaded` only after the completed file has been validated and published to the output directory.
+The two artifact fields are `null` without `--output`. After a successful download, the validated absolute path and byte size are repeated on every growth row so the command retains one stable row shape.
 
-## Download Flow
+## Data and Download Flow
 
-1. Reuse `resolveBrowserCredentials` to obtain the current Official Account token without persisting it.
-2. Validate the dates and single source using the existing user-analysis helpers.
-3. Build the authenticated official URL at `/misc/useranalysis` with `download=1`, `begin_date`, `end_date`, `source`, and `token`.
-4. Navigate the browser to the URL with navigation waiting disabled, then wait for the matching browser download.
-5. Accept only a completed, safe download whose observed URL is HTTPS on `mp.weixin.qq.com`, whose path is `/misc/useranalysis`, and whose download/date/source parameters exactly match the request.
-6. Verify the temporary file is a non-empty regular file, create the output directory, and atomically publish it as `weixin-user-growth-<begin>-<end>-<source>.xls`. Existing files are preserved with a numeric suffix.
-7. Remove the browser temporary file on a best-effort basis after publishing.
+1. Reuse `resolveBrowserCredentials`, growth date validation, and source parsing.
+2. Expand `all-sources` before constructing the authenticated JSON request.
+3. Collect and normalize sparse per-date source rows as today; do not invent zero-valued source/date combinations.
+4. If `--output` is absent, return rows immediately with null artifact fields.
+5. If `--output` is present, request `/misc/useranalysis` with `download=1`, the selected date range, source `99999999`, and the authenticated token.
+6. Wait for a matching completed browser download. Accept only HTTPS `mp.weixin.qq.com/misc/useranalysis` metadata whose download, dates, and aggregate source match the request.
+7. Verify a non-empty regular `.xls` file, create the output directory, and publish it atomically as `weixin-user-growth-<begin>-<end>-all.xls`. Preserve existing files with a numeric suffix.
+8. Best-effort remove the browser temporary file after publishing, then attach the final path and size to every returned row.
 
-## Errors and Privacy
+## Errors, Access, and Privacy
 
-- Invalid dates, multiple sources, invalid timeouts, and invalid output values produce `ArgumentError`.
-- Missing browser download support, unrelated or unsafe URLs, malformed metadata, unreadable files, and filesystem failures produce `CommandExecutionError`.
-- A download that does not complete before the configured timeout produces `TimeoutError`.
-- The token, cookies, raw authenticated URL, and browser temporary path are not exposed in command rows or error messages.
-- The command has `access: write` because it creates a local artifact, while remaining read-only against WeChat.
+- Invalid dates, sources, or output values produce `ArgumentError`.
+- Missing browser download support, unsafe download metadata, malformed files, or filesystem failures produce `CommandExecutionError`.
+- Download timeout uses the existing browser default and produces the existing typed timeout error.
+- Download failure fails the command rather than returning data that implies the requested artifact succeeded.
+- Tokens, cookies, authenticated URLs, and temporary paths never appear in command rows or error messages.
+- `user-growth` changes from `access: read` to `access: write` because `--output` can create a local artifact.
 
 ## Testing and Release Artifacts
 
-- Unit tests cover trusted URL matching, filename allocation, download metadata validation, empty files, timeouts, cleanup, and token redaction.
-- Command tests cover registry metadata, argument defaults, credential reuse, single-source enforcement, output projection, and artifact validation.
-- Documentation and manifest tests ensure the command is bundled and explain the official single-source workbook behavior.
-- Final verification includes the complete Weixin adapter suite, repository gates, production build, and a real download against the logged-in account without committing the workbook.
+- Helper tests cover `all-sources` expansion, stable ordering, and coexistence with existing explicit selections.
+- Download tests cover URL matching, aggregate-source enforcement, filename allocation, validation, cleanup, and token redaction.
+- Command tests cover no-download behavior, optional output behavior, stable columns, credential reuse, and artifact projection.
+- Documentation and manifest tests explain `all` versus `all-sources`, optional XLS output, and the aggregate-only official workbook.
+- Verification includes the complete Weixin adapter suite, repository gates, production build, and a real logged-in download without committing the workbook.
