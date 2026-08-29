@@ -60,9 +60,11 @@ interface PoolState {
   key: string;
   generation: number;
   maxParallel: number;
+  nextGrantAt: number;
   running: Map<string, AdapterLease>;
   activeSessions: Set<string>;
   queued: PendingRequest[];
+  scheduleTimer?: ReturnType<typeof setTimeout>;
   closed?: AdapterPoolCloseReason;
 }
 
@@ -87,6 +89,7 @@ export interface AdapterSchedulerOptions {
   leaseExpiryMs?: number;
   runtimeCeiling?: number;
   releasedLeaseRetentionMs?: number;
+  startIntervalMs?: number;
 }
 
 export class AdapterScheduler {
@@ -94,6 +97,7 @@ export class AdapterScheduler {
   private readonly leaseExpiryMs: number;
   private readonly runtimeCeiling: number;
   private readonly releasedLeaseRetentionMs: number;
+  private readonly startIntervalMs: number;
   private readonly pools = new Map<string, PoolState>();
   private readonly releasedLeaseIds = new Map<string, number>();
   private readonly generations = new Map<string, number>();
@@ -103,10 +107,15 @@ export class AdapterScheduler {
   private sequence = 0;
 
   constructor(options: AdapterSchedulerOptions = {}) {
+    const startIntervalMs = options.startIntervalMs ?? 5_000;
+    if (!Number.isInteger(startIntervalMs) || startIntervalMs < 0) {
+      throw new Error('Adapter start interval must be a non-negative integer');
+    }
     this.now = options.now ?? Date.now;
     this.leaseExpiryMs = options.leaseExpiryMs ?? 45_000;
     this.runtimeCeiling = options.runtimeCeiling ?? 3;
     this.releasedLeaseRetentionMs = options.releasedLeaseRetentionMs ?? 300_000;
+    this.startIntervalMs = startIntervalMs;
   }
 
   acquire(request: AdapterLeaseRequest): Promise<AdapterLease> {
@@ -161,6 +170,7 @@ export class AdapterScheduler {
 
     if (release.reason === 'auth_gate' || release.reason === 'rate_limited') {
       pool.closed = release.reason;
+      this.clearPoolTimer(pool);
       const error = this.poolClosedError(release.reason);
       for (const pending of pool.queued.splice(0)) {
         if (pending.timer) clearTimeout(pending.timer);
@@ -231,12 +241,7 @@ export class AdapterScheduler {
     const now = this.now();
     this.pruneReleasedLeaseIds(now);
     for (const pool of [...this.pools.values()]) {
-      for (const pending of [...pool.queued]) {
-        if (pending.deadline > now) continue;
-        pool.queued.splice(pool.queued.indexOf(pending), 1);
-        if (pending.timer) clearTimeout(pending.timer);
-        pending.reject(new AdapterSchedulerError('ADAPTER_QUEUE_TIMEOUT', 'Timed out waiting for an Adapter command lease'));
-      }
+      this.rejectExpiredQueued(pool, now);
       for (const lease of [...pool.running.values()]) {
         if (lease.heartbeatDeadline > now) continue;
         this.releaseAllResourcesForLease(lease.leaseId);
@@ -258,6 +263,7 @@ export class AdapterScheduler {
 
   reset(): void {
     for (const pool of this.pools.values()) {
+      this.clearPoolTimer(pool);
       for (const pending of pool.queued) {
         if (pending.timer) clearTimeout(pending.timer);
         pending.reject(new AdapterSchedulerError('ADAPTER_QUEUE_RESET', 'Adapter scheduler restarted'));
@@ -292,32 +298,66 @@ export class AdapterScheduler {
   }
 
   private schedule(pool: PoolState): void {
-    while (!pool.closed && pool.running.size < pool.maxParallel) {
-      const eligible = pool.queued
-        .filter(entry => !pool.activeSessions.has(entry.request.adapterSession)
-          && pool.running.size < pool.maxParallel)
-        .sort((a, b) => a.enqueuedAt - b.enqueuedAt || a.sequence - b.sequence)[0];
-      if (!eligible) return;
-      pool.queued.splice(pool.queued.indexOf(eligible), 1);
-      if (eligible.timer) clearTimeout(eligible.timer);
-      const grantedAt = this.now();
-      const lease: AdapterLease = {
-        leaseId: crypto.randomUUID(),
-        requestId: eligible.request.requestId,
-        poolKey: pool.key,
-        contextId: eligible.request.contextId,
-        surface: 'adapter',
-        site: eligible.request.site,
-        adapterSession: eligible.request.adapterSession,
-        sessionKey: eligible.request.sessionKey,
-        generation: pool.generation,
-        grantedAt,
-        heartbeatDeadline: grantedAt + this.leaseExpiryMs,
-      };
-      pool.running.set(lease.leaseId, lease);
-      pool.activeSessions.add(lease.adapterSession);
-      eligible.resolve({ ...lease });
+    if (pool.closed) return;
+    const now = this.now();
+    this.rejectExpiredQueued(pool, now);
+    if (pool.running.size >= pool.maxParallel) return;
+    const eligible = pool.queued
+      .filter(entry => !pool.activeSessions.has(entry.request.adapterSession))
+      .sort((a, b) => a.enqueuedAt - b.enqueuedAt || a.sequence - b.sequence)[0];
+    if (!eligible) return;
+    if (now < pool.nextGrantAt) {
+      this.armPoolTimer(pool, pool.nextGrantAt);
+      return;
     }
+    pool.queued.splice(pool.queued.indexOf(eligible), 1);
+    if (eligible.timer) clearTimeout(eligible.timer);
+    const grantedAt = now;
+    const lease: AdapterLease = {
+      leaseId: crypto.randomUUID(),
+      requestId: eligible.request.requestId,
+      poolKey: pool.key,
+      contextId: eligible.request.contextId,
+      surface: 'adapter',
+      site: eligible.request.site,
+      adapterSession: eligible.request.adapterSession,
+      sessionKey: eligible.request.sessionKey,
+      generation: pool.generation,
+      grantedAt,
+      heartbeatDeadline: grantedAt + this.leaseExpiryMs,
+    };
+    pool.nextGrantAt = grantedAt + this.startIntervalMs;
+    pool.running.set(lease.leaseId, lease);
+    pool.activeSessions.add(lease.adapterSession);
+    eligible.resolve({ ...lease });
+    this.schedule(pool);
+  }
+
+  private rejectExpiredQueued(pool: PoolState, now: number): void {
+    for (const pending of [...pool.queued]) {
+      if (pending.deadline > now) continue;
+      pool.queued.splice(pool.queued.indexOf(pending), 1);
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.reject(new AdapterSchedulerError(
+        'ADAPTER_QUEUE_TIMEOUT',
+        'Timed out waiting for an Adapter command lease',
+      ));
+    }
+  }
+
+  private clearPoolTimer(pool: PoolState): void {
+    if (pool.scheduleTimer) clearTimeout(pool.scheduleTimer);
+    pool.scheduleTimer = undefined;
+  }
+
+  private armPoolTimer(pool: PoolState, dueAt: number): void {
+    if (pool.scheduleTimer) return;
+    pool.scheduleTimer = setTimeout(() => {
+      pool.scheduleTimer = undefined;
+      if (this.pools.get(pool.key) !== pool) return;
+      this.sweepExpired();
+    }, Math.max(0, dueAt - this.now()));
+    pool.scheduleTimer.unref?.();
   }
 
   private scheduleResources(): void {
@@ -395,6 +435,7 @@ export class AdapterScheduler {
       key,
       generation,
       maxParallel: Math.min(request.maxParallel, this.runtimeCeiling),
+      nextGrantAt: 0,
       running: new Map(),
       activeSessions: new Set(),
       queued: [],
@@ -404,7 +445,13 @@ export class AdapterScheduler {
   }
 
   private removeDrainedPool(pool: PoolState): void {
-    if (pool.running.size === 0 && pool.queued.length === 0) this.pools.delete(pool.key);
+    if (pool.running.size !== 0 || pool.queued.length !== 0) return;
+    if (!pool.closed && this.now() < pool.nextGrantAt) {
+      this.armPoolTimer(pool, pool.nextGrantAt);
+      return;
+    }
+    this.clearPoolTimer(pool);
+    this.pools.delete(pool.key);
   }
 
   private poolClosedError(reason: AdapterPoolCloseReason): AdapterSchedulerError {

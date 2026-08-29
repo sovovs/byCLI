@@ -52,14 +52,19 @@ describe('daemon command dispatch', () => {
     const acquire = async (worker: string) => fetch(`http://127.0.0.1:${port}/v1/adapter-leases/acquire`, {
       method: 'POST', headers, body: JSON.stringify({
         requestId: `request-${worker}`, contextId: 'profile-a', surface: 'adapter', site: 'weixin',
-        adapterSession: worker, sessionKey: `site:weixin:${worker}`, queueTimeoutMs: 5_000, maxParallel: 3,
+        adapterSession: worker, sessionKey: `site:weixin:${worker}`, queueTimeoutMs: 20_000, maxParallel: 3,
       }),
-    }).then(response => response.json()) as Promise<{ ok: boolean; data: Record<string, unknown> }>;
+    }).then(response => response.json()) as Promise<{
+      ok: boolean;
+      data: Record<string, unknown> & { grantedAt: number };
+    }>;
     try {
       await expect.poll(async () => (await fetch(`http://127.0.0.1:${port}/ping`)).status, {
         timeout: 10_000,
       }).toBe(200);
       const leases = await Promise.all(['a', 'b', 'c'].map(acquire));
+      expect(leases[1].data.grantedAt - leases[0].data.grantedAt).toBeGreaterThanOrEqual(4_900);
+      expect(leases[2].data.grantedAt - leases[1].data.grantedAt).toBeGreaterThanOrEqual(4_900);
       const rejectedCommand = async (body: Record<string, unknown>) => {
         const response = await fetch(`http://127.0.0.1:${port}/command`, {
           method: 'POST', headers, body: JSON.stringify({ id: `invalid-${Math.random()}`, action: 'tabs', ...body }),
@@ -131,12 +136,14 @@ describe('daemon command dispatch', () => {
         }),
       });
       await expect(fenced.json()).resolves.toMatchObject({ ok: false, errorCode: 'ADAPTER_LEASE_LOST' });
-      await expect(fourth).resolves.toMatchObject({ ok: true, data: { adapterSession: 'd' } });
+      const fourthLease = await fourth;
+      expect(fourthLease).toMatchObject({ ok: true, data: { adapterSession: 'd' } });
+      expect(fourthLease.data.grantedAt - leases[2].data.grantedAt).toBeGreaterThanOrEqual(4_900);
     } finally {
       daemon.kill('SIGTERM');
       await once(daemon, 'exit');
     }
-  });
+  }, 30_000);
 
   it('rejects private ima commands before dispatch when the extension lacks ima-reader-v1', async () => {
     const probe = createServer();
