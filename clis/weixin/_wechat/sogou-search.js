@@ -144,7 +144,7 @@ export async function searchSogouArticlePage(page, { query, pageNo, preloadedUrl
     if (payload.blocked) {
       throw new AuthRequiredError(
         SOGOU_WEIXIN_DOMAIN,
-        'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
+        'Sogou Weixin requires verification. Complete it in the retained browser tab and explicitly confirm completion to the caller.',
       );
     }
     if (payload.invalidCount > 0) {

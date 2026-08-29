@@ -71,7 +71,7 @@ export async function resolveWechatArticleUrl(page, rawUrl) {
     if (/验证码|安全验证|异常访问|访问过于频繁|请输入验证码/.test(text)) {
       throw new AuthRequiredError(
         'weixin.sogou.com',
-        'Sogou Weixin requires verification. Complete it in the open browser tab and run the command again.',
+        'Sogou Weixin requires verification. Complete it in the retained browser tab and explicitly confirm completion to the caller.',
       );
     }
     if (!isTrustedWechatArticleUrl(result?.finalUrl)) {

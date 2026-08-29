@@ -233,7 +233,7 @@ cli({
         if (data?.errorHint === 'environment verification required') {
             throw new AuthRequiredError(
                 'mp.weixin.qq.com',
-                'WeChat article page requires environment verification. Complete it in the open browser tab and run the command again.',
+                'WeChat article page requires environment verification. Complete it in the retained browser tab and explicitly confirm completion to the caller.',
             );
         }
         const rows = await downloadArticle({

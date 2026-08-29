@@ -129,7 +129,7 @@ function transportError(error, credentials) {
   if (isWechatVerificationResponse(redactedMessage, redactedHint)) {
     return new AuthRequiredError(
       DOMAIN,
-      'WeChat article index requires environment verification. Complete it in the open browser tab and run the command again.',
+      'WeChat article index requires environment verification. Complete it in the retained browser tab and explicitly confirm completion to the caller.',
     );
   }
   return new CommandExecutionError(

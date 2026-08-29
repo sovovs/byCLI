@@ -60,8 +60,13 @@ describe('Weixin article link trust boundary', () => {
       pageText: '请输入验证码',
       html: '',
     });
-    await expect(resolveWechatArticleUrl(blockedPage, 'https://weixin.sogou.com/link?url=x'))
-      .rejects.toBeInstanceOf(AuthRequiredError);
+    const error = await resolveWechatArticleUrl(
+      blockedPage,
+      'https://weixin.sogou.com/link?url=x',
+    ).catch(value => value);
+    expect(error).toBeInstanceOf(AuthRequiredError);
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
 
     const wrongDestinationPage = makePage({
       finalUrl: 'https://weixin.sogou.com/weixin?query=x',

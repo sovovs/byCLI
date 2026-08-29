@@ -268,8 +268,13 @@ describe('fetchArticleHtmlInBrowser', () => {
       wait: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn().mockResolvedValue({ finalUrl: 'https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha', html: '', byteLength: 0, accessIssue: 'environment verification required' }),
     };
-    await expect(fetchArticleHtmlInBrowser({ url: 'https://mp.weixin.qq.com/s/article' }, page))
-      .rejects.toBeInstanceOf(AuthRequiredError);
+    const error = await fetchArticleHtmlInBrowser(
+      { url: 'https://mp.weixin.qq.com/s/article' },
+      page,
+    ).catch(value => value);
+    expect(error).toBeInstanceOf(AuthRequiredError);
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
   });
 
   it.each([

@@ -158,9 +158,12 @@ describe('createArticleIndexFetcher', () => {
     const page = { fetchJson: vi.fn().mockRejectedValue(failure) };
     const fetchPage = createArticleIndexFetcher({ page, source: 'browser', credentials });
 
-    await expect(fetchPage({ fakeid: 'fake-id' })).rejects.toMatchObject({
+    const error = await fetchPage({ fakeid: 'fake-id' }).catch(value => value);
+    expect(error).toMatchObject({
       name: 'AuthRequiredError', code: 'AUTH_REQUIRED', domain: 'mp.weixin.qq.com',
     });
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
   });
 
   it('keeps an unrelated non-JSON response as a command failure', async () => {

@@ -176,8 +176,13 @@ describe('Sogou Weixin page search helper', () => {
     expect(emptyPage.goto).toHaveBeenCalledTimes(1);
 
     const blockedPage = makePage({ blocked: true, empty: false, invalidCount: 0, rows: [] });
-    await expect(searchSogouArticlePage(blockedPage, { query: 'Acct', pageNo: 1 }))
-      .rejects.toBeInstanceOf(AuthRequiredError);
+    const error = await searchSogouArticlePage(
+      blockedPage,
+      { query: 'Acct', pageNo: 1 },
+    ).catch(value => value);
+    expect(error).toBeInstanceOf(AuthRequiredError);
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
     expect(blockedPage.goto).toHaveBeenCalledTimes(1);
   });
 

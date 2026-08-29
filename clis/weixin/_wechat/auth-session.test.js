@@ -159,8 +159,11 @@ describe('resolveBrowserCredentials', () => {
       cookies: [{ name: 'slave_sid', value: 'sid', domain: '.mp.weixin.qq.com' }],
     });
 
-    await expect(resolveBrowserCredentials(page, { now: () => 0 }))
-      .rejects.toBeInstanceOf(AuthRequiredError);
+    const error = await resolveBrowserCredentials(page, { now: () => 0 })
+      .catch(value => value);
+    expect(error).toBeInstanceOf(AuthRequiredError);
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
     expect(page.focusWindow).toHaveBeenCalledTimes(1);
     expect(page.wait).not.toHaveBeenCalled();
     expect(page.getCookies).not.toHaveBeenCalled();

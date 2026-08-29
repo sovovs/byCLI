@@ -41,6 +41,27 @@ describe('weixin download characterization', () => {
     expect(detectWechatAccessIssue('article', '<html>')).toBe('');
   });
 
+  it('requires explicit human completion without instructing an automatic rerun', async () => {
+    const command = getRegistry().get('weixin/download');
+    const page = {
+      goto: vi.fn(),
+      wait: vi.fn(),
+      evaluate: vi.fn().mockResolvedValue({
+        title: '', author: '', publishTime: '', contentHtml: '', codeBlocks: [],
+        imageUrls: [], errorHint: 'environment verification required',
+      }),
+    };
+
+    const error = await command.func(page, {
+      url: 'https://mp.weixin.qq.com/s/article',
+      output: '/tmp/out',
+    }).catch(value => value);
+
+    expect(error).toMatchObject({ name: 'AuthRequiredError', code: 'AUTH_REQUIRED' });
+    expect(error.message).toContain('explicitly confirm completion');
+    expect(error.message).not.toContain('run the command again');
+  });
+
   it('re-exports the shared content extractor', () => {
     const document = new JSDOM('<div id="js_content"><p>body</p></div>').window.document;
     expect(extractWechatArticleContent(document).contentHtml).toBe('<p>body</p>');

@@ -131,7 +131,7 @@ export async function resolveBrowserCredentials(page, options = {}) {
 
       throw new AuthRequiredError(
         DOMAIN,
-        'WeChat login is required. The login tab is open; complete QR-code login and run the command again.',
+        'WeChat login is required. Complete QR-code login in the retained browser tab and explicitly confirm completion to the caller.',
       );
     }
   }
