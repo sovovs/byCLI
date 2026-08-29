@@ -62,7 +62,9 @@ describe('built-in weixin history command release artifacts', () => {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be removed`).toBe(false);
     }
 
-    for (const file of ['collections.js', 'collection-detail.js']) {
+    for (const file of [
+      'collections.js', 'collection-detail.js', 'user-growth.js', 'user-attributes.js',
+    ]) {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be published`).toBe(true);
     }
   });
@@ -174,6 +176,39 @@ describe('built-in weixin history command release artifacts', () => {
       sourceFile: 'weixin/collection-detail.js',
       navigateBefore: false,
     });
+    expect(byName.get('user-growth')).toMatchObject({
+      site: 'weixin',
+      name: 'user-growth',
+      access: 'read',
+      strategy: 'cookie',
+      browser: true,
+      args: [
+        { name: 'begin', type: 'str', required: false },
+        { name: 'end', type: 'str', required: false },
+        { name: 'source', type: 'str', default: 'all', required: false },
+      ],
+      columns: [
+        'date', 'source', 'source_code', 'new_followers', 'unfollows',
+        'net_new_followers', 'cumulative_followers',
+      ],
+      modulePath: 'weixin/user-growth.js',
+    });
+    expect(byName.get('user-attributes')).toMatchObject({
+      site: 'weixin',
+      name: 'user-attributes',
+      access: 'read',
+      strategy: 'cookie',
+      browser: true,
+      args: [
+        { name: 'date', type: 'str', required: false },
+        {
+          name: 'dimension', type: 'str', default: 'all', required: false,
+          choices: ['all', 'gender', 'age', 'language', 'region', 'platform', 'brand'],
+        },
+      ],
+      columns: ['date', 'dimension', 'name', 'code', 'parent_code', 'count', 'percent'],
+      modulePath: 'weixin/user-attributes.js',
+    });
   });
 
   it('documents the built-in workflow and retires the obsolete plugin plan without deleting it', () => {
@@ -183,8 +218,13 @@ describe('built-in weixin history command release artifacts', () => {
     for (const required of [
       'weixin accounts', 'weixin articles', 'weixin save-articles',
       'weixin collections', 'weixin collection-detail',
+      'weixin user-growth', 'weixin user-attributes',
       'bycli weixin collections --limit 20 --max-pages 5 -f json',
       "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
+      'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json',
+      'bycli weixin user-attributes --date 2026-08-28 --dimension all -f json',
+      'new_followers', 'cumulative_followers', 'parent_code', 'percent',
+      '91', '100', 'brand',
       'collectionId', 'collectionType', 'AUTH_REQUIRED',
       'settingsJson', 'itemsJson', 'compact JSON strings', 'JSON.parse',
       'row-shape', 'nested business data',

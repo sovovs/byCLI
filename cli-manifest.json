@@ -29409,6 +29409,95 @@
     "sourceFile": "weixin/search.js"
   },
   {
+    "site": "weixin",
+    "name": "user-attributes",
+    "description": "读取公众号用户属性，包括性别、年龄、语言、地区、平台和设备品牌",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "date",
+        "type": "str",
+        "required": false,
+        "help": "快照日期（YYYY-MM-DD）；默认昨天"
+      },
+      {
+        "name": "dimension",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "属性维度；默认返回全部维度",
+        "choices": [
+          "all",
+          "gender",
+          "age",
+          "language",
+          "region",
+          "platform",
+          "brand"
+        ]
+      }
+    ],
+    "columns": [
+      "date",
+      "dimension",
+      "name",
+      "code",
+      "parent_code",
+      "count",
+      "percent"
+    ],
+    "type": "js",
+    "modulePath": "weixin/user-attributes.js",
+    "sourceFile": "weixin/user-attributes.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "weixin",
+    "name": "user-growth",
+    "description": "读取公众号用户增长趋势，包括新增、取消、净增和累计关注人数",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "begin",
+        "type": "str",
+        "required": false,
+        "help": "开始日期（YYYY-MM-DD）；默认 30 天窗口的第一天"
+      },
+      {
+        "name": "end",
+        "type": "str",
+        "required": false,
+        "help": "结束日期（YYYY-MM-DD）；默认昨天"
+      },
+      {
+        "name": "source",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "传播渠道名称或代码；多个值用逗号分隔"
+      }
+    ],
+    "columns": [
+      "date",
+      "source",
+      "source_code",
+      "new_followers",
+      "unfollows",
+      "net_new_followers",
+      "cumulative_followers"
+    ],
+    "type": "js",
+    "modulePath": "weixin/user-growth.js",
+    "sourceFile": "weixin/user-growth.js",
+    "navigateBefore": false
+  },
+  {
     "site": "weread",
     "name": "ai-outline",
     "description": "Get AI-generated outline for a book",

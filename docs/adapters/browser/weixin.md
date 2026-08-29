@@ -14,6 +14,8 @@
 | `bycli weixin save-articles` | List and save published articles as Markdown |
 | `bycli weixin collections` | List content collections owned by the logged-in official account |
 | `bycli weixin collection-detail` | Show one collection's settings and ordered content items |
+| `bycli weixin user-growth` | Read follower growth by date and acquisition source |
+| `bycli weixin user-attributes` | Read demographic, region, platform, and device-brand snapshots |
 | `bycli weixin download-publish-data` | Save one published article's content analysis as Markdown |
 | `bycli weixin download` | Download one WeChat article as Markdown |
 | `bycli weixin drafts` | List drafts in the Official Accounts backend |
@@ -61,6 +63,23 @@ bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json
 
 The list response exposes the readable `collectionType`, but the detail endpoint requires WeChat's numeric type. `collection-detail` resolves that type internally by scanning the collection list for the exact `collectionId`; callers do not need to supply it.
 
+## User analysis workflow
+
+`user-growth` and `user-attributes` are read-only and reuse the current logged-in Official Account browser session. They correspond to the **用户增长** and **用户属性** tabs under 用户分析.
+
+```bash
+bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json
+bycli weixin user-attributes --date 2026-08-28 --dimension all -f json
+```
+
+Growth defaults to the 30 calendar days ending yesterday. `--source` accepts one or more comma-separated names or numeric source codes: `all`, `search`, `qr`, `article`, `card`, `mini-program`, `reprint`, `ad`, `channels-live`, `channels`, and `other`. WeChat currently limits one response to at most 91 inclusive days; request smaller windows when exporting longer history.
+
+Growth rows contain `date`, `source`, `source_code`, `new_followers`, `unfollows`, `net_new_followers`, and `cumulative_followers`. When several sources are requested, sparse source/date combinations are preserved as returned rather than filled with invented zeroes.
+
+Attribute `--dimension` accepts `all`, `gender`, `age`, `language`, `region`, `platform`, or `brand`; the default date is yesterday. Rows contain `date`, `dimension`, `name`, `code`, `parent_code`, `count`, and `percent`. Region rows retain WeChat's hierarchical IDs in `code` and `parent_code`, and their `percent` is `null` because the hierarchy has no single valid denominator. Percentages for other dimensions are derived from that dimension's counts.
+
+WeChat only publishes user-attribute data on the day after an account reaches 100 followers. Accounts below that threshold receive an explicit empty-result message. The current page can also hide device-brand charts; `brand` is still requested from the embedded snapshot when WeChat supplies it, so an empty brand result is possible. Blank platform and brand labels are returned as `未知`.
+
 ### Implementation boundary
 
 `articles` history retrieval and `save-articles` saving use the published `@sovovs/wechat-article-crawler` public root API (`createWechatApi`, `collectArticles`, `saveArticles`). The adapter imports only that root entry—never private `src/*`/`bin/*` paths—and never starts a `wechat-crawler` subprocess.
@@ -78,6 +97,8 @@ Command arguments and defaults:
 | `save-articles` | required positional `<fakeid>`; optional `--name <nickname>`, `--limit <positive integer>`, `--max-pages <positive integer>`; `--output <directory>` (default `./weixin-articles`); `--auth-source browser\|env` (default `browser`) |
 | `collections` | `--limit <positive integer>` (default `20`); `--max-pages <positive integer>` (default `5`) |
 | `collection-detail` | required positional `<collectionId>`; `--max-pages <positive integer>` (default `5`) |
+| `user-growth` | optional `--begin YYYY-MM-DD`, `--end YYYY-MM-DD`, and comma-separated `--source` (default `all`) |
+| `user-attributes` | optional `--date YYYY-MM-DD`; `--dimension all\|gender\|age\|language\|region\|platform\|brand` (default `all`) |
 
 All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. On the authenticated primary path, `--name` remains display metadata. At an eligible browser fallback boundary it becomes mandatory and is the exact account-name filter; it never changes or invents the selected `fakeid`.
 
@@ -103,7 +124,7 @@ Environment credentials are all-or-nothing and are never mixed with a browser se
 
 Tokens, cookies, and fingerprints are temporary credentials. They are kept in command memory only and are redacted from errors, logs, traces, and output. Do not put them in shell history, committed files, fixtures, or shared logs. When credentials expire, the command reports an authentication error: log in again in browser mode or replace the complete environment-variable set. byCLI does not persist, refresh, or bypass expired credentials or WeChat risk controls.
 
-`collections` and `collection-detail` always use the current Browser Bridge session and do not accept environment credentials. WeChat may return HTTP 200 even when that session has expired; byCLI detects the response body and reports `AUTH_REQUIRED`. The request URL must include the temporary token, but byCLI does not copy it into the Referer, output, errors, or committed artifacts, and redacts it from diagnostics.
+`collections`, `collection-detail`, `user-growth`, and `user-attributes` always use the current Browser Bridge session and do not accept environment credentials. WeChat may return HTTP 200 even when that session has expired; byCLI detects the response body and reports `AUTH_REQUIRED`. The request URL must include the temporary token, but byCLI does not copy it into the Referer, output, errors, or committed artifacts, and redacts it from diagnostics.
 
 ## Output and partial failures
 
