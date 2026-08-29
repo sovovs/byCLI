@@ -1,6 +1,6 @@
 {
   "name": "@sovovs/bycli",
-  "version": "2.1.44",
+  "version": "2.1.45",
   "publishConfig": {
     "access": "public"
   },
