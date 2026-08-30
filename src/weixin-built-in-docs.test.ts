@@ -64,6 +64,7 @@ describe('built-in weixin history command release artifacts', () => {
 
     for (const file of [
       'collections.js', 'collection-detail.js', 'user-growth.js', 'user-attributes.js',
+      'freepublish-list.js', 'freepublish-get.js', 'published-articles.js', 'article-fetch.js',
     ]) {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be published`).toBe(true);
     }
@@ -211,6 +212,18 @@ describe('built-in weixin history command release artifacts', () => {
       columns: ['date', 'dimension', 'name', 'code', 'parent_code', 'count', 'percent'],
       modulePath: 'weixin/user-attributes.js',
     });
+    for (const name of ['freepublish-list', 'freepublish-get', 'published-articles', 'article-fetch']) {
+      expect(byName.get(name), `${name} manifest entry`).toBeDefined();
+    }
+    expect(byName.get('freepublish-list')).toMatchObject({
+      browser: false, strategy: 'local',
+      columns: ['article_id', 'article_index', 'article_type', 'title', 'author', 'digest',
+        'published_url', 'thumb_media_id', 'updated_at', 'content_html',
+        'artifact_paths_json', 'image_info_json'],
+    });
+    expect(byName.get('freepublish-get')).toMatchObject({ browser: false, strategy: 'local' });
+    expect(byName.get('published-articles')).toMatchObject({ browser: 'conditional' });
+    expect(byName.get('article-fetch')).toMatchObject({ browser: 'conditional' });
   });
 
   it('documents the built-in workflow and retires the obsolete plugin plan without deleting it', () => {
@@ -221,6 +234,8 @@ describe('built-in weixin history command release artifacts', () => {
       'weixin accounts', 'weixin articles', 'weixin save-articles',
       'weixin collections', 'weixin collection-detail',
       'weixin user-growth', 'weixin user-attributes',
+      'weixin freepublish-list', 'weixin freepublish-get',
+      'weixin published-articles', 'weixin article-fetch',
       'bycli weixin collections --limit 20 --max-pages 5 -f json',
       "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
       'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json',
@@ -237,6 +252,9 @@ describe('built-in weixin history command release artifacts', () => {
       'Referer, output, errors, or committed artifacts',
       'redacts it',
       'WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT',
+      'WECHAT_APPID', 'WECHAT_APPSECRET', 'WECHAT_ACCESS_TOKEN',
+      '--content none', '--content inline', '--content file',
+      'api-not-configured', 'api-not-authorized',
       '部分失败', '扫码', 'fakeid', 'macOS',
     ]) expect(adapterDoc).toContain(required);
     expect(adapterDoc).not.toContain('never expose the session token');

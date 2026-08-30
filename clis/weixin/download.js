@@ -149,7 +149,7 @@ export function buildDetectWechatAccessIssueJs() {
 // ============================================================
 // CLI Registration
 // ============================================================
-cli({
+export const weixinDownloadCommand = cli({
     site: 'weixin',
     name: 'download',
     access: 'read',

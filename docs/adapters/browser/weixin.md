@@ -12,6 +12,10 @@
 | `bycli weixin accounts` | Search backend public accounts and obtain `fakeid` values |
 | `bycli weixin articles` | List published articles for an explicit `fakeid` |
 | `bycli weixin save-articles` | List and save published articles as Markdown |
+| `bycli weixin freepublish-list` | List published articles through the official API |
+| `bycli weixin freepublish-get` | Get one published article by `article_id` through the official API |
+| `bycli weixin published-articles` | List through the official API with controlled browser fallback |
+| `bycli weixin article-fetch` | Fetch one article through the API or a supplied public URL |
 | `bycli weixin collections` | List content collections owned by the logged-in official account |
 | `bycli weixin collection-detail` | Show one collection's settings and ordered content items |
 | `bycli weixin user-growth` | Read follower growth by date and acquisition source |
@@ -63,6 +67,30 @@ bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json
 ```
 
 The list response exposes the readable `collectionType`, but the detail endpoint requires WeChat's numeric type. `collection-detail` resolves that type internally by scanning the collection list for the exact `collectionId`; callers do not need to supply it.
+
+## Official published-article API
+
+`freepublish-list` and `freepublish-get` call the official `api.weixin.qq.com/cgi-bin/freepublish` API and never open a browser. Configure `WECHAT_APPID` and `WECHAT_APPSECRET`, or provide a managed `WECHAT_ACCESS_TOKEN`. Command arguments `--appid`, `--appsecret`, and `--access-token` override their environment counterparts, but environment variables keep secrets out of shell history.
+
+```bash
+WECHAT_APPID='wx123' WECHAT_APPSECRET='secret' \
+  bycli weixin freepublish-list --offset 0 --count 20 --content none -f table
+
+bycli weixin freepublish-list --count 20 --content inline -f json
+bycli weixin freepublish-list --count 20 --content file --output ./weixin-published -f json
+bycli weixin freepublish-get '<articleId>' --content inline -f json
+```
+
+The account must have the corresponding official API capability and the caller may need to be in the configured IP allowlist. `--content none` sends `no_content=1`; `--content inline` returns `content_html`; `--content file` writes non-overwriting HTML and JSON artifacts and returns their absolute paths in `artifact_paths_json`. The common `-f table|json|yaml|plain|md|csv` option controls serialization, independently from content handling.
+
+`published-articles` and `article-fetch` add an explicit `--source auto|api|browser` facade. In `auto`, missing official credentials produces `fallback_reason: "api-not-configured"`; an explicit API capability error produces `fallback_reason: "api-not-authorized"`. Invalid credentials, transport errors, malformed responses, and rate limiting do not silently fall back. `article-fetch` requires a trusted public `mp.weixin.qq.com` URL before it can use browser fallback because an `article_id` alone cannot be converted into a public URL.
+
+```bash
+bycli weixin published-articles --source auto --limit 20 -f json
+bycli weixin article-fetch --article-id '<articleId>' \
+  --url 'https://mp.weixin.qq.com/s/xxx' --source auto \
+  --content file --output ./weixin-published -f json
+```
 
 ## User analysis workflow
 

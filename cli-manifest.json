@@ -28800,6 +28800,103 @@
   },
   {
     "site": "weixin",
+    "name": "article-fetch",
+    "description": "Fetch one published Weixin article with optional browser fallback",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "article-id",
+        "type": "str",
+        "required": false,
+        "help": "Official article_id for API retrieval"
+      },
+      {
+        "name": "url",
+        "type": "str",
+        "required": false,
+        "help": "Trusted public article URL required for browser mode or fallback"
+      },
+      {
+        "name": "source",
+        "type": "str",
+        "default": "auto",
+        "required": false,
+        "help": "Article source and fallback policy",
+        "choices": [
+          "auto",
+          "api",
+          "browser"
+        ]
+      },
+      {
+        "name": "content",
+        "type": "str",
+        "default": "file",
+        "required": false,
+        "help": "Official API HTML handling",
+        "choices": [
+          "none",
+          "inline",
+          "file"
+        ]
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-published",
+        "required": false,
+        "help": "Artifact output directory"
+      },
+      {
+        "name": "download-images",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Download images in browser mode"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": false,
+        "help": "WeChat Official Account AppID; falls back to WECHAT_APPID"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": false,
+        "help": "WeChat AppSecret; prefer WECHAT_APPSECRET to avoid shell history"
+      },
+      {
+        "name": "access-token",
+        "type": "str",
+        "required": false,
+        "help": "Existing API token; falls back to WECHAT_ACCESS_TOKEN"
+      }
+    ],
+    "columns": [
+      "article_id",
+      "title",
+      "author",
+      "digest",
+      "published_at",
+      "url",
+      "content_html",
+      "artifact_paths_json",
+      "thumb_media_id",
+      "image_info_json",
+      "source",
+      "fallback_reason"
+    ],
+    "type": "js",
+    "modulePath": "weixin/article-fetch.js",
+    "sourceFile": "weixin/article-fetch.js",
+    "navigateBefore": "https://mp.weixin.qq.com"
+  },
+  {
+    "site": "weixin",
     "name": "articles",
     "description": "List published articles from a WeChat official account",
     "access": "read",
@@ -29268,6 +29365,157 @@
   },
   {
     "site": "weixin",
+    "name": "freepublish-get",
+    "description": "Get one published Weixin article through the official freepublish API",
+    "access": "read",
+    "domain": "api.weixin.qq.com",
+    "strategy": "local",
+    "browser": false,
+    "args": [
+      {
+        "name": "articleId",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Published article_id returned by freepublish-list"
+      },
+      {
+        "name": "content",
+        "type": "str",
+        "default": "inline",
+        "required": false,
+        "help": "HTML handling: omit, return inline, or save files",
+        "choices": [
+          "none",
+          "inline",
+          "file"
+        ]
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-published",
+        "required": false,
+        "help": "Artifact directory when --content file is used"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": false,
+        "help": "WeChat Official Account AppID; falls back to WECHAT_APPID"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": false,
+        "help": "WeChat AppSecret; prefer WECHAT_APPSECRET to avoid shell history"
+      },
+      {
+        "name": "access-token",
+        "type": "str",
+        "required": false,
+        "help": "Existing API token; falls back to WECHAT_ACCESS_TOKEN"
+      }
+    ],
+    "columns": [
+      "article_id",
+      "article_index",
+      "article_type",
+      "title",
+      "author",
+      "digest",
+      "published_url",
+      "thumb_media_id",
+      "updated_at",
+      "content_html",
+      "artifact_paths_json",
+      "image_info_json"
+    ],
+    "type": "js",
+    "modulePath": "weixin/freepublish-get.js",
+    "sourceFile": "weixin/freepublish-get.js"
+  },
+  {
+    "site": "weixin",
+    "name": "freepublish-list",
+    "description": "List published Weixin articles through the official freepublish API",
+    "access": "read",
+    "domain": "api.weixin.qq.com",
+    "strategy": "local",
+    "browser": false,
+    "args": [
+      {
+        "name": "offset",
+        "type": "int",
+        "default": 0,
+        "required": false,
+        "help": "Zero-based published-material offset"
+      },
+      {
+        "name": "count",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Number of published materials to return (1–20)"
+      },
+      {
+        "name": "content",
+        "type": "str",
+        "default": "none",
+        "required": false,
+        "help": "HTML handling: omit, return inline, or save files",
+        "choices": [
+          "none",
+          "inline",
+          "file"
+        ]
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-published",
+        "required": false,
+        "help": "Artifact directory when --content file is used"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": false,
+        "help": "WeChat Official Account AppID; falls back to WECHAT_APPID"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": false,
+        "help": "WeChat AppSecret; prefer WECHAT_APPSECRET to avoid shell history"
+      },
+      {
+        "name": "access-token",
+        "type": "str",
+        "required": false,
+        "help": "Existing API token; falls back to WECHAT_ACCESS_TOKEN"
+      }
+    ],
+    "columns": [
+      "article_id",
+      "article_index",
+      "article_type",
+      "title",
+      "author",
+      "digest",
+      "published_url",
+      "thumb_media_id",
+      "updated_at",
+      "content_html",
+      "artifact_paths_json",
+      "image_info_json"
+    ],
+    "type": "js",
+    "modulePath": "weixin/freepublish-list.js",
+    "sourceFile": "weixin/freepublish-list.js"
+  },
+  {
+    "site": "weixin",
     "name": "home-overview",
     "aliases": [
       "overview",
@@ -29358,6 +29606,105 @@
     "modulePath": "weixin/published.js",
     "sourceFile": "weixin/published.js",
     "navigateBefore": false
+  },
+  {
+    "site": "weixin",
+    "name": "published-articles",
+    "description": "List published Weixin articles with optional official-API-to-browser fallback",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "source",
+        "type": "str",
+        "default": "auto",
+        "required": false,
+        "help": "Article source and fallback policy",
+        "choices": [
+          "auto",
+          "api",
+          "browser"
+        ]
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "Maximum articles to return"
+      },
+      {
+        "name": "max-pages",
+        "type": "int",
+        "default": 5,
+        "required": false,
+        "help": "Maximum browser pages to scan"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 30,
+        "required": false,
+        "help": "Browser request timeout in seconds"
+      },
+      {
+        "name": "content",
+        "type": "str",
+        "default": "none",
+        "required": false,
+        "help": "Official API HTML handling",
+        "choices": [
+          "none",
+          "inline",
+          "file"
+        ]
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": "./weixin-published",
+        "required": false,
+        "help": "Official API artifact directory"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": false,
+        "help": "WeChat Official Account AppID; falls back to WECHAT_APPID"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": false,
+        "help": "WeChat AppSecret; prefer WECHAT_APPSECRET to avoid shell history"
+      },
+      {
+        "name": "access-token",
+        "type": "str",
+        "required": false,
+        "help": "Existing API token; falls back to WECHAT_ACCESS_TOKEN"
+      }
+    ],
+    "columns": [
+      "article_id",
+      "title",
+      "author",
+      "digest",
+      "published_at",
+      "url",
+      "content_html",
+      "artifact_paths_json",
+      "thumb_media_id",
+      "image_info_json",
+      "source",
+      "fallback_reason"
+    ],
+    "type": "js",
+    "modulePath": "weixin/published-articles.js",
+    "sourceFile": "weixin/published-articles.js",
+    "navigateBefore": "https://mp.weixin.qq.com"
   },
   {
     "site": "weixin",
