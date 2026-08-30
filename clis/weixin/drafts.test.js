@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AuthRequiredError, EmptyResultError } from '@sovovs/bycli/errors';
 import { getRegistry } from '@sovovs/bycli/registry';
 import './create-draft.js';
+import './create-newspic.js';
 import './drafts.js';
 
 function createPageMock(overrides = {}) {
@@ -14,10 +15,11 @@ function createPageMock(overrides = {}) {
 }
 
 describe('weixin command registration', () => {
-    it('registers create-draft and drafts commands', () => {
+    it('registers create-draft, create-newspic, and drafts commands', () => {
         const registry = getRegistry();
         const values = [...registry.values()];
         expect(values.find(c => c.site === 'weixin' && c.name === 'create-draft')).toBeDefined();
+        expect(values.find(c => c.site === 'weixin' && c.name === 'create-newspic')).toBeDefined();
         const draftsCommand = values.find(c => c.site === 'weixin' && c.name === 'drafts');
         expect(draftsCommand).toBeDefined();
         expect(draftsCommand.args.find((arg) => arg.name === 'timeout')).toMatchObject({ type: 'int', default: 60 });

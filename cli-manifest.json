@@ -29046,6 +29046,62 @@
   },
   {
     "site": "weixin",
+    "name": "create-newspic",
+    "description": "通过微信公众号官方 API 创建贴图草稿（不会公开发布）",
+    "access": "write",
+    "example": "bycli weixin create-newspic --title \"相册标题\" --images \"./01.jpg,http://example.com/02.png\" --content \"说明文字\" --appid wx123 --appsecret secret",
+    "strategy": "local",
+    "browser": false,
+    "args": [
+      {
+        "name": "title",
+        "type": "str",
+        "required": true,
+        "help": "贴图标题（最长 32 字）"
+      },
+      {
+        "name": "images",
+        "type": "str",
+        "required": true,
+        "help": "1–20 张本地或 HTTP(S) 图片，使用逗号分隔"
+      },
+      {
+        "name": "content",
+        "type": "str",
+        "required": false,
+        "valueRequired": true,
+        "help": "可选的纯文本贴图说明"
+      },
+      {
+        "name": "appid",
+        "type": "str",
+        "required": true,
+        "help": "公众号 AppID"
+      },
+      {
+        "name": "appsecret",
+        "type": "str",
+        "required": true,
+        "help": "公众号 AppSecret；请勿提交到 shell 历史或日志"
+      },
+      {
+        "name": "allow-private-image-hosts",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "允许下载 localhost/内网 HTTP(S) 图片；云元数据地址始终禁止"
+      }
+    ],
+    "columns": [
+      "status",
+      "detail"
+    ],
+    "type": "js",
+    "modulePath": "weixin/create-newspic.js",
+    "sourceFile": "weixin/create-newspic.js"
+  },
+  {
+    "site": "weixin",
     "name": "download",
     "description": "下载微信公众号文章为 Markdown 格式",
     "access": "read",

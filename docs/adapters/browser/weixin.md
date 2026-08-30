@@ -20,6 +20,7 @@
 | `bycli weixin download` | Download one WeChat article as Markdown |
 | `bycli weixin drafts` | List drafts in the Official Accounts backend |
 | `bycli weixin create-draft` | Create an Official Accounts draft |
+| `bycli weixin create-newspic` | Create an API-only image-post draft with 1–20 images |
 
 ## Search and history workflow
 
@@ -164,6 +165,20 @@ bycli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output ./weixin
 bycli weixin download --url "https://mp.weixin.qq.com/s/xxx" --download-images
 bycli weixin drafts --limit 5
 bycli weixin create-draft --title "周报" --author "byCLI" --summary "本周更新摘要" "这里是正文内容"
+bycli weixin create-newspic \
+  --title "周末随拍" \
+  --images "./01.jpg,http://example.com/02.png" \
+  --content "图片说明" \
+  --appid "$APPID" \
+  --appsecret "$APPSECRET"
 ```
 
 `download` writes Markdown and, by default, local images below the selected output directory. `create-draft --cover-image` requires Browser Bridge file-upload support.
+
+`create-newspic` does not open a browser and does not publish the result. It
+uploads every input image as permanent Weixin image material, then creates a
+draft with `article_type: "newspic"`. Local paths and HTTP(S) URLs can be mixed
+in input order. Localhost and private-network URLs require
+`--allow-private-image-hosts true`; cloud metadata addresses are always blocked.
+If upload or draft creation fails, the command makes a best-effort attempt to
+delete permanent materials uploaded by that invocation.

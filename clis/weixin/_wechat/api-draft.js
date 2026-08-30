@@ -12,7 +12,7 @@ function apiError(context, payload) {
   return new CommandExecutionError(`${context} failed (${code}): ${message}`);
 }
 
-async function readJsonResponse(response, context) {
+export async function readJsonResponse(response, context) {
   let payload;
   try {
     payload = await response.json();
@@ -24,7 +24,7 @@ async function readJsonResponse(response, context) {
   return payload;
 }
 
-async function getAccessToken(appid, appsecret, fetchImpl) {
+export async function getAccessToken(appid, appsecret, fetchImpl) {
   const url = new URL(`${API_BASE}/token`);
   url.searchParams.set('grant_type', 'client_credential');
   url.searchParams.set('appid', appid);
@@ -43,7 +43,7 @@ function mimeType(filePath) {
   return 'image/jpeg';
 }
 
-async function uploadImage(filePath, token, fetchImpl) {
+export async function uploadImage(filePath, token, fetchImpl) {
   const data = await nodeFs.readFile(filePath);
   const form = new FormData();
   form.append('media', new Blob([data], { type: mimeType(filePath) }), nodePath.basename(filePath));
