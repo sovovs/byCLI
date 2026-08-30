@@ -29552,6 +29552,51 @@
   },
   {
     "site": "weixin",
+    "name": "open-platform-authorizer-info",
+    "description": "Get an authorized Official Account profile through a Weixin third-party platform",
+    "access": "read",
+    "domain": "api.weixin.qq.com",
+    "strategy": "local",
+    "browser": false,
+    "args": [
+      {
+        "name": "authorizerAppid",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Authorized Official Account AppID"
+      },
+      {
+        "name": "component-appid",
+        "type": "str",
+        "required": false,
+        "help": "Third-party platform AppID; falls back to WECHAT_COMPONENT_APPID"
+      },
+      {
+        "name": "component-appsecret",
+        "type": "str",
+        "required": false,
+        "help": "Third-party platform AppSecret; prefer WECHAT_COMPONENT_APPSECRET"
+      },
+      {
+        "name": "component-verify-ticket",
+        "type": "str",
+        "required": false,
+        "help": "Latest pushed verify ticket; prefer WECHAT_COMPONENT_VERIFY_TICKET"
+      }
+    ],
+    "columns": [
+      "appid",
+      "nickname",
+      "username",
+      "principal_name"
+    ],
+    "type": "js",
+    "modulePath": "weixin/open-platform-authorizer-info.js",
+    "sourceFile": "weixin/open-platform-authorizer-info.js"
+  },
+  {
+    "site": "weixin",
     "name": "published",
     "description": "List Weixin published records and engagement metrics",
     "access": "read",

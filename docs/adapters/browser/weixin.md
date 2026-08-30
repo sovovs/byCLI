@@ -136,6 +136,25 @@ All commands also accept byCLI's common output option, such as `-f table|json|ya
 
 ## Login and authentication
 
+### 微信开放平台第三方平台账号资料
+
+`weixin open-platform-authorizer-info` 是独立于公众号后台登录状态的只读命令。它先使用第三方平台
+凭据和微信最近推送的 `component_verify_ticket` 换取 `component_access_token`，再调用
+`api_get_authorizer_info` 返回授权公众号的 `appid`、`nickname`、`username`（`gh_` 原始 ID）和
+`principal_name`。
+
+```bash
+WECHAT_COMPONENT_APPID='...' \
+WECHAT_COMPONENT_APPSECRET='...' \
+WECHAT_COMPONENT_VERIFY_TICKET='...' \
+  bycli weixin open-platform-authorizer-info 'wx-authorizer-appid' -f json
+```
+
+`component_verify_ticket` 不能由 AppID/AppSecret 主动获取；微信会定时推送到第三方平台配置的授权事件
+接收 URL，调用方必须提供最近一次已验证的 ticket。不要把 AppSecret、ticket 或返回的 access token
+写入命令历史、日志、测试夹具或仓库文件。该命令不读取浏览器 Cookie，也不会回退到
+`mp.weixin.qq.com`。
+
 The default `--auth-source browser` mode connects through Browser Bridge and reuses Chrome's `mp.weixin.qq.com` session. If the session is not authenticated, byCLI opens the Official Accounts login page, brings it to the foreground, and waits up to 180 seconds for you to scan the QR code (扫码) and finish login. Already-authenticated runs do not deliberately steal focus.
 
 For `accounts`, byCLI opens the editor's **账号名片** picker, enters the query in the **插入账号名片** dialog, and captures only the `fingerprint` value from the resulting backend search request. It does not select a result, click **插入**, save the draft, or persist credentials. If the picker cannot be opened automatically after the editor has had time to render, byCLI brings the window to the foreground and waits for you to open the **插入账号名片** dialog manually; once the dialog appears, the command fills the query and continues automatically.

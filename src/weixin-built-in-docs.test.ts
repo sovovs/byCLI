@@ -65,6 +65,7 @@ describe('built-in weixin history command release artifacts', () => {
     for (const file of [
       'collections.js', 'collection-detail.js', 'user-growth.js', 'user-attributes.js',
       'freepublish-list.js', 'freepublish-get.js', 'published-articles.js', 'article-fetch.js',
+      'open-platform-authorizer-info.js',
     ]) {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be published`).toBe(true);
     }
@@ -212,7 +213,10 @@ describe('built-in weixin history command release artifacts', () => {
       columns: ['date', 'dimension', 'name', 'code', 'parent_code', 'count', 'percent'],
       modulePath: 'weixin/user-attributes.js',
     });
-    for (const name of ['freepublish-list', 'freepublish-get', 'published-articles', 'article-fetch']) {
+    for (const name of [
+      'freepublish-list', 'freepublish-get', 'published-articles', 'article-fetch',
+      'open-platform-authorizer-info',
+    ]) {
       expect(byName.get(name), `${name} manifest entry`).toBeDefined();
     }
     expect(byName.get('freepublish-list')).toMatchObject({
@@ -224,6 +228,11 @@ describe('built-in weixin history command release artifacts', () => {
     expect(byName.get('freepublish-get')).toMatchObject({ browser: false, strategy: 'local' });
     expect(byName.get('published-articles')).toMatchObject({ browser: 'conditional' });
     expect(byName.get('article-fetch')).toMatchObject({ browser: 'conditional' });
+    expect(byName.get('open-platform-authorizer-info')).toMatchObject({
+      browser: false,
+      strategy: 'local',
+      columns: ['appid', 'nickname', 'username', 'principal_name'],
+    });
   });
 
   it('documents the built-in workflow and retires the obsolete plugin plan without deleting it', () => {
@@ -236,6 +245,7 @@ describe('built-in weixin history command release artifacts', () => {
       'weixin user-growth', 'weixin user-attributes',
       'weixin freepublish-list', 'weixin freepublish-get',
       'weixin published-articles', 'weixin article-fetch',
+      'weixin open-platform-authorizer-info',
       'bycli weixin collections --limit 20 --max-pages 5 -f json',
       "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
       'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json',
@@ -253,6 +263,7 @@ describe('built-in weixin history command release artifacts', () => {
       'redacts it',
       'WECHAT_TOKEN', 'WECHAT_COOKIE', 'WECHAT_FINGERPRINT',
       'WECHAT_APPID', 'WECHAT_APPSECRET', 'WECHAT_ACCESS_TOKEN',
+      'WECHAT_COMPONENT_APPID', 'WECHAT_COMPONENT_APPSECRET', 'WECHAT_COMPONENT_VERIFY_TICKET',
       '--content none', '--content inline', '--content file',
       'api-not-configured', 'api-not-authorized',
       '部分失败', '扫码', 'fakeid', 'macOS',
