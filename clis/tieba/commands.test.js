@@ -41,6 +41,32 @@ describe('tieba commands', () => {
         expect(posts?.args.find((arg) => arg.name === 'limit')?.default).toBe(20);
         expect(search?.args.find((arg) => arg.name === 'limit')?.default).toBe(20);
     });
+    it('retries tieba search once when the first page load has no cards', async () => {
+        const search = getRegistry().get('tieba/search');
+        const run = search?.func;
+        if (!run)
+            throw new Error('tieba/search did not register a handler');
+        let gotoCalls = 0;
+        let evaluateCalls = 0;
+        const page = {
+            goto: async () => {
+                gotoCalls += 1;
+            },
+            evaluate: async () => {
+                evaluateCalls += 1;
+                return evaluateCalls === 1 ? [] : [{
+                    title: '编程入门',
+                    id: '123456',
+                    url: 'https://tieba.baidu.com/p/123456',
+                }];
+            },
+        };
+        await expect(run(page, { keyword: '编程', page: 1, limit: 20 })).resolves.toMatchObject([
+            { title: '编程入门', id: '123456' },
+        ]);
+        expect(gotoCalls).toBe(2);
+        expect(evaluateCalls).toBe(2);
+    });
     it('rejects tieba read results when navigation lands on the wrong page number', async () => {
         const read = getRegistry().get('tieba/read');
         expect(read).toBeDefined();

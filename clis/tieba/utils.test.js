@@ -83,6 +83,33 @@ describe('buildTiebaPostCardsFromPagePc', () => {
             },
         ]);
     });
+
+    it('prefers the canonical business title over a feed-title badge', () => {
+        const cards = buildTiebaPostCardsFromPagePc([
+            {
+                layout: 'feed',
+                feed: {
+                    business_info_map: {
+                        thread_id: '6170769312',
+                        title: '威海生活记录——大邹的工作日记',
+                    },
+                    components: [
+                        {
+                            component: 'feed_title',
+                            feed_title: {
+                                data: [{ text_info: { text: '精华' } }],
+                            },
+                        },
+                    ],
+                },
+            },
+        ]);
+
+        expect(cards[0]).toMatchObject({
+            threadId: '6170769312',
+            title: '威海生活记录——大邹的工作日记',
+        });
+    });
 });
 describe('buildTiebaPostItems', () => {
     it('builds stable thread ids and urls from card props without page hops', () => {

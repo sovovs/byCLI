@@ -97,13 +97,16 @@ cli({
     func: async (page, kwargs) => {
         assertSupportedPage(kwargs);
         const limit = normalizeTiebaLimit(kwargs.limit);
-        // Use the default browser settle path so we do not read a stale page.
-        await page.goto(getSearchUrl(kwargs));
-        const raw = await page.evaluate(buildExtractSearchResultsEvaluate(limit));
-        const items = buildTiebaSearchItems(Array.isArray(raw) ? raw : [], limit);
-        if (!items.length) {
-            throw new EmptyResultError('tieba search', 'Tieba may have blocked the result page, or the DOM structure may have changed');
+        const searchUrl = getSearchUrl(kwargs);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            // Tieba occasionally serves an empty shell on the first navigation.
+            await page.goto(searchUrl);
+            const raw = await page.evaluate(buildExtractSearchResultsEvaluate(limit));
+            const items = buildTiebaSearchItems(Array.isArray(raw) ? raw : [], limit);
+            if (items.length) {
+                return items;
+            }
         }
-        return items;
+        throw new EmptyResultError('tieba search', 'Tieba may have blocked the result page, or the DOM structure may have changed');
     },
 });

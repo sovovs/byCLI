@@ -78,11 +78,14 @@ function extractTiebaFeedAuthor(feed) {
     return '';
 }
 function extractTiebaFeedTitle(feed) {
+    const canonicalTitle = normalizeText(feed?.business_info_map?.title);
+    if (canonicalTitle)
+        return canonicalTitle;
     const title = getTiebaFeedComponent(feed, 'feed_title');
     const titleData = Array.isArray(title.data) ? title.data : [];
     const firstTitle = titleData[0];
     const textInfo = firstTitle?.text_info;
-    return normalizeText(textInfo?.text) || normalizeText(feed?.business_info_map?.title);
+    return normalizeText(textInfo?.text);
 }
 function extractTiebaFeedCommentCount(feed) {
     const social = getTiebaFeedComponent(feed, 'feed_social');
