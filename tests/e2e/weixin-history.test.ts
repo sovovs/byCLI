@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AuthRequiredError, CommandExecutionError, TimeoutError, toEnvelope } from '@sovovs/bycli/errors';
+import { AuthRequiredError, CommandExecutionError, toEnvelope } from '@sovovs/bycli/errors';
 import { getRegistry } from '../../src/registry.js';
 import { render } from '../../src/output.js';
 
@@ -33,7 +33,7 @@ function restoreWechatEnvironment(snapshot = initialWechatEnvironment) {
 
 beforeAll(async () => {
   await Promise.all([
-    import('../../clis/weixin/accounts.js'),
+    import('../../clis/weixin/get-public-account-info.js'),
     import('../../clis/weixin/articles.js'),
     import('../../clis/weixin/save-articles.js'),
   ]);
@@ -108,7 +108,7 @@ describe('built-in weixin history workflow', () => {
     expect(process.env.WECHAT_FINGERPRINT).toBe('pre-existing-fingerprint');
   });
 
-  it('runs the registered browser accounts command and preserves two similar candidates', async () => {
+  it('runs the registered browser get-public-account-info command and preserves two similar candidates', async () => {
     let preflightReads = 0;
     let fingerprintReads = 0;
     const page = {
@@ -118,6 +118,12 @@ describe('built-in weixin history workflow', () => {
           return { href: `https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=${encodeURIComponent(secrets.token)}`, hasLoginUi: false };
         }
         if (arg.operation === 'install') return { submitted: true };
+        if (arg.operation === 'open-picker') {
+          return { dialogVisible: true, entryClicked: false, overflowClicked: false };
+        }
+        if (arg.operation === 'submit-search') {
+          return { submitted: true, dialogVisible: true, inputCount: 1, buttonFound: true, clickInvoked: true };
+        }
         if (arg.operation === 'read') return ++fingerprintReads === 1 ? null : secrets.fingerprint;
         return undefined;
       }),
@@ -128,8 +134,9 @@ describe('built-in weixin history workflow', () => {
         { nickname: 'Acme Lab', fakeid: 'same-2', alias: 'acme-lab' },
       ] })),
     };
-    const registered = command('accounts');
+    const registered = command('get-public-account-info');
     expect(registered).toMatchObject({ browser: 'conditional', strategy: 'intercept', columns: ['nickname', 'fakeid', 'alias'] });
+    expect(getRegistry().get('weixin/accounts')).toBeUndefined();
     expect(registered.requiresBrowser?.({ 'auth-source': 'browser' })).toBe(true);
     const rows = await registered.func!(page as never, { query: 'Acme', limit: 2, 'auth-source': 'browser' });
     expect(rows).toEqual([
@@ -179,7 +186,7 @@ describe('built-in weixin history workflow', () => {
       expect(rows.map(row => row.status)).toEqual(['saved', 'failed']);
       expect(rows[1]).toMatchObject({ stage: 'download', path: null, error: 'article download failed' });
       const savedPath = String(rows[0].path);
-      expect(path.relative(fs.realpathSync(output), savedPath)).not.toMatch(/^\.\.(?:[/\\]|$)/);
+      expect(path.relative(fs.realpathSync(output), fs.realpathSync(savedPath))).not.toMatch(/^\.\.(?:[/\\]|$)/);
       if (process.platform !== 'win32') expect(fs.statSync(savedPath).mode & 0o777).toBe(0o600);
       expect(fs.readFileSync(savedPath, 'utf8')).toContain('Saved body');
       assertSecretFree(rows);
@@ -200,7 +207,7 @@ describe('built-in weixin history workflow', () => {
     assertSecretFree(toEnvelope(thrown));
   });
 
-  it('surfaces browser login timeout as TimeoutError without leaking page credentials', async () => {
+  it('surfaces browser login as AuthRequiredError without leaking page credentials', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(0));
     const page = {
@@ -210,7 +217,7 @@ describe('built-in weixin history workflow', () => {
       wait: vi.fn(async (seconds: number) => vi.setSystemTime(Date.now() + seconds * 1000)),
     };
     const thrown = await command('articles').func!(page as never, { fakeid: 'account-1', 'auth-source': 'browser' }).catch(error => error);
-    expect(thrown).toBeInstanceOf(TimeoutError);
+    expect(thrown).toBeInstanceOf(AuthRequiredError);
     assertSecretFree(toEnvelope(thrown));
   });
 
