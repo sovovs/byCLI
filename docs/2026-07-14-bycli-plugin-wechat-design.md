@@ -14,7 +14,7 @@ byCLI 已有 `clis/weixin`，当前提供：
 本设计直接扩展该内置 adapter，增加微信公众号搜索与历史文章批量处理能力：
 
 ```bash
-bycli weixin accounts <query>
+bycli weixin get-public-account-info <query>
 bycli weixin articles <fakeid>
 bycli weixin save-articles <fakeid>
 ```
@@ -60,7 +60,7 @@ clis/weixin/
 ├── download.js                # 现有：单篇文章下载
 ├── drafts.js                  # 现有：草稿列表
 ├── create-draft.js            # 现有：创建草稿
-├── accounts.js                # 新增：搜索公众号/fakeid
+├── get-public-account-info.js # 新增：搜索公众号/fakeid
 ├── articles.js                # 新增：列出历史文章
 ├── save-articles.js           # 新增：批量保存 Markdown
 └── _wechat/
@@ -86,10 +86,10 @@ clis/weixin/
 
 ## 4. 命令合同
 
-### 4.1 `weixin accounts`
+### 4.1 `weixin get-public-account-info`
 
 ```bash
-bycli weixin accounts <query> \
+bycli weixin get-public-account-info <query> \
   [--limit 10] \
   [--auth-source browser|env] \
   [-f table|json|yaml|plain|md|csv]
@@ -211,7 +211,7 @@ domain: mp.weixin.qq.com
                     → 最长等待 180 秒
   → 读取 token 与目标域 Cookie
   → 进入图文编辑场景
-  → accounts 安装一次性请求监听器
+  → get-public-account-info 安装一次性请求监听器
       → 等待并点击 header 中的“账号名片”入口
       → 等待“插入账号名片”弹窗
       → 在弹窗内输入 query 并触发搜索
@@ -230,7 +230,7 @@ Cookie 必须通过 `page.getCookies({ url: 'https://mp.weixin.qq.com/' })` 获�
 只有显式 `--auth-source env` 才使用环境变量：
 
 ```text
-accounts: WECHAT_TOKEN + WECHAT_COOKIE + WECHAT_FINGERPRINT
+get-public-account-info: WECHAT_TOKEN + WECHAT_COOKIE + WECHAT_FINGERPRINT
 articles/save-articles: WECHAT_TOKEN + WECHAT_COOKIE
 ```
 
@@ -354,7 +354,7 @@ fakeid + token + Cookie
 ### 10.2 命令合同
 
 - 三个新命令的 site/name/access/strategy/browser/domain、参数和静态列。
-- `accounts` 不自动选择相似名称。
+- `get-public-account-info` 不自动选择相似名称。
 - `articles` 缺失字段为 `null`，不输出 `alias`。
 - `save-articles` 同时返回 saved/failed 行，失败 message 映射到 `error`。
 - `save-articles --auth-source browser` 的 Node 下载失败时自动使用浏览器页面回退；验证页、非文章最终 URL 与超大 HTML 均被拒绝。
@@ -372,7 +372,7 @@ fakeid + token + Cookie
 ## 11. 验收示例
 
 ```bash
-bycli weixin accounts 前端之神 -f json
+bycli weixin get-public-account-info 前端之神 -f json
 ```
 
 返回全部候选公众号及 `fakeid`；未登录时等待用户完成登录。
@@ -412,7 +412,7 @@ WECHAT_TOKEN='...' WECHAT_COOKIE='...' \
 2. 将认证、fingerprint、`search_biz`、参数和脱敏模块迁入 `clis/weixin/_wechat`，转换为现有 JS/JSDoc 风格并保留测试。
 3. 接入 crawler public root API 的微信 API、分页与保存能力，不 spawn CLI，不携带 envelope、子进程或退出码假设。
 4. 抽取并复用现有 `weixin download` 的正文下载能力，避免双份 DOM 解析。
-5. 注册 `accounts`、`articles`、`save-articles`，锁定参数、条件浏览器与输出列合同。
+5. 注册 `get-public-account-info`、`articles`、`save-articles`，锁定参数、条件浏览器与输出列合同。
 6. 补齐共享模块、命令、现有 weixin 回归、manifest、security 和集成测试。
 7. 保持 crawler 依赖在 public root API 合同内，清理独立插件陈旧文档，完成全量构建与受控 E2E。
 

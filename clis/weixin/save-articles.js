@@ -164,7 +164,7 @@ export const saveArticlesCommand = cli({
   description: 'Download WeChat official-account articles as Markdown files',
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
-    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' }, { name: 'name', help: 'Official-account name; exact case-insensitive match required for browser Sogou fallback' },
+    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin get-public-account-info' }, { name: 'name', help: 'Official-account name; exact case-insensitive match required for browser Sogou fallback' },
     { name: 'output', default: './weixin-articles', help: 'Directory for saved Markdown files' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to save' },
     { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' }, { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],

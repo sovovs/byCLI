@@ -19,7 +19,7 @@ export const articlesCommand = cli({
   description: 'List published articles from a WeChat official account',
   strategy: Strategy.COOKIE, browser: browserRequired,
   args: [
-    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin accounts' },
+    { name: 'fakeid', positional: true, required: true, help: 'Official-account fakeid returned by weixin get-public-account-info' },
     { name: 'name', help: 'Official-account name; exact case-insensitive match required for browser Sogou fallback' }, { name: 'limit', type: 'int', help: 'Maximum number of articles to return' }, { name: 'max-pages', type: 'int', help: 'Maximum number of history pages to scan' },
     { name: 'auth-source', default: 'browser', choices: ['browser', 'env'], help: 'Credential source: browser session or environment variables' },
   ],
