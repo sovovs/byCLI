@@ -7,14 +7,15 @@ import * as searchBiz from './_wechat/search-biz.js';
 vi.mock('./_wechat/auth-session.js');
 vi.mock('./_wechat/fingerprint.js');
 vi.mock('./_wechat/search-biz.js');
-await import('./accounts.js');
+await import('./get-public-account-info.js');
 
-describe('weixin accounts command', () => {
-  const command = getRegistry().get('weixin/accounts');
+describe('weixin get-public-account-info command', () => {
+  const command = getRegistry().get('weixin/get-public-account-info');
   beforeEach(() => vi.resetAllMocks());
 
-  it('registers exact metadata and conditional browser predicate', () => {
-    expect(command).toMatchObject({ site: 'weixin', name: 'accounts', access: 'read', strategy: 'intercept', domain: 'mp.weixin.qq.com', browser: 'conditional', columns: ['nickname', 'fakeid', 'alias'] });
+  it('registers only the renamed metadata and conditional browser predicate', () => {
+    expect(command).toMatchObject({ site: 'weixin', name: 'get-public-account-info', access: 'read', strategy: 'intercept', domain: 'mp.weixin.qq.com', browser: 'conditional', columns: ['nickname', 'fakeid', 'alias'] });
+    expect(getRegistry().has('weixin/accounts')).toBe(false);
     expect(command.requiresBrowser({ 'auth-source': 'browser' })).toBe(true);
     expect(command.requiresBrowser({ 'auth-source': 'env' })).toBe(false);
     expect(() => command.requiresBrowser({ 'auth-source': 'invalid' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT' }));
