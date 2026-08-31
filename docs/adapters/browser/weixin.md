@@ -20,6 +20,7 @@
 | `bycli weixin collection-detail` | Show one collection's settings and ordered content items |
 | `bycli weixin user-growth` | Read follower growth by date and acquisition source |
 | `bycli weixin user-attributes` | Read demographic, region, platform, and device-brand snapshots |
+| `bycli weixin user-info` | Read account details, feature settings, and authorization management by TAB |
 | `bycli weixin download-publish-data` | Save one published article's content analysis as Markdown |
 | `bycli weixin download` | Download one WeChat article as Markdown |
 | `bycli weixin drafts` | List drafts in the Official Accounts backend |
@@ -112,6 +113,19 @@ Attribute `--dimension` accepts `all`, `gender`, `age`, `language`, `region`, `p
 
 WeChat only publishes user-attribute data on the day after an account reaches 100 followers. Accounts below that threshold receive an explicit empty-result message. The current page can also hide device-brand charts; `brand` is still requested from the embedded snapshot when WeChat supplies it, so an empty brand result is possible. Blank platform and brand labels are returned as `未知`.
 
+## Account settings workflow
+
+`weixin user-info` reuses the current logged-in Official Account browser session and reads the three TABs under **公众号 → 账号设置**. `weixin userInfo` is an alias for the same command.
+
+```bash
+bycli weixin user-info --settle 2 -f json
+bycli weixin userInfo -f json
+```
+
+The command returns one row per TAB with columns `tab` and `data_json`. Stable `tab` values are `account_details`, `feature_settings`, and `authorization_management`. `data_json` is a compact JSON string containing the displayed TAB label, `available` state, sections, fields, statuses, and actions. A TAB that is explicitly disabled or absent while other settings TABs are recognized is returned with `available: false` and an empty section list; a page where no settings TAB can be recognized fails instead of returning invented empty data.
+
+Actions such as 修改、设置、下载二维码, and 申请认证 include their label, enabled state, and a safe `path`. The path is pathname-only: query parameters, fragments, temporary account tokens, JavaScript handlers, insecure links, and foreign origins are never returned. Button-only actions use `path: null`.
+
 ### Implementation boundary
 
 `articles` history retrieval and `save-articles` saving use the published `@sovovs/wechat-article-crawler` public root API (`createWechatApi`, `collectArticles`, `saveArticles`). The adapter imports only that root entry—never private `src/*`/`bin/*` paths—and never starts a `wechat-crawler` subprocess.
@@ -131,6 +145,7 @@ Command arguments and defaults:
 | `collection-detail` | required positional `<collectionId>`; `--max-pages <positive integer>` (default `5`) |
 | `user-growth` | optional `--begin YYYY-MM-DD`, `--end YYYY-MM-DD`, `--source` (default `all`; use `all-sources` for aggregate plus all channels), and `--output <directory>` to download the aggregate XLS |
 | `user-attributes` | optional `--date YYYY-MM-DD`; `--dimension all\|gender\|age\|language\|region\|platform\|brand` (default `all`) |
+| `user-info` / `userInfo` | optional `--settle <positive integer>` (default `2`) |
 
 All commands also accept byCLI's common output option, such as `-f table|json|yaml|plain|md|csv`. On the authenticated primary path, `--name` remains display metadata. At an eligible browser fallback boundary it becomes mandatory and is the exact account-name filter; it never changes or invents the selected `fakeid`.
 
@@ -175,7 +190,7 @@ Environment credentials are all-or-nothing and are never mixed with a browser se
 
 Tokens, cookies, and fingerprints are temporary credentials. They are kept in command memory only and are redacted from errors, logs, traces, and output. Do not put them in shell history, committed files, fixtures, or shared logs. When credentials expire, the command reports an authentication error: log in again in browser mode or replace the complete environment-variable set. byCLI does not persist, refresh, or bypass expired credentials or WeChat risk controls.
 
-`collections`, `collection-detail`, `user-growth`, and `user-attributes` always use the current Browser Bridge session and do not accept environment credentials. WeChat may return HTTP 200 even when that session has expired; byCLI detects the response body and reports `AUTH_REQUIRED`. The request URL must include the temporary token, but byCLI does not copy it into the Referer, output, errors, or committed artifacts, and redacts it from diagnostics.
+`collections`, `collection-detail`, `user-growth`, `user-attributes`, and `user-info` always use the current Browser Bridge session and do not accept environment credentials. WeChat may return HTTP 200 even when that session has expired; byCLI detects the response body and reports `AUTH_REQUIRED`. The request URL must include the temporary token, but byCLI does not copy it into the Referer, output, errors, or committed artifacts, and redacts it from diagnostics.
 
 ## Output and partial failures
 
@@ -188,6 +203,8 @@ Tokens, cookies, and fingerprints are temporary credentials. They are kept in co
 `collections` columns are `collectionId`, `title`, `collectionType`, `itemCount`, `views`, `continuousRead`, `isUpdating`, `isBanned`, `isPaid`, `createdAt`, `updatedAt`, and `coverUrl`.
 
 `collection-detail` returns exactly one row with columns `collectionId`, `title`, `description`, `collectionType`, `coverUrl`, `itemCount`, `createdAt`, `updatedAt`, `settingsJson`, and `itemsJson`. The last two fields are compact JSON strings that can be decoded with `JSON.parse`; this preserves nested business data, including collection settings and ordered content items, while complying with byCLI's row-shape validator.
+
+`user-info` returns exactly three classified rows when all account-settings TABs are present. Parse each row's `data_json` with `JSON.parse` to inspect section fields and safe action metadata.
 
 `download-publish-data` saves both the matched article's XLS data export and a Markdown content-analysis report under `--output` (default `./weixin-publish-data`). A `downloaded` row means both artifacts passed validation, `partial` preserves the one validated artifact and the other error, and `failed` means neither artifact passed. All three are terminal outcomes.
 

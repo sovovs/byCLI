@@ -29961,6 +29961,35 @@
     "navigateBefore": false
   },
   {
+    "site": "weixin",
+    "name": "user-info",
+    "aliases": [
+      "userInfo"
+    ],
+    "description": "按账号详情、功能设置和授权管理 TAB 读取公众号账号设置",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "settle",
+        "type": "int",
+        "default": 2,
+        "required": false,
+        "help": "切换账号设置 TAB 后等待渲染的秒数"
+      }
+    ],
+    "columns": [
+      "tab",
+      "data_json"
+    ],
+    "type": "js",
+    "modulePath": "weixin/user-info.js",
+    "sourceFile": "weixin/user-info.js",
+    "navigateBefore": false
+  },
+  {
     "site": "weread",
     "name": "ai-outline",
     "description": "Get AI-generated outline for a book",

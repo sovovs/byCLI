@@ -65,7 +65,7 @@ describe('built-in weixin history command release artifacts', () => {
     for (const file of [
       'collections.js', 'collection-detail.js', 'user-growth.js', 'user-attributes.js',
       'freepublish-list.js', 'freepublish-get.js', 'published-articles.js', 'article-fetch.js',
-      'open-platform-authorizer-info.js',
+      'open-platform-authorizer-info.js', 'user-info.js',
     ]) {
       expect(fs.existsSync(path.join(adapterDir, file)), `${file} should be published`).toBe(true);
     }
@@ -215,7 +215,7 @@ describe('built-in weixin history command release artifacts', () => {
     });
     for (const name of [
       'freepublish-list', 'freepublish-get', 'published-articles', 'article-fetch',
-      'open-platform-authorizer-info',
+      'open-platform-authorizer-info', 'user-info',
     ]) {
       expect(byName.get(name), `${name} manifest entry`).toBeDefined();
     }
@@ -233,6 +233,18 @@ describe('built-in weixin history command release artifacts', () => {
       strategy: 'local',
       columns: ['appid', 'nickname', 'username', 'principal_name'],
     });
+    expect(byName.get('user-info')).toMatchObject({
+      site: 'weixin',
+      name: 'user-info',
+      aliases: ['userInfo'],
+      access: 'read',
+      strategy: 'cookie',
+      browser: true,
+      args: [{ name: 'settle', type: 'int', default: 2, required: false }],
+      columns: ['tab', 'data_json'],
+      modulePath: 'weixin/user-info.js',
+      navigateBefore: false,
+    });
   });
 
   it('documents the built-in workflow and retires the obsolete plugin plan without deleting it', () => {
@@ -245,12 +257,15 @@ describe('built-in weixin history command release artifacts', () => {
       'weixin user-growth', 'weixin user-attributes',
       'weixin freepublish-list', 'weixin freepublish-get',
       'weixin published-articles', 'weixin article-fetch',
-      'weixin open-platform-authorizer-info',
+      'weixin open-platform-authorizer-info', 'weixin user-info', 'weixin userInfo',
       'bycli weixin collections --limit 20 --max-pages 5 -f json',
       "bycli weixin collection-detail '<collectionId>' --max-pages 5 -f json",
       'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all -f json',
       'bycli weixin user-growth --begin 2026-08-01 --end 2026-08-28 --source all-sources --output ./weixin-user-growth -f json',
       'bycli weixin user-attributes --date 2026-08-28 --dimension all -f json',
+      'bycli weixin user-info --settle 2 -f json',
+      'account_details', 'feature_settings', 'authorization_management',
+      'data_json', 'available: false', 'pathname',
       'new_followers', 'cumulative_followers', 'parent_code', 'percent',
       'all-sources', 'official_xls_path', 'official_xls_size',
       'only when `--output` is provided', 'aggregate “全部来源” workbook',
