@@ -49,7 +49,7 @@ function loggedInPage() {
           hasLoginUi: false,
         };
       }
-      if (String(script).includes('const candidates')) {
+      if (String(script).includes("'a[href]'") && String(script).includes('node.click()')) {
         return { selected: true, disabled: false };
       }
       const payload = RAW_TABS[extracted];

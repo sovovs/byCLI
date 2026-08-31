@@ -53,26 +53,50 @@ export function buildSelectTabScript(label) {
     const compact = value => String(value || '').trim().replace(/\\s+/g, ' ');
     const visible = node => {
       if (!node || node.hidden || node.closest('[hidden], [aria-hidden="true"]')) return false;
-      const style = window.getComputedStyle(node);
-      return style.display !== 'none' && style.visibility !== 'hidden';
+      for (let current = node; current && current.nodeType === 1; current = current.parentElement) {
+        const style = window.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+      }
+      return true;
     };
-    const candidates = Array.from(document.querySelectorAll([
+    const selectors = [
+      'a[href]',
+      'button',
       '[role="tab"]',
       '.weui-desktop-tab__nav',
       '.tab_nav',
-      'a',
-      'button',
       'li',
-    ].join(',')));
-    const node = candidates.find(candidate => visible(candidate)
-      && compact(candidate.textContent) === ${JSON.stringify(label)});
-    if (!node) return { selected: false, disabled: false };
+    ];
+    let node = null;
+    for (const selector of selectors) {
+      node = Array.from(document.querySelectorAll(selector)).find(candidate => visible(candidate)
+        && compact(candidate.textContent) === ${JSON.stringify(label)});
+      if (node) break;
+    }
+    if (!node) return { selected: false, disabled: false, href: null };
     const disabled = node.disabled === true
       || node.getAttribute('aria-disabled') === 'true'
       || /(^|\\s)(disabled|is-disabled)(\\s|$)/.test(node.className || '');
-    if (disabled) return { selected: false, disabled: true };
+    if (disabled) return { selected: false, disabled: true, href: null };
+    const rawHref = node.tagName === 'A' ? node.getAttribute('href') : null;
+    if (rawHref) {
+      const href = node.href;
+      let destination = null;
+      try { destination = new URL(href); } catch { /* handled as a click-only placeholder */ }
+      const trustedNavigation = destination
+        && destination.origin === window.location.origin
+        && destination.pathname === '/cgi-bin/settingpage'
+        && Boolean(destination.searchParams.get('token'));
+      if (trustedNavigation) return { selected: true, disabled: false, href };
+      const clickOnly = /^javascript:/i.test(rawHref)
+        || rawHref.charAt(0) === '#'
+        || (destination
+          && destination.origin === window.location.origin
+          && destination.pathname === '/cgi-bin/settingpage');
+      if (!clickOnly) return { selected: true, disabled: false, href };
+    }
     node.click();
-    return { selected: true, disabled: false };
+    return { selected: true, disabled: false, href: null };
   })()`;
 }
 
@@ -84,8 +108,11 @@ export const SETTINGS_SESSION_SCRIPT = `(() => {
   ];
   const visible = node => {
     if (!node || node.hidden || node.closest('[hidden], [aria-hidden="true"]')) return false;
-    const style = window.getComputedStyle(node);
-    return style.display !== 'none' && style.visibility !== 'hidden';
+    for (let current = node; current && current.nodeType === 1; current = current.parentElement) {
+      const style = window.getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    }
+    return true;
   };
   return {
     href: window.location.href,
@@ -121,8 +148,11 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
   };
   const visible = node => {
     if (!node || node.hidden || node.closest('[hidden], [aria-hidden="true"]')) return false;
-    const style = window.getComputedStyle(node);
-    return style.display !== 'none' && style.visibility !== 'hidden';
+    for (let current = node; current && current.nodeType === 1; current = current.parentElement) {
+      const style = window.getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    }
+    return true;
   };
   const firstVisible = (root, selectors) => {
     for (const selector of selectors) {
@@ -186,8 +216,22 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
     const actions = [];
     const seenFields = new Set();
     const seenActions = new Set();
+    const fieldRows = new Set();
+    const genericParts = node => Array.from(node.children).flatMap(child => {
+      if (!visible(child)
+        || /^(H1|H2|H3|H4|H5|H6|A|BUTTON)$/.test(child.tagName)
+        || child.getAttribute('role') === 'button') return [];
+      const copy = child.cloneNode(true);
+      copy.querySelectorAll('a, button, [role="button"], svg, .setting_opr, .weui-desktop-setting__status, .setting_status, .status')
+        .forEach(item => item.remove());
+      const value = compact(copy.textContent);
+      return value ? [value] : [];
+    });
 
     for (const row of rows) {
+      const headerCells = row.tagName === 'TR' ? row.querySelectorAll(':scope > th') : [];
+      const dataCells = row.tagName === 'TR' ? row.querySelectorAll(':scope > td') : [];
+      if (headerCells.length > 0 && dataCells.length === 0) continue;
       const labelNode = firstVisible(row, [
         '.frm_label',
         '.weui-desktop-setting__label',
@@ -220,16 +264,48 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
         '.status',
       ]);
       let fieldValue = null;
+      let fieldStatus = compact(statusNode && statusNode.textContent);
       if (valueNode) {
         const copy = valueNode.cloneNode(true);
         copy.querySelectorAll('a, button, [role="button"], .setting_opr, .weui-desktop-setting__status, .setting_status, .status')
           .forEach(node => node.remove());
         fieldValue = compact(copy.textContent);
       }
+      if (fieldValue === null) {
+        const parts = genericParts(row);
+        const labelIndex = parts.indexOf(fieldLabel);
+        if (labelIndex !== -1) {
+          fieldValue = parts[labelIndex + 1] || null;
+          if (fieldStatus === null && parts.length > labelIndex + 2) {
+            fieldStatus = parts.slice(labelIndex + 2).join(' ');
+          }
+        }
+      }
       const item = {
         label: fieldLabel,
         value: fieldValue,
-        status: compact(statusNode && statusNode.textContent),
+        status: fieldStatus,
+      };
+      const key = JSON.stringify(item);
+      if (!seenFields.has(key)) {
+        seenFields.add(key);
+        fields.push(item);
+      }
+      fieldRows.add(row);
+    }
+
+    let genericRows = Array.from(sectionNode.querySelectorAll('div, li'))
+      .filter(node => visible(node)
+        && !fieldRows.has(node)
+        && !rows.some(row => row !== node && row.contains(node))
+        && genericParts(node).length >= 2);
+    genericRows = genericRows.filter(node => !genericRows.some(other => other !== node && node.contains(other)));
+    for (const row of genericRows) {
+      const parts = genericParts(row);
+      const item = {
+        label: parts[0],
+        value: parts[1] || null,
+        status: parts.length > 2 ? parts.slice(2).join(' ') : null,
       };
       const key = JSON.stringify(item);
       if (!seenFields.has(key)) {
@@ -248,7 +324,9 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
         actions.push(item);
       }
     }
-    return fields.length > 0 || actions.length > 0 ? [{ label, fields, actions }] : [];
+    if (fields.length > 0 || actions.length > 0) return [{ label, fields, actions }];
+    const empty = Boolean(sectionNode.querySelector('table thead th, table tr > th'));
+    return empty ? [{ label, fields, actions, empty: true }] : [];
   });
 
   if (sections.length === 0 && /(无权限|暂无权限|暂不支持|不可用)/.test(document.body.textContent || '')) {
@@ -305,7 +383,9 @@ export function normalizeUserInfoTab(tabId, payload) {
     const actions = rawActions.map((action, actionIndex) => (
       normalizeAction(action, definition.label, sectionIndex, actionIndex)
     ));
-    return fields.length > 0 || actions.length > 0 ? [{ label, fields, actions }] : [];
+    return fields.length > 0 || actions.length > 0 || section.empty === true
+      ? [{ label, fields, actions }]
+      : [];
   });
 
   execution(sections.length > 0, `WeChat ${definition.label} exposed no recognizable settings`);
@@ -331,6 +411,20 @@ export async function collectUserInfoTabs(page, { settle = 2 } = {}) {
         data: normalizeUserInfoTab(definition.id, { available: false, sections: [] }),
       });
       continue;
+    }
+    if (selection.href !== null && selection.href !== undefined) {
+      let navigationUrl;
+      try {
+        navigationUrl = new URL(selection.href);
+      } catch {
+        throw new CommandExecutionError('WeChat account settings exposed an invalid tab destination');
+      }
+      execution(
+        navigationUrl.origin === ORIGIN
+          && Boolean(navigationUrl.searchParams.get('token')?.trim()),
+        'WeChat account settings exposed an untrusted tab destination',
+      );
+      await page.goto(navigationUrl.toString());
     }
     await page.wait(settle);
     const payload = await page.evaluate(USER_INFO_EXTRACT_SCRIPT);
