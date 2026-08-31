@@ -99,8 +99,7 @@ describe('weixin user-info command', () => {
         available: true,
         sections: [{
           label: '公开信息',
-          fields: [{ label: '名称', value: '升sovs', status: null }],
-          actions: [{ label: '修改', enabled: true, path: '/cgi-bin/setting' }],
+          fields: [{ label: '名称', value: '升sovs' }],
         }],
       },
       {
@@ -108,8 +107,7 @@ describe('weixin user-info command', () => {
         available: true,
         sections: [{
           label: '功能状态',
-          fields: [{ label: '留言功能', value: '已开启', status: null }],
-          actions: [{ label: '设置', enabled: true, path: null }],
+          fields: [{ label: '留言功能', value: '已开启' }],
         }],
       },
       { label: '授权管理', available: false, sections: [] },

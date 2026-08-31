@@ -161,20 +161,73 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
     }
     return null;
   };
-  const actionNodes = root => Array.from(root.querySelectorAll('a, button, [role="button"]'))
-    .filter(node => {
-      if (!visible(node)) return false;
-      const label = compact(node.textContent || node.getAttribute('aria-label') || node.title);
-      const hint = [node.className, node.title, node.getAttribute('aria-label')].join(' ');
-      return label && !/(help|question|icon-question|帮助|说明)/i.test(hint);
-    });
-  const action = node => ({
-    label: compact(node.textContent || node.getAttribute('aria-label') || node.title),
-    enabled: !(node.disabled === true
-      || node.getAttribute('aria-disabled') === 'true'
-      || /(^|\\s)(disabled|is-disabled)(\\s|$)/.test(node.className || '')),
-    href: node.tagName === 'A' && node.getAttribute('href') ? node.href : null,
-  });
+  const ignoredValueSelector = [
+    'a',
+    'button',
+    '[role="button"]',
+    '[role="tooltip"]',
+    'svg',
+    '.setting_opr',
+    '.weui-desktop-setting__status',
+    '.setting_status',
+    '.status',
+    '.frm_tips',
+    '.weui-desktop-form__tips',
+    '.weui-desktop-setting__desc',
+    '.setting_desc',
+    '.tips',
+    '.desc',
+    '.description',
+    '.help',
+    '.icon-question',
+    '[class*="question"]',
+    '[class*="help"]',
+    '[class*="popover"]',
+    '[class*="-ask"]',
+  ].join(',');
+  const cleanValueText = node => {
+    if (!node) return null;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(ignoredValueSelector).forEach(item => item.remove());
+    return compact(copy.textContent);
+  };
+  const primaryValueText = node => {
+    if (node && node.matches('.weui-desktop-setting__item__info')) {
+      const directText = compact(Array.from(node.childNodes)
+        .filter(child => child.nodeType === Node.TEXT_NODE)
+        .map(child => child.textContent)
+        .join(' '));
+      if (directText) return cleanValueText(node);
+      const primaryChild = Array.from(node.children)
+        .find(child => visible(child) && !child.matches(ignoredValueSelector));
+      if (primaryChild) return cleanValueText(primaryChild);
+    }
+    return cleanValueText(node);
+  };
+  const switchValue = row => {
+    const node = firstVisible(row, [
+      'input[type="checkbox"]',
+      '[role="switch"]',
+      '.weui-desktop-switch',
+      '.weui-switch',
+      '[class*="switch"]',
+    ]);
+    if (!node) return null;
+    const input = node.matches('input[type="checkbox"]')
+      ? node
+      : node.querySelector('input[type="checkbox"]');
+    if (input) return Boolean(input.checked);
+    const ariaNode = node.hasAttribute('aria-checked')
+      ? node
+      : node.querySelector('[aria-checked]');
+    const ariaChecked = ariaNode && ariaNode.getAttribute('aria-checked');
+    if (ariaChecked === 'true') return true;
+    if (ariaChecked === 'false') return false;
+    const className = [node.className, node.parentElement && node.parentElement.className].join(' ');
+    if (/(^|[\\s_-])(checked|on|active)([\\s_-]|$)/i.test(className)) return true;
+    if (/(^|[\\s_-])(unchecked|off)([\\s_-]|$)/i.test(className)) return false;
+    return null;
+  };
   const rowSelectors = [
     '.setting_item',
     '.weui-desktop-setting__item',
@@ -213,18 +266,13 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
     let rows = Array.from(sectionNode.querySelectorAll(rowSelector)).filter(visible);
     rows = rows.filter(node => !rows.some(other => other !== node && other.contains(node)));
     const fields = [];
-    const actions = [];
     const seenFields = new Set();
-    const seenActions = new Set();
     const fieldRows = new Set();
     const genericParts = node => Array.from(node.children).flatMap(child => {
       if (!visible(child)
         || /^(H1|H2|H3|H4|H5|H6|A|BUTTON)$/.test(child.tagName)
         || child.getAttribute('role') === 'button') return [];
-      const copy = child.cloneNode(true);
-      copy.querySelectorAll('a, button, [role="button"], svg, .setting_opr, .weui-desktop-setting__status, .setting_status, .status')
-        .forEach(item => item.remove());
-      const value = compact(copy.textContent);
+      const value = cleanValueText(child);
       return value ? [value] : [];
     });
 
@@ -235,56 +283,34 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
       const labelNode = firstVisible(row, [
         '.frm_label',
         '.weui-desktop-setting__label',
+        '.weui-desktop-setting__item__label',
         '.weui-desktop-form__label',
         'dt',
         'th',
       ]);
-      const fieldLabel = compact(labelNode && labelNode.textContent);
-      const rowActions = actionNodes(row);
-      for (const node of rowActions) {
-        const item = action(node);
-        const key = JSON.stringify(item);
-        if (!seenActions.has(key)) {
-          seenActions.add(key);
-          actions.push(item);
-        }
-      }
+      const fieldLabel = cleanValueText(labelNode);
       if (!fieldLabel) continue;
       const valueNode = firstVisible(row, [
         '.weui-desktop-setting__value',
+        '.weui-desktop-setting__item__info',
         '.setting_value',
         '.frm_value',
         'dd',
         'td',
         '.frm_controls',
       ]);
-      const statusNode = firstVisible(row, [
-        '.weui-desktop-setting__status',
-        '.setting_status',
-        '.status',
-      ]);
-      let fieldValue = null;
-      let fieldStatus = compact(statusNode && statusNode.textContent);
-      if (valueNode) {
-        const copy = valueNode.cloneNode(true);
-        copy.querySelectorAll('a, button, [role="button"], .setting_opr, .weui-desktop-setting__status, .setting_status, .status')
-          .forEach(node => node.remove());
-        fieldValue = compact(copy.textContent);
-      }
+      let fieldValue = switchValue(row);
+      if (fieldValue === null) fieldValue = primaryValueText(valueNode);
       if (fieldValue === null) {
         const parts = genericParts(row);
         const labelIndex = parts.indexOf(fieldLabel);
         if (labelIndex !== -1) {
           fieldValue = parts[labelIndex + 1] || null;
-          if (fieldStatus === null && parts.length > labelIndex + 2) {
-            fieldStatus = parts.slice(labelIndex + 2).join(' ');
-          }
         }
       }
       const item = {
         label: fieldLabel,
         value: fieldValue,
-        status: fieldStatus,
       };
       const key = JSON.stringify(item);
       if (!seenFields.has(key)) {
@@ -305,7 +331,6 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
       const item = {
         label: parts[0],
         value: parts[1] || null,
-        status: parts.length > 2 ? parts.slice(2).join(' ') : null,
       };
       const key = JSON.stringify(item);
       if (!seenFields.has(key)) {
@@ -314,19 +339,9 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
       }
     }
 
-    const rowSet = new Set(rows);
-    for (const node of actionNodes(sectionNode)) {
-      if (rows.some(row => rowSet.has(row) && row.contains(node))) continue;
-      const item = action(node);
-      const key = JSON.stringify(item);
-      if (!seenActions.has(key)) {
-        seenActions.add(key);
-        actions.push(item);
-      }
-    }
-    if (fields.length > 0 || actions.length > 0) return [{ label, fields, actions }];
+    if (fields.length > 0) return [{ label, fields }];
     const empty = Boolean(sectionNode.querySelector('table thead th, table tr > th'));
-    return empty ? [{ label, fields, actions, empty: true }] : [];
+    return empty ? [{ label, fields, empty: true }] : [];
   });
 
   if (sections.length === 0 && /(无权限|暂无权限|暂不支持|不可用)/.test(document.body.textContent || '')) {
@@ -342,20 +357,7 @@ function normalizeField(field, tabLabel, sectionIndex, fieldIndex) {
   execution(label, prefix);
   return {
     label,
-    value: text(field.value),
-    status: text(field.status),
-  };
-}
-
-function normalizeAction(action, tabLabel, sectionIndex, actionIndex) {
-  const prefix = `WeChat ${tabLabel} returned an invalid action at section ${sectionIndex} index ${actionIndex}`;
-  execution(object(action), prefix);
-  const label = text(action.label);
-  execution(label, prefix);
-  return {
-    label,
-    enabled: action.enabled !== false,
-    path: sanitizeActionPath(action.href ?? action.path),
+    value: typeof field.value === 'boolean' ? field.value : text(field.value),
   };
 }
 
@@ -375,16 +377,12 @@ export function normalizeUserInfoTab(tabId, payload) {
     const label = text(section.label);
     execution(label, prefix);
     const rawFields = section.fields ?? [];
-    const rawActions = section.actions ?? [];
-    execution(Array.isArray(rawFields) && Array.isArray(rawActions), prefix);
+    execution(Array.isArray(rawFields), prefix);
     const fields = rawFields.map((field, fieldIndex) => (
       normalizeField(field, definition.label, sectionIndex, fieldIndex)
     ));
-    const actions = rawActions.map((action, actionIndex) => (
-      normalizeAction(action, definition.label, sectionIndex, actionIndex)
-    ));
-    return fields.length > 0 || actions.length > 0 || section.empty === true
-      ? [{ label, fields, actions }]
+    return fields.length > 0 || section.empty === true
+      ? [{ label, fields }]
       : [];
   });
 

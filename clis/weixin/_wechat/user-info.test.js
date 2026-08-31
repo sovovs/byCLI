@@ -63,20 +63,34 @@ describe('weixin account settings helpers', () => {
     expect(sanitizeActionPath(input)).toBe(expected);
   });
 
-  it('normalizes fields and actions without exposing query parameters', () => {
+  it('normalizes only field labels and values', () => {
     expect(normalizeUserInfoTab('account_details', RAW_ACCOUNT_DETAILS)).toEqual({
       label: '账号详情',
       available: true,
       sections: [{
         label: '公开信息',
         fields: [
-          { label: '名称', value: '升sovs', status: null },
-          { label: '认证情况', value: '未认证', status: '需认证' },
+          { label: '名称', value: '升sovs' },
+          { label: '认证情况', value: '未认证' },
         ],
-        actions: [
-          { label: '修改', enabled: true, path: '/cgi-bin/setting' },
-          { label: '下载二维码', enabled: false, path: null },
-        ],
+      }],
+    });
+  });
+
+  it('preserves boolean field values', () => {
+    expect(normalizeUserInfoTab('feature_settings', {
+      available: true,
+      sections: [{
+        label: '功能设置',
+        fields: [{ label: '隐私设置', value: true, status: 'ignored' }],
+        actions: [{ label: '设置', enabled: true, href: '/ignored' }],
+      }],
+    })).toEqual({
+      label: '功能设置',
+      available: true,
+      sections: [{
+        label: '功能设置',
+        fields: [{ label: '隐私设置', value: true }],
       }],
     });
   });
@@ -99,7 +113,7 @@ describe('weixin account settings helpers', () => {
     })).toEqual({
       label: '授权管理',
       available: true,
-      sections: [{ label: '第三方平台', fields: [], actions: [] }],
+      sections: [{ label: '第三方平台', fields: [] }],
     });
   });
 
@@ -136,8 +150,7 @@ describe('weixin account settings helpers', () => {
       available: true,
       sections: [{
         label: '功能',
-        fields: [{ label: '留言', value: null, status: null }],
-        actions: [],
+        fields: [{ label: '留言', value: null }],
       }],
     });
   });
@@ -239,7 +252,7 @@ describe('weixin account settings browser extraction', () => {
     expect(clicks).toBe(1);
   });
 
-  it('extracts legacy setting rows while separating actions from values', () => {
+  it('extracts a legacy main value without right-side actions', () => {
     const dom = new JSDOM(`
       <nav><a href="/cgi-bin/home">首页</a></nav>
       <div class="setting_area">
@@ -261,17 +274,12 @@ describe('weixin account settings browser extraction', () => {
       available: true,
       sections: [{
         label: '公开信息',
-        fields: [{ label: '名称', value: '升sovs', status: null }],
-        actions: [{
-          label: '修改',
-          enabled: true,
-          href: 'https://mp.weixin.qq.com/cgi-bin/setting?action=edit&token=secret',
-        }],
+        fields: [{ label: '名称', value: '升sovs' }],
       }],
     });
   });
 
-  it('extracts WeUI desktop rows and button-only actions', () => {
+  it('omits button-only actions from WeUI desktop rows', () => {
     const dom = new JSDOM(`
       <section class="weui-desktop-panel">
         <h3 class="weui-desktop-panel__title">功能状态</h3>
@@ -287,8 +295,7 @@ describe('weixin account settings browser extraction', () => {
       available: true,
       sections: [{
         label: '功能状态',
-        fields: [{ label: '留言功能', value: '已开启', status: null }],
-        actions: [{ label: '设置', enabled: false, href: null }],
+        fields: [{ label: '留言功能', value: '已开启' }],
       }],
     });
   });
@@ -315,16 +322,159 @@ describe('weixin account settings browser extraction', () => {
       sections: [{
         label: '公开信息',
         fields: [
-          { label: '名称', value: '升sovs', status: null },
-          { label: '认证情况', value: '未认证', status: '需认证' },
+          { label: '名称', value: '升sovs' },
+          { label: '认证情况', value: '未认证' },
         ],
-        actions: [{
-          label: '修改',
-          enabled: true,
-          href: 'https://mp.weixin.qq.com/cgi-bin/setting?action=edit&token=secret',
-        }],
       }],
     });
+  });
+
+  it('removes explanatory tips while preserving the primary field value', () => {
+    const dom = new JSDOM(`
+      <section class="setting_area">
+        <h3>公开信息</h3>
+        <div class="setting_item">
+          <div class="frm_label">名称</div>
+          <div class="frm_controls">
+            <span class="setting_value">升sovs</span>
+            <p class="frm_tips">个人类账号一个自然年内可主动修改两次名称 <a>查看</a></p>
+            <a class="setting_opr">修改</a><span class="icon-question">?</span>
+          </div>
+        </div>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: '名称', value: '升sovs' },
+    ]);
+  });
+
+  it('returns true for an enabled switch field', () => {
+    const dom = new JSDOM(`
+      <section class="setting_area">
+        <h3>功能设置</h3>
+        <div class="setting_item">
+          <div class="frm_label">隐私设置</div>
+          <div class="frm_controls">
+            <span>允许通过名称搜索到本账号</span>
+            <label class="weui-desktop-switch"><input type="checkbox" checked></label>
+          </div>
+        </div>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: '隐私设置', value: true },
+    ]);
+  });
+
+  it('reads a switch from the current WeChat desktop setting DOM', () => {
+    const dom = new JSDOM(`
+      <section class="weui-desktop-panel">
+        <h3 class="weui-desktop-panel__title">功能设置</h3>
+        <li class="weui-desktop-setting__item">
+          <label class="weui-desktop-setting__item__label">隐私设置</label>
+          <div class="weui-desktop-setting__item__controls">
+            <div class="weui-desktop-setting__item__main">
+              <strong class="weui-desktop-setting__item__info">
+                <span>允许通过名称搜索到本账号</span>
+              </strong>
+              <div class="weui-desktop-setting__item__extra">
+                <label class="weui-desktop-switch">
+                  <input class="weui-desktop-switch__input" type="checkbox" checked>
+                  <div class="weui-desktop-switch__box"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </li>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: '隐私设置', value: true },
+    ]);
+  });
+
+  it('removes a WeChat popover from a field label and value', () => {
+    const dom = new JSDOM(`
+      <section class="weui-desktop-panel">
+        <h3 class="weui-desktop-panel__title">功能设置</h3>
+        <li class="weui-desktop-setting__item">
+          <label class="weui-desktop-setting__item__label">
+            JS接口安全域名
+            <span class="weui-desktop-popover__wrp">
+              <i class="icon-svg-common-ask"></i>
+              <span class="weui-desktop-popover">帮助说明</span>
+            </span>
+          </label>
+          <div class="weui-desktop-setting__item__info">
+            <span>未设置</span>
+            <span class="weui-desktop-popover">设置后的接口说明</span>
+          </div>
+        </li>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: 'JS接口安全域名', value: '未设置' },
+    ]);
+  });
+
+  it('keeps only the primary paragraph from a current WeChat value container', () => {
+    const dom = new JSDOM(`
+      <section class="weui-desktop-panel">
+        <h3 class="weui-desktop-panel__title">功能设置</h3>
+        <li class="weui-desktop-setting__item">
+          <label class="weui-desktop-setting__item__label">JS接口安全域名</label>
+          <strong class="weui-desktop-setting__item__info js_container">
+            <p>未设置</p>
+            <p>设置JS接口安全域名后，开发者可在该域名下调用微信开放的JS接口</p>
+          </strong>
+          <a>设置</a>
+        </li>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: 'JS接口安全域名', value: '未设置' },
+    ]);
+  });
+
+  it('keeps direct business text together with its inline type', () => {
+    const dom = new JSDOM(`
+      <section class="weui-desktop-panel">
+        <h3 class="weui-desktop-panel__title">公开信息</h3>
+        <li class="weui-desktop-setting__item">
+          <label class="weui-desktop-setting__item__label">主体信息</label>
+          <strong class="weui-desktop-setting__item__info">谢** <span>(个人)</span></strong>
+          <a>详情</a>
+        </li>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: '主体信息', value: '谢** (个人)' },
+    ]);
+  });
+
+  it('returns false for a disabled ARIA switch field', () => {
+    const dom = new JSDOM(`
+      <section class="setting_area">
+        <h3>功能设置</h3>
+        <div class="setting_item">
+          <div class="frm_label">图片水印</div>
+          <div class="frm_controls">
+            <span>使用账号名称作为水印</span>
+            <span role="switch" aria-checked="false"></span>
+          </div>
+        </div>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
+      { label: '图片水印', value: false },
+    ]);
   });
 
   it('falls back within a known row when label and value classes changed', () => {
@@ -340,7 +490,7 @@ describe('weixin account settings browser extraction', () => {
     `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
 
     expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
-      { label: '公众号ID', value: 'gh_123456', status: null },
+      { label: '公众号ID', value: 'gh_123456' },
     ]);
   });
 
@@ -356,7 +506,7 @@ describe('weixin account settings browser extraction', () => {
     `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
 
     expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT).sections[0].fields).toEqual([
-      { label: '第三方平台名称', value: '示例平台', status: null },
+      { label: '第三方平台名称', value: '示例平台' },
     ]);
   });
 
@@ -380,7 +530,7 @@ describe('weixin account settings browser extraction', () => {
 
     expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT)).toEqual({
       available: true,
-      sections: [{ label: '第三方平台', fields: [], actions: [], empty: true }],
+      sections: [{ label: '第三方平台', fields: [], empty: true }],
     });
   });
 
@@ -419,7 +569,7 @@ describe('weixin account settings browser extraction', () => {
     ]);
     expect(result[0].data.label).toBe('账号详情');
     expect(result[1].data.sections[0].fields[0].value).toBe('已开启');
-    expect(result[2].data.sections[0].actions[0].path).toBe('/cgi-bin/component_unauthorize');
+    expect(result[2].data.sections[0].fields[0].value).toBe('0');
     expect(page.wait.mock.calls).toEqual([[2], [2], [2]]);
   });
 
