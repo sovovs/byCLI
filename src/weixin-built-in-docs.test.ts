@@ -94,13 +94,13 @@ describe('built-in weixin history command release artifacts', () => {
     const byName = new Map(
       manifest.filter(entry => entry.site === 'weixin').map(entry => [entry.name, entry]),
     );
-    for (const name of ['accounts', 'articles', 'save-articles']) {
+    for (const name of ['get-public-account-info', 'articles', 'save-articles']) {
       const command = byName.get(name) as { description?: string; args?: Array<{ help?: string }> };
       expect(command.description?.trim(), `${name} manifest description`).toBeTruthy();
       expect(command.args?.every(arg => Boolean(arg.help?.trim())), `${name} manifest arg help`).toBe(true);
     }
 
-    expect(byName.get('accounts')).toMatchObject({
+    expect(byName.get('get-public-account-info')).toMatchObject({
       browser: 'conditional',
       args: [
         { name: 'query', type: 'str', positional: true, required: true },
@@ -109,6 +109,7 @@ describe('built-in weixin history command release artifacts', () => {
       ],
       columns: ['nickname', 'fakeid', 'alias'],
     });
+    expect(byName.has('accounts')).toBe(false);
     const articles = byName.get('articles') as { args: Array<Record<string, unknown>> };
     expect(articles).toMatchObject({
       browser: 'conditional',
@@ -252,7 +253,7 @@ describe('built-in weixin history command release artifacts', () => {
     const oldPlan = fs.readFileSync(path.join(root, 'docs/superpowers/plans/2026-07-14-bycli-plugin-wechat.md'), 'utf8');
 
     for (const required of [
-      'weixin accounts', 'weixin articles', 'weixin save-articles',
+      'weixin get-public-account-info', 'weixin articles', 'weixin save-articles',
       'weixin collections', 'weixin collection-detail',
       'weixin user-growth', 'weixin user-attributes',
       'weixin freepublish-list', 'weixin freepublish-get',

@@ -28755,51 +28755,6 @@
   },
   {
     "site": "weixin",
-    "name": "accounts",
-    "description": "Search WeChat official accounts and return their fakeids",
-    "access": "read",
-    "domain": "mp.weixin.qq.com",
-    "strategy": "intercept",
-    "browser": "conditional",
-    "args": [
-      {
-        "name": "query",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Official-account name to search for"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 10,
-        "required": false,
-        "help": "Maximum number of matching accounts to return"
-      },
-      {
-        "name": "auth-source",
-        "type": "str",
-        "default": "browser",
-        "required": false,
-        "help": "Credential source: browser session or environment variables",
-        "choices": [
-          "browser",
-          "env"
-        ]
-      }
-    ],
-    "columns": [
-      "nickname",
-      "fakeid",
-      "alias"
-    ],
-    "type": "js",
-    "modulePath": "weixin/accounts.js",
-    "sourceFile": "weixin/accounts.js",
-    "navigateBefore": true
-  },
-  {
-    "site": "weixin",
     "name": "article-fetch",
     "description": "Fetch one published Weixin article with optional browser fallback",
     "access": "read",
@@ -28909,7 +28864,7 @@
         "type": "str",
         "required": true,
         "positional": true,
-        "help": "Official-account fakeid returned by weixin accounts"
+        "help": "Official-account fakeid returned by weixin get-public-account-info"
       },
       {
         "name": "name",
@@ -29516,6 +29471,51 @@
   },
   {
     "site": "weixin",
+    "name": "get-public-account-info",
+    "description": "Search WeChat official accounts and return their fakeids",
+    "access": "read",
+    "domain": "mp.weixin.qq.com",
+    "strategy": "intercept",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Official-account name to search for"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Maximum number of matching accounts to return"
+      },
+      {
+        "name": "auth-source",
+        "type": "str",
+        "default": "browser",
+        "required": false,
+        "help": "Credential source: browser session or environment variables",
+        "choices": [
+          "browser",
+          "env"
+        ]
+      }
+    ],
+    "columns": [
+      "nickname",
+      "fakeid",
+      "alias"
+    ],
+    "type": "js",
+    "modulePath": "weixin/get-public-account-info.js",
+    "sourceFile": "weixin/get-public-account-info.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "weixin",
     "name": "home-overview",
     "aliases": [
       "overview",
@@ -29765,7 +29765,7 @@
         "type": "str",
         "required": true,
         "positional": true,
-        "help": "Official-account fakeid returned by weixin accounts"
+        "help": "Official-account fakeid returned by weixin get-public-account-info"
       },
       {
         "name": "name",
