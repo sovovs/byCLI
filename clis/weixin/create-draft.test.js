@@ -9,6 +9,7 @@ getRegistry().delete('weixin/create-draft');
 await import('./create-draft.js');
 
 const command = getRegistry().get('weixin/create-draft');
+const pasteModifier = process.platform === 'darwin' ? 'Meta' : 'Ctrl';
 let temporaryDirectory;
 let validCover;
 
@@ -281,7 +282,7 @@ describe('weixin create-draft command', () => {
 
         const scripts = page.evaluate.mock.calls.map(([script]) => String(script));
         expect(scripts.some(script => script.includes('setContent'))).toBe(false);
-        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', [pasteModifier]);
     });
 
     it('pastes HTML through the native clipboard when the editor is ProseMirror', async () => {
@@ -312,7 +313,7 @@ describe('weixin create-draft command', () => {
             detail: '"title"',
         }]);
 
-        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', [pasteModifier]);
     });
 
     it('supports a no-save HTML insertion check for browser verification', async () => {
@@ -377,7 +378,7 @@ describe('weixin create-draft command', () => {
 
         expect(page.nativeKeyPress).toHaveBeenCalledTimes(3);
         expect(page.nativeKeyPress).toHaveBeenCalledWith('Backspace', []);
-        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', ['Meta']);
+        expect(page.nativeKeyPress).toHaveBeenCalledWith('v', [pasteModifier]);
         const uploadPollScript = page.evaluate.mock.calls
             .map(([script]) => String(script))
             .find((script) => script.includes("var editors = document.querySelectorAll('#ueditor_0"));
