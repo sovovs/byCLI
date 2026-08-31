@@ -204,6 +204,12 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
     }
     return cleanValueText(node);
   };
+  const textWithout = (node, selector) => {
+    if (!node) return null;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(selector).forEach(item => item.remove());
+    return compact(copy.textContent);
+  };
   const switchValue = row => {
     const node = firstVisible(row, [
       'input[type="checkbox"]',
@@ -263,6 +269,45 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
     const label = compact(heading && heading.textContent)
       || compact(sectionNode.getAttribute('aria-label'))
       || '其他信息';
+    const authorizationTable = Array.from(sectionNode.querySelectorAll('table'))
+      .filter(visible)
+      .find(table => {
+        const headers = Array.from(table.querySelectorAll('thead th, tr > th'))
+          .filter(visible)
+          .map(node => compact(node.textContent));
+        return headers.includes('第三方平台名称')
+          && headers.includes('已授权权限')
+          && headers.includes('授权时间');
+      }) || null;
+    const records = authorizationTable === null ? null : Array.from(
+      authorizationTable.querySelectorAll('tbody > tr, tr'),
+    ).filter(visible).flatMap(row => {
+      const cells = Array.from(row.querySelectorAll(':scope > td')).filter(visible);
+      if (cells.length < 3 || row.querySelector('.empty_tips')) return [];
+      const nameNode = firstVisible(cells[0], [
+        '.plugin_info h4',
+        '.plugin_info .name',
+        'h4',
+      ]);
+      const name = compact(nameNode && nameNode.textContent);
+      if (!name) return [];
+      const descriptionNode = firstVisible(cells[0], [
+        '.plugin_info .desc',
+        '.plugin_info p',
+      ]);
+      const permissions = Array.from(cells[1].querySelectorAll('.privilege'))
+        .filter(visible)
+        .flatMap(node => {
+          const permission = textWithout(node, '.dot');
+          return permission ? [permission] : [];
+        });
+      return [{
+        name,
+        description: compact(descriptionNode && descriptionNode.textContent),
+        permissions,
+        authorized_at: cleanValueText(cells[2]),
+      }];
+    });
     let rows = Array.from(sectionNode.querySelectorAll(rowSelector)).filter(visible);
     rows = rows.filter(node => !rows.some(other => other !== node && other.contains(node)));
     const fields = [];
@@ -339,7 +384,10 @@ export const USER_INFO_EXTRACT_SCRIPT = `(() => {
       }
     }
 
-    if (fields.length > 0) return [{ label, fields }];
+    if (fields.length > 0 || (records && records.length > 0)) {
+      return [{ label, fields, ...(records === null ? {} : { records }) }];
+    }
+    if (records !== null) return [{ label, fields, records, empty: true }];
     const empty = Boolean(sectionNode.querySelector('table thead th, table tr > th'));
     return empty ? [{ label, fields, empty: true }] : [];
   });
@@ -358,6 +406,25 @@ function normalizeField(field, tabLabel, sectionIndex, fieldIndex) {
   return {
     label,
     value: typeof field.value === 'boolean' ? field.value : text(field.value),
+  };
+}
+
+function normalizeAuthorizationRecord(record, tabLabel, sectionIndex, recordIndex) {
+  const prefix = `WeChat ${tabLabel} returned an invalid authorization record at section ${sectionIndex} index ${recordIndex}`;
+  execution(object(record), prefix);
+  const name = text(record.name);
+  const authorizedAt = text(record.authorized_at);
+  execution(name && authorizedAt && Array.isArray(record.permissions), prefix);
+  const permissions = record.permissions.map((permission, permissionIndex) => {
+    const normalized = text(permission);
+    execution(normalized, `${prefix} permission ${permissionIndex}`);
+    return normalized;
+  });
+  return {
+    name,
+    description: text(record.description),
+    permissions,
+    authorized_at: authorizedAt,
   };
 }
 
@@ -381,8 +448,14 @@ export function normalizeUserInfoTab(tabId, payload) {
     const fields = rawFields.map((field, fieldIndex) => (
       normalizeField(field, definition.label, sectionIndex, fieldIndex)
     ));
-    return fields.length > 0 || section.empty === true
-      ? [{ label, fields }]
+    const hasRecords = Object.prototype.hasOwnProperty.call(section, 'records');
+    const rawRecords = hasRecords ? section.records : [];
+    execution(Array.isArray(rawRecords), prefix);
+    const records = rawRecords.map((record, recordIndex) => (
+      normalizeAuthorizationRecord(record, definition.label, sectionIndex, recordIndex)
+    ));
+    return fields.length > 0 || records.length > 0 || section.empty === true
+      ? [{ label, fields, ...(hasRecords ? { records } : {}) }]
       : [];
   });
 

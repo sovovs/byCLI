@@ -26,8 +26,18 @@ const RAW_TABS = [
     }],
   },
   {
-    available: false,
-    sections: [],
+    available: true,
+    sections: [{
+      label: '第三方平台',
+      fields: [],
+      records: [{
+        name: '抽奖助手',
+        description: '免费、稳定的抽奖工具',
+        permissions: ['消息管理', '用户管理'],
+        authorized_at: '2021-9-15 19:19',
+        action: '查看平台详情',
+      }],
+    }],
   },
 ];
 
@@ -110,7 +120,20 @@ describe('weixin user-info command', () => {
           fields: [{ label: '留言功能', value: '已开启' }],
         }],
       },
-      { label: '授权管理', available: false, sections: [] },
+      {
+        label: '授权管理',
+        available: true,
+        sections: [{
+          label: '第三方平台',
+          fields: [],
+          records: [{
+            name: '抽奖助手',
+            description: '免费、稳定的抽奖工具',
+            permissions: ['消息管理', '用户管理'],
+            authorized_at: '2021-9-15 19:19',
+          }],
+        }],
+      },
     ]);
   });
 

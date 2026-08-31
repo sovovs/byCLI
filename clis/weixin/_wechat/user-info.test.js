@@ -109,11 +109,41 @@ describe('weixin account settings helpers', () => {
   it('preserves an explicitly recognized empty section', () => {
     expect(normalizeUserInfoTab('authorization_management', {
       available: true,
-      sections: [{ label: '第三方平台', fields: [], actions: [], empty: true }],
+      sections: [{ label: '第三方平台', fields: [], records: [], actions: [], empty: true }],
     })).toEqual({
       label: '授权管理',
       available: true,
-      sections: [{ label: '第三方平台', fields: [] }],
+      sections: [{ label: '第三方平台', fields: [], records: [] }],
+    });
+  });
+
+  it('normalizes third-party authorization records without action data', () => {
+    expect(normalizeUserInfoTab('authorization_management', {
+      available: true,
+      sections: [{
+        label: ' 第三方平台 ',
+        fields: [],
+        records: [{
+          name: ' 抽奖助手 ',
+          description: ' 免费、稳定的抽奖工具 ',
+          permissions: [' 消息管理 ', ' 用户管理 '],
+          authorized_at: ' 2021-9-15 19:19 ',
+          action: '查看平台详情',
+        }],
+      }],
+    })).toEqual({
+      label: '授权管理',
+      available: true,
+      sections: [{
+        label: '第三方平台',
+        fields: [],
+        records: [{
+          name: '抽奖助手',
+          description: '免费、稳定的抽奖工具',
+          permissions: ['消息管理', '用户管理'],
+          authorized_at: '2021-9-15 19:19',
+        }],
+      }],
     });
   });
 
@@ -530,7 +560,77 @@ describe('weixin account settings browser extraction', () => {
 
     expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT)).toEqual({
       available: true,
-      sections: [{ label: '第三方平台', fields: [], empty: true }],
+      sections: [{ label: '第三方平台', fields: [], records: [], empty: true }],
+    });
+  });
+
+  it('extracts third-party authorization rows without the operation column', () => {
+    const dom = new JSDOM(`
+      <section class="setting_area">
+        <h3>第三方平台</h3>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="table_cell tl plugin_name">第三方平台名称</th>
+              <th class="table_cell tl">已授权权限</th>
+              <th class="table_cell tl">授权时间</th>
+              <th class="table_cell tr">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="table_cell plugin_name">
+                <div class="plugin_logo"><img src="/logo.png"></div>
+                <div class="plugin_info">
+                  <h4>抽奖助手</h4>
+                  <p class="desc">免费、稳定的抽奖工具</p>
+                </div>
+              </td>
+              <td class="table_cell">
+                <p class="privilege"><i class="dot">●</i>消息管理</p>
+                <p class="privilege"><i class="dot">●</i>用户管理</p>
+              </td>
+              <td class="table_cell">2021-9-15 19:19</td>
+              <td class="table_cell tr"><a class="js_auth">查看平台详情</a></td>
+            </tr>
+            <tr>
+              <td class="table_cell plugin_name">
+                <div class="plugin_info">
+                  <h4>互动酷</h4>
+                  <p class="desc">公众号应用和小程序平台</p>
+                </div>
+              </td>
+              <td class="table_cell">
+                <p class="privilege"><i class="dot">●</i>网页服务</p>
+              </td>
+              <td class="table_cell">2021-6-9 19:16</td>
+              <td class="table_cell tr"><a class="js_auth">查看平台详情</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    `, { runScripts: 'outside-only', url: 'https://mp.weixin.qq.com/cgi-bin/settingpage' });
+
+    expect(dom.window.eval(USER_INFO_EXTRACT_SCRIPT)).toEqual({
+      available: true,
+      sections: [{
+        label: '第三方平台',
+        fields: [],
+        records: [
+          {
+            name: '抽奖助手',
+            description: '免费、稳定的抽奖工具',
+            permissions: ['消息管理', '用户管理'],
+            authorized_at: '2021-9-15 19:19',
+          },
+          {
+            name: '互动酷',
+            description: '公众号应用和小程序平台',
+            permissions: ['网页服务'],
+            authorized_at: '2021-6-9 19:16',
+          },
+        ],
+      }],
     });
   });
 
