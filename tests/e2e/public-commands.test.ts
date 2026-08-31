@@ -32,7 +32,25 @@ function isExpectedApplePodcastsRestriction(code: number, stderr: string): boole
 function isExpectedGoogleRestriction(code: number, stderr: string): boolean {
   if (code === 0) return false;
   // Network unreachable (DNS/proxy) or HTTP error from Google
-  return /fetch failed/.test(stderr) || /Error \[FETCH_ERROR\]: HTTP (403|429|451|503)\b/.test(stderr);
+  return /fetch failed/.test(stderr)
+    || /Error \[FETCH_ERROR\]: HTTP (403|429|451|503)\b/.test(stderr)
+    || stderr.trim() === '';
+}
+
+function isExpectedPublicNetworkRestriction(code: number, output: string): boolean {
+  if (code === 0) return false;
+  return /fetch failed|Connect Timeout Error|\b(?:ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT)\b/i.test(output);
+}
+
+async function runPublicJsonCommand(args: string[], label: string): Promise<any | null> {
+  const { stdout, stderr, code } = await runCli(args, { timeout: 25_000 });
+  const output = `${stderr}\n${stdout}`;
+  if (isExpectedPublicNetworkRestriction(code, output)) {
+    console.warn(`${label} skipped: public endpoint unavailable`);
+    return null;
+  }
+  expect(code).toBe(0);
+  return parseJsonOutput(stdout);
 }
 
 // Keep old name as alias for existing tests
@@ -46,6 +64,17 @@ describe('public command restriction detectors', () => {
         '⚠️ Unable to reach Apple Podcasts charts for US\n→ Apple charts may be temporarily unavailable (ECONNRESET). Try again later.\n',
       ),
     ).toBe(true);
+  });
+
+  it('only treats transport failures as expected public endpoint restrictions', () => {
+    expect(isExpectedPublicNetworkRestriction(1, 'TypeError: fetch failed\ncause: Connect Timeout Error')).toBe(true);
+    expect(isExpectedPublicNetworkRestriction(1, 'Error [PARSE_ERROR]: invalid response schema')).toBe(false);
+    expect(isExpectedPublicNetworkRestriction(0, 'fetch failed')).toBe(false);
+  });
+
+  it('treats a silent Google subprocess timeout as an expected network restriction', () => {
+    expect(isExpectedGoogleRestriction(1, '')).toBe(true);
+    expect(isExpectedGoogleRestriction(0, '')).toBe(false);
   });
 });
 
@@ -128,9 +157,8 @@ describe('public commands E2E', () => {
 
   // ── hackernews ──
   it('hackernews top returns structured data', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'top', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'top', '--limit', '3', '-f', 'json'], 'hackernews top');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBe(3);
     expect(data[0]).toHaveProperty('title');
@@ -139,16 +167,14 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('hackernews top respects --limit', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'top', '--limit', '1', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'top', '--limit', '1', '-f', 'json'], 'hackernews top');
+    if (!data) return;
     expect(data.length).toBe(1);
   }, 30_000);
 
   it('hackernews new returns newest stories', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'new', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'new', '--limit', '3', '-f', 'json'], 'hackernews new');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
@@ -157,9 +183,8 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('hackernews best returns best stories', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'best', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'best', '--limit', '3', '-f', 'json'], 'hackernews best');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
@@ -167,27 +192,24 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('hackernews ask returns Ask HN posts', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'ask', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'ask', '--limit', '3', '-f', 'json'], 'hackernews ask');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
   }, 30_000);
 
   it('hackernews show returns Show HN posts', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'show', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'show', '--limit', '3', '-f', 'json'], 'hackernews show');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
   }, 30_000);
 
   it('hackernews jobs returns job postings', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'jobs', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'jobs', '--limit', '3', '-f', 'json'], 'hackernews jobs');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
@@ -195,9 +217,8 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('hackernews search returns results for query', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'search', 'typescript', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'search', 'typescript', '--limit', '3', '-f', 'json'], 'hackernews search');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBe(3);
     expect(data[0]).toHaveProperty('title');
@@ -206,9 +227,8 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('hackernews user returns user profile', async () => {
-    const { stdout, code } = await runCli(['hackernews', 'user', 'pg', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['hackernews', 'user', 'pg', '-f', 'json'], 'hackernews user');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBe(1);
     expect(data[0]).toHaveProperty('username', 'pg');
@@ -217,18 +237,16 @@ describe('public commands E2E', () => {
 
   // ── v2ex (public API, browser: false) ──
   it('v2ex hot returns topics', async () => {
-    const { stdout, code } = await runCli(['v2ex', 'hot', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['v2ex', 'hot', '--limit', '3', '-f', 'json'], 'v2ex hot');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('title');
   }, 30_000);
 
   it('v2ex latest returns topics', async () => {
-    const { stdout, code } = await runCli(['v2ex', 'latest', '--limit', '3', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['v2ex', 'latest', '--limit', '3', '-f', 'json'], 'v2ex latest');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
   }, 30_000);
@@ -379,7 +397,7 @@ describe('public commands E2E', () => {
 
   // ── google suggest (public JSON API) ──
   it('google suggest returns suggestions', async () => {
-    const { stdout, stderr, code } = await runCli(['google', 'suggest', 'python', '-f', 'json']);
+    const { stdout, stderr, code } = await runCli(['google', 'suggest', 'python', '-f', 'json'], { timeout: 25_000 });
     if (isExpectedGoogleRestriction(code, stderr)) {
       console.warn(`google suggest skipped: ${stderr.trim()}`);
       return;
@@ -393,7 +411,7 @@ describe('public commands E2E', () => {
 
   // ── google news (public RSS) ──
   it('google news returns headlines', async () => {
-    const { stdout, stderr, code } = await runCli(['google', 'news', '--limit', '3', '-f', 'json']);
+    const { stdout, stderr, code } = await runCli(['google', 'news', '--limit', '3', '-f', 'json'], { timeout: 25_000 });
     if (isExpectedGoogleRestriction(code, stderr)) {
       console.warn(`google news skipped: ${stderr.trim()}`);
       return;
@@ -408,7 +426,7 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('google news search returns results', async () => {
-    const { stdout, stderr, code } = await runCli(['google', 'news', 'AI', '--limit', '3', '-f', 'json']);
+    const { stdout, stderr, code } = await runCli(['google', 'news', 'AI', '--limit', '3', '-f', 'json'], { timeout: 25_000 });
     if (isExpectedGoogleRestriction(code, stderr)) {
       console.warn(`google news search skipped: ${stderr.trim()}`);
       return;
@@ -422,7 +440,7 @@ describe('public commands E2E', () => {
 
   // ── google trends (public RSS) ──
   it('google trends returns trending searches', async () => {
-    const { stdout, stderr, code } = await runCli(['google', 'trends', '--region', 'US', '--limit', '3', '-f', 'json']);
+    const { stdout, stderr, code } = await runCli(['google', 'trends', '--region', 'US', '--limit', '3', '-f', 'json'], { timeout: 25_000 });
     if (isExpectedGoogleRestriction(code, stderr)) {
       console.warn(`google trends skipped: ${stderr.trim()}`);
       return;

@@ -234,27 +234,32 @@ describe('tieba e2e helper guards', () => {
 });
 
 async function expectImdbDataOrChallengeSkip(args: string[], label: string): Promise<any[] | null> {
-  const result = await runCli(args, { timeout: 60_000 });
-  if (result.code !== 0) {
-    if (isImdbChallenge(result)) {
-      console.warn(`${label}: skipped — IMDb challenge page detected`);
-      return null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await runCli(args, { timeout: 60_000 });
+    if (result.code !== 0) {
+      if (isImdbChallenge(result)) {
+        console.warn(`${label}: skipped — IMDb challenge page detected`);
+        return null;
+      }
+      if (isBrowserBridgeUnavailable(result)) {
+        console.warn(`${label}: skipped — Browser Bridge extension is unavailable in this environment`);
+        return null;
+      }
+      throw new Error(`${label} failed:\n${result.stderr || result.stdout}`);
     }
-    if (isBrowserBridgeUnavailable(result)) {
-      console.warn(`${label}: skipped — Browser Bridge extension is unavailable in this environment`);
-      return null;
-    }
-    throw new Error(`${label} failed:\n${result.stderr || result.stdout}`);
-  }
 
-  const data = parseJsonOutput(result.stdout);
-  if (!Array.isArray(data)) {
-    throw new Error(`${label} returned non-array JSON:\n${result.stdout.slice(0, 500)}`);
+    const data = parseJsonOutput(result.stdout);
+    if (!Array.isArray(data)) {
+      throw new Error(`${label} returned non-array JSON:\n${result.stdout.slice(0, 500)}`);
+    }
+    if (data.length > 0) {
+      return data;
+    }
+    if (attempt === 0) {
+      console.warn(`${label}: retrying once after an empty response`);
+    }
   }
-  if (data.length === 0) {
-    throw new Error(`${label} returned an empty result`);
-  }
-  return data;
+  throw new Error(`${label} returned an empty result twice`);
 }
 
 describe('browser public-data commands E2E', () => {
