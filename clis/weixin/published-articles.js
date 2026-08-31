@@ -17,6 +17,12 @@ function sourceValue(value) {
   return source;
 }
 
+function limitValue(value) {
+  const limit = value ?? 20;
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new ArgumentError('limit must be a positive safe integer');
+  return limit;
+}
+
 export function projectOfficialRows(rows, fallbackReason = null) {
   return rows.map(row => ({
     article_id: row.article_id, title: row.title, author: row.author, digest: row.digest,
@@ -39,6 +45,29 @@ async function browserRows(page, args, fallbackReason) {
   }));
 }
 
+async function officialRows(args) {
+  const limit = limitValue(args.limit);
+  const rows = [];
+  let offset = 0;
+  while (rows.length < limit) {
+    const remaining = limit - rows.length;
+    const count = remaining > 20 ? 20 : remaining;
+    let pageRows;
+    try {
+      pageRows = await freepublishListCommand.func({
+        ...args, offset, count, content: args.content ?? 'none',
+      });
+    } catch (error) {
+      if (error instanceof EmptyResultError && rows.length > 0) break;
+      throw error;
+    }
+    rows.push(...pageRows);
+    offset += count;
+    if (pageRows.length < count) break;
+  }
+  return rows.slice(0, limit);
+}
+
 export const publishedArticlesCommand = cli({
   site: 'weixin', name: 'published-articles', access: 'read', domain: 'mp.weixin.qq.com',
   description: 'List published Weixin articles with optional official-API-to-browser fallback',
@@ -56,17 +85,17 @@ export const publishedArticlesCommand = cli({
   columns: FACADE_COLUMNS,
   func: async (page, args) => {
     const source = sourceValue(args.source);
-    if (source === 'browser') return browserRows(page, args, null);
+    const limit = limitValue(args.limit);
+    const normalizedArgs = { ...args, limit };
+    if (source === 'browser') return browserRows(page, normalizedArgs, null);
     const credentials = readOfficialApiCredentials(args);
-    if (source === 'auto' && !credentials.configured) return browserRows(page, args, 'api-not-configured');
+    if (source === 'auto' && !credentials.configured) return browserRows(page, normalizedArgs, 'api-not-configured');
     try {
-      const rows = await freepublishListCommand.func({
-        ...args, offset: 0, count: Math.min(args.limit ?? 20, 20), content: args.content ?? 'none',
-      });
+      const rows = await officialRows(normalizedArgs);
       return projectOfficialRows(rows);
     } catch (error) {
       if (source === 'auto' && isFreepublishFallbackEligible(error)) {
-        return browserRows(page, args, 'api-not-authorized');
+        return browserRows(page, normalizedArgs, 'api-not-authorized');
       }
       if (error instanceof EmptyResultError) throw error;
       throw error;
