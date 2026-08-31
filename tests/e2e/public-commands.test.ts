@@ -39,7 +39,7 @@ function isExpectedGoogleRestriction(code: number, stderr: string): boolean {
 
 function isExpectedPublicNetworkRestriction(code: number, output: string): boolean {
   if (code === 0) return false;
-  return /fetch failed|Connect Timeout Error|\b(?:ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT)\b/i.test(output);
+  return /fetch failed|Connect Timeout Error|operation was aborted|\b(?:AbortError|TimeoutError|ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|timed? ?out)\b/i.test(output);
 }
 
 async function runPublicJsonCommand(args: string[], label: string): Promise<any | null> {
@@ -49,7 +49,9 @@ async function runPublicJsonCommand(args: string[], label: string): Promise<any 
     console.warn(`${label} skipped: public endpoint unavailable`);
     return null;
   }
-  expect(code).toBe(0);
+  if (code !== 0) {
+    throw new Error(`${label} failed with exit code ${code}:\n${output.trim() || '(no output)'}`);
+  }
   return parseJsonOutput(stdout);
 }
 
@@ -68,6 +70,8 @@ describe('public command restriction detectors', () => {
 
   it('only treats transport failures as expected public endpoint restrictions', () => {
     expect(isExpectedPublicNetworkRestriction(1, 'TypeError: fetch failed\ncause: Connect Timeout Error')).toBe(true);
+    expect(isExpectedPublicNetworkRestriction(1, 'AbortError: This operation was aborted')).toBe(true);
+    expect(isExpectedPublicNetworkRestriction(1, 'Request timed out')).toBe(true);
     expect(isExpectedPublicNetworkRestriction(1, 'Error [PARSE_ERROR]: invalid response schema')).toBe(false);
     expect(isExpectedPublicNetworkRestriction(0, 'fetch failed')).toBe(false);
   });
