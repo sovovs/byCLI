@@ -510,9 +510,8 @@ describe('public commands E2E', () => {
 
   // ── dictionary (public API, browser: false) ──
   it('dictionary search returns word definitions', async () => {
-    const { stdout, code } = await runCli(['dictionary', 'search', 'serendipity', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['dictionary', 'search', 'serendipity', '-f', 'json'], 'dictionary search');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('word', 'serendipity');
@@ -521,9 +520,8 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('dictionary synonyms returns synonyms', async () => {
-    const { stdout, code } = await runCli(['dictionary', 'synonyms', 'serendipity', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['dictionary', 'synonyms', 'serendipity', '-f', 'json'], 'dictionary synonyms');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('word', 'serendipity');
@@ -531,9 +529,8 @@ describe('public commands E2E', () => {
   }, 30_000);
 
   it('dictionary examples returns examples', async () => {
-    const { stdout, code } = await runCli(['dictionary', 'examples', 'perfect', '-f', 'json']);
-    expect(code).toBe(0);
-    const data = parseJsonOutput(stdout);
+    const data = await runPublicJsonCommand(['dictionary', 'examples', 'perfect', '-f', 'json'], 'dictionary examples');
+    if (!data) return;
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data[0]).toHaveProperty('word', 'perfect');
