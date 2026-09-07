@@ -1,6 +1,7 @@
 import { listKnowledgeBases, readKnowledgeBaseFromApi } from './native-api.js';
 
 const IMA_WIKIS_URL = 'https://ima.qq.com/wikis';
+const IMA_GET_MEDIA_URL = 'https://ima.qq.com/cgi-bin/file_manager/get_media';
 
 function codedError(code, message) {
     return Object.assign(new Error(message), { code });
@@ -83,4 +84,24 @@ export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}
     } finally {
         await releaseImaAuth(page, authId);
     }
+}
+
+export async function readImaMediaUrl(page, item, dependencies = {}) {
+    if (!page || typeof page.fetchJson !== 'function') {
+        throw codedError('IMA_ORIGINAL_URL_UNAVAILABLE', 'IMA browser page cannot call get_media');
+    }
+    const response = await page.fetchJson(IMA_GET_MEDIA_URL, {
+        method: 'POST',
+        body: {
+            knowledgeBaseId: String(item?.knowledgeBaseId ?? item?.knowledge_base_id ?? ''),
+            mediaId: String(item?.mediaId ?? item?.media_id ?? ''),
+            scene: dependencies.scene ?? 4,
+        },
+    });
+    const data = response && typeof response === 'object' ? response : {};
+    const url = data.jumpUrlInfo?.url ?? data.jump_url_info?.url;
+    if (Number(data.action) !== 1 || typeof url !== 'string' || !url) {
+        throw codedError('IMA_ORIGINAL_URL_UNAVAILABLE', data.toastText || data.toast_text || 'IMA did not return an exportable file URL');
+    }
+    return url;
 }

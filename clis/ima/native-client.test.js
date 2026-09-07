@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { readKnowledgeBaseFromChrome, readKnowledgeBasesFromChrome } from './native-client.js';
+import { readKnowledgeBaseFromChrome, readKnowledgeBasesFromChrome, readImaMediaUrl } from './native-client.js';
 
 function readerResponse(path) {
     if (path === '/get_knowledge_base_list') {
@@ -27,6 +27,22 @@ function readerResponse(path) {
 }
 
 describe('readKnowledgeBaseFromChrome', () => {
+    it('reads the signed media URL from get_media', async () => {
+        const page = { fetchJson: vi.fn(async () => ({ code: 0, action: 1, jump_url_info: { url: 'https://res-skb.ima.qq.com/a.pdf?sign=x' } })) };
+        await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }))
+            .resolves.toBe('https://res-skb.ima.qq.com/a.pdf?sign=x');
+        expect(page.fetchJson).toHaveBeenCalledWith(
+            'https://ima.qq.com/cgi-bin/file_manager/get_media',
+            expect.objectContaining({ method: 'POST', body: { knowledgeBaseId: 'kb-1', mediaId: 'm-1', scene: 4 } }),
+        );
+    });
+
+    it('reports when get_media has no exportable URL', async () => {
+        const page = { fetchJson: vi.fn(async () => ({ code: 0, action: 2, jump_url_info: null, toast_text: '请前往客户端查看内容' })) };
+        await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }))
+            .rejects.toMatchObject({ code: 'IMA_ORIGINAL_URL_UNAVAILABLE' });
+    });
+
     it('lists knowledge bases with an opaque Chrome auth ID and releases it', async () => {
         const page = {
             startImaAuthCapture: vi.fn(async () => {}),

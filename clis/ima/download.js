@@ -3,7 +3,7 @@ import path from 'node:path';
 import { httpDownload } from '@sovovs/bycli/download';
 import { cli, Strategy } from '@sovovs/bycli/registry';
 import { CommandExecutionError, EmptyResultError } from '@sovovs/bycli/errors';
-import { readKnowledgeBaseFromChrome } from './native-client.js';
+import { readImaMediaUrl, readKnowledgeBaseFromChrome } from './native-client.js';
 import { extractOriginUrl, resolveOutputPath, sha256File } from './download-utils.js';
 
 function countPdfPages(filePath) {
@@ -31,6 +31,7 @@ export async function runDownloadCommand(page, kwargs, deps = {}) {
     if (currentUrl?.includes('originUrl=')) originUrl = extractOriginUrl(currentUrl);
   }
   if (!originUrl && deps.readOriginalUrl) originUrl = await deps.readOriginalUrl(item);
+  if (!originUrl && page.fetchJson) originUrl = await readImaMediaUrl(page, { ...item, knowledgeBaseId: item.knowledgeBaseId || envelope.knowledgeBaseId });
   if (!originUrl && process.platform === 'darwin') {
     const { readKnowledgeBase: readKnowledgeBaseFromDesktop } = await import('./ax.js');
     const desktop = await Promise.resolve(readKnowledgeBaseFromDesktop(kb));
