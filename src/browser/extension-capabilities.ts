@@ -7,6 +7,7 @@ const IMA_READER_ACTIONS = new Set([
   'ima-auth-start',
   'ima-auth-read',
   'ima-reader-request',
+  'ima-media-request',
   'ima-auth-release',
 ]);
 

@@ -27,7 +27,7 @@ function generateId(): string {
 
 export interface DaemonCommand {
   id: string;
-  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'set-file-input' | 'insert-text' | 'bind' | 'network-capture-start' | 'network-capture-read' | 'ima-auth-start' | 'ima-auth-read' | 'ima-reader-request' | 'ima-auth-release' | 'wait-download' | 'cdp' | 'frames';
+  action: 'exec' | 'navigate' | 'tabs' | 'cookies' | 'screenshot' | 'close-window' | 'set-file-input' | 'insert-text' | 'bind' | 'network-capture-start' | 'network-capture-read' | 'ima-auth-start' | 'ima-auth-read' | 'ima-reader-request' | 'ima-media-request' | 'ima-auth-release' | 'wait-download' | 'cdp' | 'frames';
   /** Target page identity (targetId). Cross-layer contract with the extension. */
   page?: string;
   code?: string;
@@ -58,6 +58,7 @@ export interface DaemonCommand {
   authId?: string;
   readerPath?: string;
   readerBody?: Record<string, unknown>;
+  mediaBody?: Record<string, unknown>;
   /** Download wait timeout in milliseconds */
   timeoutMs?: number;
   cdpMethod?: string;

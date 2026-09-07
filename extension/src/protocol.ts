@@ -21,6 +21,7 @@ export type Action =
   | 'ima-auth-start'
   | 'ima-auth-read'
   | 'ima-reader-request'
+  | 'ima-media-request'
   | 'ima-auth-release'
   | 'ui-capture-start'
   | 'ui-capture-read'
@@ -96,6 +97,7 @@ export interface Command {
   readerPath?: string;
   /** JSON body for an allow-listed ima reader endpoint. */
   readerBody?: Record<string, unknown>;
+  mediaBody?: Record<string, unknown>;
 }
 
 export interface Result {

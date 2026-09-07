@@ -1124,6 +1124,8 @@ async function handleCommand(cmd: Command): Promise<Result> {
         return await handleImaAuthRead(cmd, leaseKey);
       case 'ima-reader-request':
         return await handleImaReaderRequest(cmd, leaseKey);
+      case 'ima-media-request':
+        return await handleImaMediaRequest(cmd, leaseKey);
       case 'ima-auth-release':
         return await handleImaAuthRelease(cmd, leaseKey);
       case 'ui-capture-start':
@@ -2031,6 +2033,18 @@ async function handleImaReaderRequest(cmd: Command, leaseKey: string): Promise<R
   const tabId = await resolveTabId(cmdTabId, leaseKey);
   const data = await executor.requestImaReader(tabId, cmd.authId, cmd.readerPath, cmd.readerBody);
   return pageScopedResult(cmd.id, tabId, data);
+}
+
+async function handleImaMediaRequest(cmd: Command, leaseKey: string): Promise<Result> {
+  if (!cmd.authId || !cmd.mediaBody) return { id: cmd.id, ok: false, error: 'Missing ima media request payload' };
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    const data = await executor.requestImaMedia(tabId, cmd.authId, cmd.mediaBody);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function handleImaAuthRelease(cmd: Command, leaseKey: string): Promise<Result> {

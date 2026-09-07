@@ -141,6 +141,7 @@ const READER_PATHS = /* @__PURE__ */ new Set([
   "/get_knowledge_base_list",
   "/get_knowledge_list"
 ]);
+const MEDIA_PATH = "/cgi-bin/file_manager/get_media";
 const AUTH_SOURCE_PATHS = /* @__PURE__ */ new Set([
   "/cgi-bin/activity_tab/get_available_activities"
 ]);
@@ -162,6 +163,14 @@ function isImaReaderRequest(url) {
     return false;
   }
 }
+function isImaMediaRequest(url) {
+  try {
+    const parsed = new URL(url ?? "");
+    return parsed.origin === READER_ORIGIN && parsed.pathname === MEDIA_PATH;
+  } catch {
+    return false;
+  }
+}
 function imaBknFromCookie(cookie) {
   const token = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("IMA-TOKEN="))?.slice("IMA-TOKEN=".length);
   if (!token) return null;
@@ -172,7 +181,7 @@ function imaBknFromCookie(cookie) {
 class ImaReaderAuthStore {
   sessions = /* @__PURE__ */ new Map();
   capture(tabId, request) {
-    if (!isImaReaderRequest(request.url)) return false;
+    if (!isImaReaderRequest(request.url) && !isImaMediaRequest(request.url)) return false;
     const headers = normalizedHeaders(request.headers);
     if (!headers["x-ima-cookie"]) return false;
     headers["x-ima-bkn"] ??= imaBknFromCookie(headers["x-ima-cookie"]) ?? "";
@@ -201,6 +210,11 @@ class ImaReaderAuthStore {
       else return perform(session.headers, body);
     }
     throw new Error("ima reader authentication is missing or expired");
+  }
+  async mediaRequest(tabId, authId, body, perform) {
+    const session = this.sessions.get(tabId);
+    if (!session || session.authId !== authId || session.expiresAt <= Date.now()) throw new Error("ima reader authentication is missing or expired");
+    return perform(session.headers, body);
   }
   release(authId) {
     for (const [tabId, session] of this.sessions) {
@@ -853,6 +867,7 @@ async function startImaReaderAuthCapture(tabId) {
   await chrome.debugger.sendCommand({ tabId }, "Fetch.enable", {
     patterns: [
       { urlPattern: "https://ima.qq.com/cgi-bin/knowledge_tab_reader/*", requestStage: "Request" },
+      { urlPattern: "https://ima.qq.com/cgi-bin/file_manager/get_media", requestStage: "Request" },
       { urlPattern: "https://ima.qq.com/cgi-bin/activity_tab/get_available_activities", requestStage: "Request" }
     ]
   });
@@ -866,8 +881,8 @@ async function startImaReaderAuthCapture(tabId) {
 function readImaReaderAuth(tabId) {
   return imaReaderAuthStore.read(tabId);
 }
-function readerRequestExpression(headers, path, body) {
-  const url = `https://ima.qq.com/cgi-bin/knowledge_tab_reader${path}`;
+function readerRequestExpression(headers, path, body, base = "https://ima.qq.com/cgi-bin/knowledge_tab_reader") {
+  const url = `${base}${path}`;
   const requestHeaders = { "content-type": "application/json", ...headers };
   return `(async () => {
     const response = await fetch(${JSON.stringify(url)}, {
@@ -881,6 +896,9 @@ function readerRequestExpression(headers, path, body) {
 }
 async function requestImaReader(tabId, authId, path, body) {
   return imaReaderAuthStore.request(tabId, authId, path, body, async (headers, requestBody) => evaluate(tabId, readerRequestExpression(headers, path, requestBody), true));
+}
+async function requestImaMedia(tabId, authId, body) {
+  return imaReaderAuthStore.mediaRequest(tabId, authId, body, async (headers, requestBody) => evaluate(tabId, readerRequestExpression(headers, "", requestBody, "https://ima.qq.com/cgi-bin/file_manager/get_media"), true));
 }
 function releaseImaReaderAuth(authId) {
   imaReaderAuthStore.release(authId);
@@ -2412,6 +2430,8 @@ async function handleCommand(cmd) {
         return await handleImaAuthRead(cmd, leaseKey);
       case "ima-reader-request":
         return await handleImaReaderRequest(cmd, leaseKey);
+      case "ima-media-request":
+        return await handleImaMediaRequest(cmd, leaseKey);
       case "ima-auth-release":
         return await handleImaAuthRelease(cmd, leaseKey);
       case "ui-capture-start":
@@ -3150,6 +3170,17 @@ async function handleImaReaderRequest(cmd, leaseKey) {
   const tabId = await resolveTabId(cmdTabId, leaseKey);
   const data = await requestImaReader(tabId, cmd.authId, cmd.readerPath, cmd.readerBody);
   return pageScopedResult(cmd.id, tabId, data);
+}
+async function handleImaMediaRequest(cmd, leaseKey) {
+  if (!cmd.authId || !cmd.mediaBody) return { id: cmd.id, ok: false, error: "Missing ima media request payload" };
+  const cmdTabId = await resolveCommandTabId(cmd);
+  const tabId = await resolveTabId(cmdTabId, leaseKey);
+  try {
+    const data = await requestImaMedia(tabId, cmd.authId, cmd.mediaBody);
+    return pageScopedResult(cmd.id, tabId, data);
+  } catch (err) {
+    return { id: cmd.id, ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 async function handleImaAuthRelease(cmd, leaseKey) {
   if (!cmd.authId) return { id: cmd.id, ok: false, error: "Missing ima reader auth ID" };

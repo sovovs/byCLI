@@ -4,6 +4,7 @@ const READER_PATHS = new Set([
   '/get_knowledge_base_list',
   '/get_knowledge_list',
 ]);
+const MEDIA_PATH = '/cgi-bin/file_manager/get_media';
 const AUTH_SOURCE_PATHS = new Set([
   '/cgi-bin/activity_tab/get_available_activities',
 ]);
@@ -36,6 +37,10 @@ export function isImaReaderRequest(url: string | undefined): boolean {
   }
 }
 
+export function isImaMediaRequest(url: string | undefined): boolean {
+  try { const parsed = new URL(url ?? ''); return parsed.origin === READER_ORIGIN && parsed.pathname === MEDIA_PATH; } catch { return false; }
+}
+
 function imaBknFromCookie(cookie: string): string | null {
   const token = cookie.split(';')
     .map((part) => part.trim())
@@ -51,7 +56,7 @@ export class ImaReaderAuthStore {
   private readonly sessions = new Map<number, ReaderSession>();
 
   capture(tabId: number, request: { url?: string; headers?: Record<string, unknown> }): boolean {
-    if (!isImaReaderRequest(request.url)) return false;
+    if (!isImaReaderRequest(request.url) && !isImaMediaRequest(request.url)) return false;
     const headers = normalizedHeaders(request.headers);
     if (!headers['x-ima-cookie']) return false;
     headers['x-ima-bkn'] ??= imaBknFromCookie(headers['x-ima-cookie']) ?? '';
@@ -88,6 +93,12 @@ export class ImaReaderAuthStore {
       else return perform(session.headers, body);
     }
     throw new Error('ima reader authentication is missing or expired');
+  }
+
+  async mediaRequest<T>(tabId: number, authId: string, body: Record<string, unknown>, perform: (headers: ReaderHeaders, body: Record<string, unknown>) => Promise<T>): Promise<T> {
+    const session = this.sessions.get(tabId);
+    if (!session || session.authId !== authId || session.expiresAt <= Date.now()) throw new Error('ima reader authentication is missing or expired');
+    return perform(session.headers, body);
   }
 
   release(authId: string): void {

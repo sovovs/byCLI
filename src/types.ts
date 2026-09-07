@@ -134,6 +134,7 @@ export interface IPage {
   startImaAuthCapture?(): Promise<void>;
   readImaAuth?(): Promise<{ authId: string } | null>;
   requestImaReader?(authId: string, path: string, body: Record<string, unknown>): Promise<unknown>;
+  requestImaMedia?(authId: string, body: Record<string, unknown>): Promise<unknown>;
   releaseImaAuth?(authId: string): Promise<void>;
   /**
    * Set local file paths on a file input element via CDP DOM.setFileInputFiles.

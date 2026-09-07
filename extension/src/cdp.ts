@@ -959,6 +959,7 @@ export async function startImaReaderAuthCapture(tabId: number): Promise<void> {
   await chrome.debugger.sendCommand({ tabId }, 'Fetch.enable', {
     patterns: [
       { urlPattern: 'https://ima.qq.com/cgi-bin/knowledge_tab_reader/*', requestStage: 'Request' },
+      { urlPattern: 'https://ima.qq.com/cgi-bin/file_manager/get_media', requestStage: 'Request' },
       { urlPattern: 'https://ima.qq.com/cgi-bin/activity_tab/get_available_activities', requestStage: 'Request' },
     ],
   });
@@ -974,8 +975,8 @@ export function readImaReaderAuth(tabId: number): { authId: string } | null {
   return imaReaderAuthStore.read(tabId);
 }
 
-function readerRequestExpression(headers: Record<string, string>, path: string, body: Record<string, unknown>): string {
-  const url = `https://ima.qq.com/cgi-bin/knowledge_tab_reader${path}`;
+function readerRequestExpression(headers: Record<string, string>, path: string, body: Record<string, unknown>, base = 'https://ima.qq.com/cgi-bin/knowledge_tab_reader'): string {
+  const url = `${base}${path}`;
   const requestHeaders = { 'content-type': 'application/json', ...headers };
   return `(async () => {
     const response = await fetch(${JSON.stringify(url)}, {
@@ -996,6 +997,12 @@ export async function requestImaReader(
 ): Promise<unknown> {
   return imaReaderAuthStore.request(tabId, authId, path, body, async (headers, requestBody) => (
     evaluate(tabId, readerRequestExpression(headers, path, requestBody), true)
+  ));
+}
+
+export async function requestImaMedia(tabId: number, authId: string, body: Record<string, unknown>): Promise<unknown> {
+  return imaReaderAuthStore.mediaRequest(tabId, authId, body, async (headers, requestBody) => (
+    evaluate(tabId, readerRequestExpression(headers, '', requestBody, 'https://ima.qq.com/cgi-bin/file_manager/get_media'), true)
   ));
 }
 

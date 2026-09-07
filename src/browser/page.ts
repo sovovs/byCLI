@@ -342,6 +342,10 @@ export class Page extends BasePage {
     });
   }
 
+  async requestImaMedia(authId: string, body: Record<string, unknown>): Promise<unknown> {
+    return sendCommand('ima-media-request', { authId, mediaBody: body, ...this._cmdOpts() });
+  }
+
   async releaseImaAuth(authId: string): Promise<void> {
     await sendCommand('ima-auth-release', { authId, ...this._cmdOpts() });
   }

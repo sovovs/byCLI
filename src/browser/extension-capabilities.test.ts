@@ -36,6 +36,7 @@ describe('extension capability negotiation', () => {
     'ima-auth-start',
     'ima-auth-read',
     'ima-reader-request',
+    'ima-media-request',
     'ima-auth-release',
   ])('requires ima-reader-v1 for %s', (action) => {
     expect(requiredExtensionCapability({ action })).toBe(IMA_READER_CAPABILITY);
