@@ -87,6 +87,26 @@ export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}
 }
 
 export async function readImaMediaUrl(page, item, dependencies = {}) {
+    if (typeof page.requestImaMedia === 'function' && typeof page.startImaAuthCapture === 'function') {
+        const authId = await acquireImaChromeAuth(page, item?.knowledgeBaseId, dependencies);
+        try {
+            const response = await page.requestImaMedia(authId, {
+                knowledgeBaseId: String(item?.knowledgeBaseId ?? ''),
+                mediaId: String(item?.mediaId ?? ''),
+                scene: dependencies.scene ?? 4,
+                ...(item?.shareId ? { shareId: String(item.shareId) } : {}),
+                ...(item?.sourceKnowledgeBaseId ? { sourceKnowledgeBaseId: String(item.sourceKnowledgeBaseId) } : {}),
+            });
+            const data = response && typeof response === 'object' ? response : {};
+            const url = data.jumpUrlInfo?.url ?? data.jump_url_info?.url;
+            if (Number(data.action) !== 1 || typeof url !== 'string' || !url) {
+                throw codedError('IMA_ORIGINAL_URL_UNAVAILABLE', data.toastText || data.toast_text || 'IMA did not return an exportable file URL');
+            }
+            return url;
+        } finally {
+            await releaseImaAuth(page, authId);
+        }
+    }
     if (!page || typeof page.fetchJson !== 'function') {
         throw codedError('IMA_ORIGINAL_URL_UNAVAILABLE', 'IMA browser page cannot call get_media');
     }
