@@ -13548,6 +13548,62 @@
   },
   {
     "site": "ima",
+    "name": "download",
+    "description": "下载 ima 知识库中的原始文件",
+    "access": "read",
+    "domain": "ima.qq.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "knowledgeBase",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "知识库名称或 ID"
+      },
+      {
+        "name": "file",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "文件标题"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": ".",
+        "required": false,
+        "help": "输出文件或目录"
+      },
+      {
+        "name": "mediaId",
+        "type": "str",
+        "required": false,
+        "help": "IMA mediaId，用于精确定位"
+      },
+      {
+        "name": "viewerUrl",
+        "type": "str",
+        "required": false,
+        "help": "已打开的 IMA 查看器 URL（含 originUrl 签名参数）"
+      }
+    ],
+    "columns": [
+      "path",
+      "title",
+      "contentType",
+      "size",
+      "sha256",
+      "pages"
+    ],
+    "type": "js",
+    "modulePath": "ima/download.js",
+    "sourceFile": "ima/download.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "ima",
     "name": "knowledge",
     "description": "按名称或 ID 获取 ima 知识库中的文章标题、URL 与文件夹路径",
     "access": "read",
