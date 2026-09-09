@@ -27,6 +27,20 @@ function readerResponse(path) {
 }
 
 describe('readKnowledgeBaseFromChrome', () => {
+    it('reads knowledge metadata directly on Linux with the configured IMA cookie', async () => {
+        const page = {
+            fetchJson: vi.fn(async (url) => url.endsWith('/get_knowledge_base_list')
+                ? readerResponse('/get_knowledge_base_list') : readerResponse('/get_knowledge_list')),
+        };
+        await expect(readKnowledgeBaseFromChrome(page, '工程', {
+            imaCookie: 'IMA-UID=u1; IMA-TOKEN=token-1; IMA-GUID=g1', extensionVersion: '2.1.23',
+        })).resolves.toMatchObject({ ok: true, items: [expect.objectContaining({ title: '文章' })] });
+        expect(page.fetchJson).toHaveBeenCalledWith(
+            expect.stringContaining('/cgi-bin/knowledge_tab_reader/get_knowledge_base_list'),
+            expect.objectContaining({ headers: expect.objectContaining({ 'x-ima-cookie': expect.any(String), from_browser_ima: '1' }) }),
+        );
+    });
+
     it('reads the signed media URL from get_media', async () => {
         const page = { fetchJson: vi.fn(async () => ({ code: 0, action: 1, jump_url_info: { url: 'https://res-skb.ima.qq.com/a.pdf?sign=x' } })) };
         await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }))
@@ -41,6 +55,40 @@ describe('readKnowledgeBaseFromChrome', () => {
         const page = { fetchJson: vi.fn(async () => ({ code: 0, action: 2, jump_url_info: null, toast_text: '请前往客户端查看内容' })) };
         await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }))
             .rejects.toMatchObject({ code: 'IMA_ORIGINAL_URL_UNAVAILABLE' });
+    });
+
+    it('uses the client snake_case media request through Browser Bridge', async () => {
+        const page = {
+            startImaAuthCapture: vi.fn(async () => {}),
+            goto: vi.fn(async () => {}),
+            evaluate: vi.fn(async () => true),
+            readImaAuth: vi.fn(async () => ({ authId: 'opaque-id' })),
+            requestImaReader: vi.fn(async () => ({})),
+            requestImaMedia: vi.fn(async () => ({ action: 1, jump_url_info: { url: 'https://res-skb.ima.qq.com/a.pdf?sign=x' } })),
+            releaseImaAuth: vi.fn(async () => {}),
+        };
+        await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }))
+            .resolves.toBe('https://res-skb.ima.qq.com/a.pdf?sign=x');
+        expect(page.requestImaMedia).toHaveBeenCalledWith('opaque-id', {
+            knowledge_base_id: 'kb-1', media_id: 'm-1', scene: 4,
+        });
+    });
+
+    it('sends client headers for a Linux direct request when an IMA cookie is configured', async () => {
+        const page = { fetchJson: vi.fn(async () => ({ action: 1, jump_url_info: { url: 'https://res-skb.ima.qq.com/a.pdf?sign=x' } })) };
+        await expect(readImaMediaUrl(page, { knowledgeBaseId: 'kb-1', mediaId: 'm-1' }, {
+            imaCookie: 'IMA-UID=u1; IMA-TOKEN=token-1; IMA-GUID=g1',
+            extensionVersion: '2.1.23',
+        })).resolves.toContain('res-skb.ima.qq.com');
+        expect(page.fetchJson).toHaveBeenCalledWith(
+            'https://ima.qq.com/cgi-bin/file_manager/get_media',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'x-ima-cookie': 'IMA-UID=u1; IMA-TOKEN=token-1; IMA-GUID=g1',
+                    'from_browser_ima': '1', extension_version: '2.1.23',
+                }),
+            }),
+        );
     });
 
     it('lists knowledge bases with an opaque Chrome auth ID and releases it', async () => {

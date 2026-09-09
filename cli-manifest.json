@@ -13549,11 +13549,11 @@
   {
     "site": "ima",
     "name": "download",
-    "description": "下载 ima 知识库中的原始文件",
+    "description": "下载 ima 知识库中的完整原始文件（Linux 无需 IMA App）",
     "access": "read",
     "domain": "ima.qq.com",
     "strategy": "cookie",
-    "browser": true,
+    "browser": "conditional",
     "args": [
       {
         "name": "knowledgeBase",
@@ -13586,7 +13586,7 @@
         "name": "viewerUrl",
         "type": "str",
         "required": false,
-        "help": "已打开的 IMA 查看器 URL（含 originUrl 签名参数）"
+        "help": "已打开的 IMA 查看器 URL（含 originUrl 签名参数；Linux 可省略）"
       }
     ],
     "columns": [

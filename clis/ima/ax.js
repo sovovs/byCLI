@@ -163,12 +163,15 @@ func knowledgeWindow(_ app: AXUIElement) -> AXUIElement? {
     return windows(app).first(where: { !pageKnowledgeID($0).isEmpty })
 }
 
-func publicURL(in root: AXUIElement) -> String? {
+func publicURL(in root: AXUIElement, allowViewer: Bool = false) -> String? {
     func acceptable(_ value: String?) -> String? {
-        guard let value, value.hasPrefix("http://") || value.hasPrefix("https://") else { return nil }
+        guard let value else { return nil }
+        if allowViewer && value.hasPrefix("chrome-extension://") && value.contains("originUrl=") { return value }
+        guard value.hasPrefix("http://") || value.hasPrefix("https://") else { return nil }
         return value.contains("ima.qq.com") || value.contains("ima.copilot") ? nil : value
     }
     if let value = acceptable(stringAttribute(root, kAXURLAttribute as CFString)) { return value }
+    if let value = acceptable(stringAttribute(root, kAXDocumentAttribute as CFString)) { return value }
     for element in descendants(root, limit: 4000) {
         let elementRole = role(element)
         let description = stringAttribute(element, kAXDescriptionAttribute as CFString) ?? ""
@@ -176,6 +179,7 @@ func publicURL(in root: AXUIElement) -> String? {
             || (elementRole == (kAXTextFieldRole as String) && description.contains("地址"))
         guard isDocumentLocation else { continue }
         if let value = acceptable(stringAttribute(element, kAXURLAttribute as CFString)) { return value }
+        if let value = acceptable(stringAttribute(element, kAXDocumentAttribute as CFString)) { return value }
         if let value = acceptable(stringAttribute(element, kAXValueAttribute as CFString)) { return value }
     }
     return nil
@@ -197,8 +201,9 @@ func readPublicURL(
     let deadline = Date().addingTimeInterval(expectsURL ? 12 : 2)
     repeat {
         for window in windows(app).reversed()
-            where !known.contains(windowSignature(window)) && pageKnowledgeID(window).isEmpty {
-            if let url = publicURL(in: window) {
+            where (expectsURL || !known.contains(windowSignature(window)))
+                && (expectsURL || pageKnowledgeID(window).isEmpty) {
+            if let url = publicURL(in: window, allowViewer: expectsURL) {
                 return (window, url, CFEqual(window, knowledgeBeforeOpen))
             }
             let title = label(window) ?? ""
@@ -230,10 +235,12 @@ func closeArticlePage(app: AXUIElement, _ window: AXUIElement, reusedKnowledgeWi
 
 func pageKnowledgeID(_ window: AXUIElement) -> String {
     for element in [window] + descendants(window, limit: 4000) {
-        guard let value = stringAttribute(element, kAXURLAttribute as CFString),
-              let range = value.range(of: "knowledgeBaseId=") else { continue }
-        let suffix = value[range.upperBound...]
-        return String(suffix.prefix { $0 != "&" && $0 != "#" })
+        for key in [kAXURLAttribute, kAXDocumentAttribute] {
+            guard let value = stringAttribute(element, key as CFString),
+                  let range = value.range(of: "knowledgeBaseId=") else { continue }
+            let suffix = value[range.upperBound...]
+            return String(suffix.prefix { $0 != "&" && $0 != "#" })
+        }
     }
     return ""
 }
@@ -494,7 +501,7 @@ func scrapeCurrentFolder(
                 throw DriverError(code: "KNOWLEDGE_WINDOW_LOST", message: "Knowledge-base window disappeared")
             }
             var url: String? = nil
-            let expectsURL = contentType == "公众号" || contentType == "网页"
+            let expectsURL = contentType == "公众号" || contentType == "网页" || contentType == "PDF"
             if press(row.element), let opened = readPublicURL(
                 app: app,
                 excluding: before,
@@ -502,7 +509,7 @@ func scrapeCurrentFolder(
                 expectsURL: expectsURL
             ) {
                 url = opened.1
-                if !closeArticlePage(app: app, opened.0, reusedKnowledgeWindow: opened.2) {
+                if !closeArticlePage(app: app, opened.0, reusedKnowledgeWindow: opened.2 && contentType != "PDF") {
                     throw DriverError(code: "TAB_CLOSE_FAILED", message: "Could not close article tab '\(row.title)' safely")
                 }
             }
@@ -651,6 +658,30 @@ export function readKnowledgeBase(query) {
         envelope.items = envelope.items.map((item) => ({ ...item, url: normalizeArticleUrl(item.url) }));
     }
     return envelope;
+}
+
+const CURRENT_VIEWER_SCRIPT = String.raw`
+import Cocoa
+import ApplicationServices
+func attr(_ e: AXUIElement, _ key: CFString) -> AnyObject? { var v: CFTypeRef?; guard AXUIElementCopyAttributeValue(e, key, &v) == .success else { return nil }; return v }
+func children(_ e: AXUIElement) -> [AXUIElement] { attr(e, kAXChildrenAttribute as CFString) as? [AXUIElement] ?? [] }
+func string(_ e: AXUIElement, _ key: CFString) -> String? { if let v = attr(e, key) as? String { return v }; if let v = attr(e, key) as? URL { return v.absoluteString }; return nil }
+func all(_ root: AXUIElement) -> [AXUIElement] { var out = [root], q = [root], seen = Set<CFHashCode>(); while let e = q.popLast() { let h = CFHash(e); if seen.contains(h) { continue }; seen.insert(h); for c in children(e) { out.append(c); q.append(c) } }; return out }
+let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.tencent.imamac")
+var urls: [String] = []
+for app in apps where !app.isTerminated { let root = AXUIElementCreateApplication(app.processIdentifier); let windows = attr(root, kAXWindowsAttribute as CFString) as? [AXUIElement] ?? []; for e in windows.flatMap(all) { for key in [kAXURLAttribute, kAXDocumentAttribute, kAXValueAttribute] { if let v = string(e, key as CFString), v.hasPrefix("chrome-extension://"), v.contains("originUrl=") && !urls.contains(v) { urls.append(v) } } } }
+let data = try! JSONSerialization.data(withJSONObject: urls, options: []); print(String(data: data, encoding: .utf8)!)
+`;
+
+export function readCurrentViewerUrl(title = '') {
+    if (process.platform !== 'darwin') return null;
+    try {
+        const output = execFileSync('swift', ['-'], { input: CURRENT_VIEWER_SCRIPT, encoding: 'utf8', timeout: 20_000, maxBuffer: 8 * 1024 * 1024, stdio: ['pipe', 'pipe', 'ignore'] });
+        const urls = String(output).trim().split(/\r?\n/).reverse().reduce((found, line) => {
+            try { const parsed = JSON.parse(line); return Array.isArray(parsed) ? parsed : found; } catch { return found; }
+        }, []);
+        return urls.find((url) => { try { const origin = new URL(url).searchParams.get('originUrl'); return !title || (origin && new URL(origin).searchParams.get('media_title') === title); } catch { return false; } }) || null;
+    } catch { return null; }
 }
 
 export const __test__ = { AX_KNOWLEDGE_SCRIPT, OPEN_KNOWLEDGE_APPLESCRIPT };

@@ -22,6 +22,27 @@ bycli <site> <command> --help   # 查看命令的参数和选项
 bycli <site> <command> -f yaml  # 结构化输出(适合 agent)
 ```
 
+### Linux 下载 IMA 知识库 PDF
+
+Linux 不需要安装 IMA 桌面客户端。安装 bycli 后，把 npm 包内的
+`extension/` 目录加载到 Chrome/Chromium 的开发者模式，启动 daemon，并在浏览器中登录
+`ima.qq.com`。Browser Bridge 会复用浏览器会话获取文件地址：
+
+```bash
+bycli daemon start
+bycli ima download "知识库名称" "文件名.pdf" --output ./downloads -f json
+```
+
+全局安装时扩展目录可用 `npm root -g` 定位：
+`$(npm root -g)/@sovovs/bycli/extension`。如果浏览器会话需要跨机器提供，可在受控浏览器端
+导出完整 `x-ima-cookie` 后设置 `BYCLI_IMA_COOKIE`，下载命令会切换到 Node 直连模式，Linux
+主机无需安装 IMA App 或运行 Chrome：
+
+```bash
+export BYCLI_IMA_COOKIE='完整的 x-ima-cookie'
+bycli ima download "知识库名称" "文件名.pdf" --output ./downloads -f json
+```
+
 示例:
 
 ```bash

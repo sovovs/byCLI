@@ -2,6 +2,30 @@ import { listKnowledgeBases, readKnowledgeBaseFromApi } from './native-api.js';
 
 const IMA_WIKIS_URL = 'https://ima.qq.com/wikis';
 const IMA_GET_MEDIA_URL = 'https://ima.qq.com/cgi-bin/file_manager/get_media';
+const IMA_READER_URL = 'https://ima.qq.com/cgi-bin/knowledge_tab_reader';
+
+function imaBknFromCookie(cookie) {
+    const token = String(cookie).split(';').map((part) => part.trim())
+        .find((part) => part.startsWith('IMA-TOKEN='))?.slice('IMA-TOKEN='.length);
+    if (!token) return '';
+    let hash = 5381;
+    for (const character of token) hash += (hash << 5) + character.charCodeAt(0);
+    return String(hash & 0x7fffffff);
+}
+
+function directImaRequest(page, dependencies = {}) {
+    const imaCookie = dependencies.imaCookie ?? process.env.BYCLI_IMA_COOKIE;
+    if (!imaCookie || !page || typeof page.fetchJson !== 'function') return null;
+    const headers = {
+        'x-ima-cookie': String(imaCookie),
+        'x-ima-bkn': dependencies.imaBkn ?? imaBknFromCookie(imaCookie),
+        from_browser_ima: '1',
+        extension_version: String(dependencies.extensionVersion ?? process.env.BYCLI_IMA_EXTENSION_VERSION ?? '2.1.23'),
+    };
+    return (path, body) => page.fetchJson(`${IMA_READER_URL}${path}`, {
+        method: 'POST', headers, body,
+    });
+}
 
 function codedError(code, message) {
     return Object.assign(new Error(message), { code });
@@ -66,6 +90,8 @@ async function releaseImaAuth(page, authId) {
 }
 
 export async function readKnowledgeBasesFromChrome(page, dependencies = {}) {
+    const directRequest = directImaRequest(page, dependencies);
+    if (directRequest) return listKnowledgeBases(directRequest);
     const authId = await acquireImaChromeAuth(page, undefined, dependencies);
     try {
         return await listKnowledgeBases((path, body) => page.requestImaReader(authId, path, body));
@@ -75,6 +101,8 @@ export async function readKnowledgeBasesFromChrome(page, dependencies = {}) {
 }
 
 export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}) {
+    const directRequest = directImaRequest(page, dependencies);
+    if (directRequest) return readKnowledgeBaseFromApi(query, directRequest);
     const authId = await acquireImaChromeAuth(page, query, dependencies);
     try {
         return await readKnowledgeBaseFromApi(
@@ -87,15 +115,38 @@ export async function readKnowledgeBaseFromChrome(page, query, dependencies = {}
 }
 
 export async function readImaMediaUrl(page, item, dependencies = {}) {
+    const imaCookie = dependencies.imaCookie ?? process.env.BYCLI_IMA_COOKIE;
+    if (imaCookie && page && typeof page.fetchJson === 'function') {
+        const response = await page.fetchJson(IMA_GET_MEDIA_URL, {
+            method: 'POST',
+            headers: {
+                'x-ima-cookie': String(imaCookie),
+                'x-ima-bkn': dependencies.imaBkn ?? imaBknFromCookie(imaCookie),
+                from_browser_ima: '1',
+                extension_version: String(dependencies.extensionVersion ?? process.env.BYCLI_IMA_EXTENSION_VERSION ?? '2.1.23'),
+            },
+            body: {
+                knowledge_base_id: String(item?.knowledgeBaseId ?? ''),
+                media_id: String(item?.mediaId ?? ''),
+                scene: dependencies.scene ?? 4,
+            },
+        });
+        const data = response && typeof response === 'object' ? response : {};
+        const url = data.jumpUrlInfo?.url ?? data.jump_url_info?.url;
+        if (Number(data.action) !== 1 || typeof url !== 'string' || !url) {
+            throw codedError('IMA_ORIGINAL_URL_UNAVAILABLE', data.toastText || data.toast_text || 'IMA did not return an exportable file URL');
+        }
+        return url;
+    }
     if (typeof page.requestImaMedia === 'function' && typeof page.startImaAuthCapture === 'function') {
         const authId = await acquireImaChromeAuth(page, item?.knowledgeBaseId, dependencies);
         try {
             const response = await page.requestImaMedia(authId, {
-                knowledgeBaseId: String(item?.knowledgeBaseId ?? ''),
-                mediaId: String(item?.mediaId ?? ''),
+                knowledge_base_id: String(item?.knowledgeBaseId ?? ''),
+                media_id: String(item?.mediaId ?? ''),
                 scene: dependencies.scene ?? 4,
-                ...(item?.shareId ? { shareId: String(item.shareId) } : {}),
-                ...(item?.sourceKnowledgeBaseId ? { sourceKnowledgeBaseId: String(item.sourceKnowledgeBaseId) } : {}),
+                ...(item?.shareId ? { share_id: String(item.shareId) } : {}),
+                ...(item?.sourceKnowledgeBaseId ? { source_knowledge_base_id: String(item.sourceKnowledgeBaseId) } : {}),
             });
             const data = response && typeof response === 'object' ? response : {};
             const url = data.jumpUrlInfo?.url ?? data.jump_url_info?.url;

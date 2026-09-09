@@ -273,6 +273,12 @@ class CDPPage extends BasePage {
         const maxMs = options?.settleMs ?? 1000;
         await this.evaluate(waitForDomStableJs(maxMs, Math.min(500, maxMs)));
       }
+      try {
+        const current = await this.evaluate<string>('window.location.href');
+        if (typeof current === 'string' && current) this._lastUrl = current;
+      } catch {
+        // Retain the requested URL when the document is still unavailable.
+      }
     } finally {
       if (guard) await guard.dispose();
     }

@@ -16,8 +16,11 @@
  */
 
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+
+const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 
 // ── Completion script content ──────────────────────────────────────────────
@@ -163,7 +166,7 @@ function main() {
   console.log('');
   console.log('  \x1b[1mNext step — Browser Bridge setup\x1b[0m');
   console.log('  Browser commands (bilibili, zhihu, twitter...) require the extension:');
-  console.log('  1. Download: https://github.com/sovovs/byCLI/releases');
+  console.log('  1. Browser Bridge is included at: ' + join(PACKAGE_ROOT, 'extension'));
   console.log('  2. In Chrome or Chromium, open chrome://extensions → enable Developer Mode → Load unpacked');
   console.log('');
   console.log('  Then run \x1b[36mbycli doctor\x1b[0m to verify.');

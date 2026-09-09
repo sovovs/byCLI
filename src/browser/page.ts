@@ -120,6 +120,14 @@ export class Page extends BasePage {
       this._page = result.page;
     }
     this._lastUrl = url;
+    const refreshUrl = async (): Promise<void> => {
+      try {
+        const current = await this.evaluate<string>('window.location.href');
+        if (typeof current === 'string' && current) this._lastUrl = current;
+      } catch {
+        // Navigation may still be settling; retain the requested URL as fallback.
+      }
+    };
     // Inject stealth + settle in a single round-trip instead of two sequential exec calls.
     // Some security-sensitive editors reject runtime environment patches, so callers can
     // retain the normal DOM-settle behavior while opting out of stealth injection.
@@ -147,6 +155,7 @@ export class Page extends BasePage {
           if (classifyBrowserError(retryErr).kind !== 'target-navigation') throw retryErr;
         }
       }
+      await refreshUrl();
     } else if (useStealth) {
       // Even with waitUntil='none', still inject stealth (best-effort)
       try {
@@ -157,6 +166,7 @@ export class Page extends BasePage {
       } catch {
         // Non-fatal: stealth is best-effort
       }
+      await refreshUrl();
     }
   }
 
