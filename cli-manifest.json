@@ -14675,6 +14675,204 @@
     "navigateBefore": "https://www.instagram.com"
   },
   {
+    "site": "iwhalecloud",
+    "name": "download",
+    "description": "下载浩鲸邮件附件到本地目录，同名文件自动编号",
+    "access": "read",
+    "example": "bycli iwhalecloud download \"<emailId>\" --attachment all --output ./mail-downloads -f yaml",
+    "domain": "mail.iwhalecloud.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "emailId",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "list 返回的 emailId（请加引号）"
+      },
+      {
+        "name": "attachment",
+        "type": "str",
+        "default": "all",
+        "required": false,
+        "help": "all（不含内嵌图片）、附件 ID 或 read 中的序号（从 1 开始）"
+      },
+      {
+        "name": "output",
+        "type": "str",
+        "default": ".",
+        "required": false,
+        "help": "本地输出目录"
+      }
+    ],
+    "columns": [
+      "emailId",
+      "attachmentId",
+      "name",
+      "path",
+      "size",
+      "contentType"
+    ],
+    "type": "js",
+    "modulePath": "iwhalecloud/download.js",
+    "sourceFile": "iwhalecloud/download.js",
+    "navigateBefore": false,
+    "siteSession": "persistent"
+  },
+  {
+    "site": "iwhalecloud",
+    "name": "list",
+    "description": "浩鲸邮箱邮件列表：服务端分页、默认排序及 9 种字段排序",
+    "access": "read",
+    "example": "bycli iwhalecloud list --sort date --order desc --limit 50 -f yaml",
+    "domain": "mail.iwhalecloud.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "folder",
+        "type": "str",
+        "default": "inbox",
+        "required": false,
+        "help": "邮件文件夹",
+        "choices": [
+          "inbox",
+          "sent",
+          "drafts",
+          "trash",
+          "spam"
+        ]
+      },
+      {
+        "name": "folder-id",
+        "type": "str",
+        "required": false,
+        "help": "自定义文件夹的 OWA FolderId，优先于 --folder"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "返回数量，1–10000；自动分页"
+      },
+      {
+        "name": "offset",
+        "type": "int",
+        "default": 0,
+        "required": false,
+        "help": "服务端起始偏移，0 表示第一封"
+      },
+      {
+        "name": "sort",
+        "type": "str",
+        "default": "default",
+        "required": false,
+        "help": "default 保留服务端默认顺序",
+        "choices": [
+          "default",
+          "date",
+          "from",
+          "to",
+          "subject",
+          "attachments",
+          "importance",
+          "size",
+          "sent",
+          "created"
+        ]
+      },
+      {
+        "name": "order",
+        "type": "str",
+        "default": "default",
+        "required": false,
+        "help": "默认：姓名/主题升序，其余降序；显式方向须指定 --sort",
+        "choices": [
+          "default",
+          "asc",
+          "desc"
+        ]
+      }
+    ],
+    "columns": [
+      "emailId",
+      "subject",
+      "fromName",
+      "fromEmail",
+      "toDisplay",
+      "date",
+      "times",
+      "unread",
+      "hasAttachments",
+      "importance",
+      "size",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "iwhalecloud/list.js",
+    "sourceFile": "iwhalecloud/list.js",
+    "navigateBefore": false,
+    "siteSession": "persistent"
+  },
+  {
+    "site": "iwhalecloud",
+    "name": "read",
+    "description": "读取浩鲸邮件完整正文、收件人和附件列表（不标记已读）",
+    "access": "read",
+    "example": "bycli iwhalecloud read \"<emailId>\" -f yaml",
+    "domain": "mail.iwhalecloud.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "emailId",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "list 返回的 emailId（请加引号）"
+      },
+      {
+        "name": "body-type",
+        "type": "str",
+        "default": "text",
+        "required": false,
+        "help": "正文格式",
+        "choices": [
+          "text",
+          "html"
+        ]
+      }
+    ],
+    "columns": [
+      "emailId",
+      "subject",
+      "fromName",
+      "fromEmail",
+      "toDisplay",
+      "date",
+      "times",
+      "unread",
+      "hasAttachments",
+      "importance",
+      "size",
+      "url",
+      "to",
+      "cc",
+      "bcc",
+      "recipientCounts",
+      "bodyType",
+      "body",
+      "attachments"
+    ],
+    "type": "js",
+    "modulePath": "iwhalecloud/read.js",
+    "sourceFile": "iwhalecloud/read.js",
+    "navigateBefore": false,
+    "siteSession": "persistent"
+  },
+  {
     "site": "jd",
     "name": "add-cart",
     "description": "京东加入购物车",

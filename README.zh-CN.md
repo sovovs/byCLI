@@ -50,6 +50,19 @@ bycli 12306 stations 北京        # 公开命令,无需登录
 bycli juejin search bycli        # 掘金搜索
 ```
 
+### 浩鲸邮箱
+
+在 Chrome 中登录 `mail.iwhalecloud.com` 并连接 Browser Bridge 后：
+
+```bash
+bycli iwhalecloud list --sort date --order desc --limit 50 -f yaml
+bycli iwhalecloud read "<emailId>" -f yaml
+bycli iwhalecloud download "<emailId>" --output ./mail-downloads -f yaml
+```
+
+支持默认顺序和 9 个字段的服务端排序、自动分页、邮件正文与附件下载。
+详细参数见[浩鲸邮箱适配器文档](./docs/adapters/browser/iwhalecloud.md)。
+
 ### 搜索适配器
 
 当前可用的搜索命令包括:
