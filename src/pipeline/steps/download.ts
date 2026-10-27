@@ -131,6 +131,7 @@ export async function stepDownload(
   const concurrency = typeof p.concurrency === 'number' ? p.concurrency : 3;
   const skipExisting = p.skip_existing !== false;
   const timeout = typeof p.timeout === 'number' ? p.timeout * 1000 : 30000;
+  const ytdlpTimeout = typeof p.timeout === 'number' ? p.timeout * 1000 : 600000;
   const useYtdlp = p.use_ytdlp ?? false;
   const ytdlpArgs: string[] = Array.isArray(p.ytdlp_args)
     ? p.ytdlp_args.map((v) => String(v))
@@ -239,7 +240,7 @@ export async function stepDownload(
     const detectedType = contentType === 'auto' ? detectContentType(url) : contentType;
     const shouldUseYtdlp = useYtdlp || (detectedType === 'video' && requiresYtdlp(url));
 
-    let result: { success: boolean; size: number; error?: string };
+    let result: { success: boolean; size: number; error?: string; path?: string };
 
     try {
       if (detectedType === 'document' && contentTemplate) {
@@ -262,6 +263,7 @@ export async function stepDownload(
         // Use yt-dlp for video downloads
         result = await ytdlpDownload(url, destPath, {
           cookiesFile,
+          timeout: ytdlpTimeout,
           extraArgs: ytdlpArgs,
           onProgress: (percent) => {
             if (progressBar) {
@@ -320,7 +322,7 @@ export async function stepDownload(
       ...item,
       _download: {
         status: result.success ? 'success' : 'failed',
-        path: result.success ? destPath : undefined,
+        path: result.success ? (result.path || destPath) : undefined,
         size: result.size,
         error: result.error,
         duration,

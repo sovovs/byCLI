@@ -2,14 +2,17 @@
 
 发布前必须先保存、重开核对平台草稿，向用户展示具体内容并获得明确确认；然后单独调用 `--mode submit --execute --user-confirmed`。准备阶段不得预先传入确认参数。详见[三平台发布确认流程](../../guide/publishing-confirmation.md)。
 
-**Mode**: 🔐 Browser · **Domain**: `baijiahao.baidu.com`
+**Mode**: Browser · **Domains**: `baijiahao.baidu.com`、`haokan.baidu.com`
 
 先在 Chrome 登录百家号并连接 [Browser Bridge](/guide/browser-bridge)。发布通过网页原生控件完成；统计通过当前账号的只读接口读取。图文和文章在后台均为 `news`，共用驱动。
+
+公开视频检索使用好看视频原生搜索页，需要 Chrome 和 Browser Bridge，不要求百家号创作者后台登录。
 
 ## 命令
 
 | 命令 | 用途 |
 | --- | --- |
+| `bycli baijiahao search <query>` | 通过好看视频原生入口搜索公开视频，返回可用于下载的正式链接 |
 | `bycli baijiahao video-download <url> --output <dir>` | 下载百家号、mbd 分享页或好看分发页的公开视频，不限定本人账号 |
 | `bycli baijiahao video-publish` | 视频上传、双封面、AI 声明、保存/核对草稿、单次提交和状态读取 |
 | `bycli baijiahao video-stats <id>` | 本人已发布视频的播放、点赞、评论、收藏、分享 |
@@ -71,7 +74,29 @@ bycli baijiahao article-stats 1879490896848503110 \
 
 真实 `0` 保留为数字；缺失指标为 `null`，并写入 `unavailableMetrics`。`observation` 包含检索日期、发表时间、采集时间和 `counterScope: "as_returned"`。累计/区间口径未独立证明，不能解释为某日新增或已结算值。
 
-## 下载
+## 检索并下载
+
+```bash
+bycli baijiahao search '航天' --limit 15 --timeout 30 -f json
+```
+
+入口为 `https://haokan.baidu.com/web/search/page?query=...&tab=video`。检索的是好看视频公开分发的视频，包含百家号创作者发布到该平台的作品；不是百家号后台本人作品检索，也不覆盖全部百家号文章、草稿或未被好看视频收录的内容。命令不使用百度网页／视频搜索作为替代入口。
+
+返回 `rank`、字符串 `id`、`title`、`author`、`duration`、`playsText`、`publishedAtText`、`url`、`source`。播放量和相对发布时间保留页面原文，不转换为精确统计或日期。只读取视频标签页中的原生结果卡片，排除广告和推荐区，并按视频 ID 去重。
+
+`--limit` 为最多返回条数（1–50，默认 10）；超过首批结果时通过页面原生滚动加载。等待超时、导航错误或验证页会报错，不当作零结果。原生页面明确显示无结果时返回 `EMPTY_RESULT`，不据此证明平台索引没有命中。结果沿用平台排序，不保证全量或标题精确匹配。
+
+将结果中的 `url` 原样传给下载命令即可。搜索返回不代表视频已验证可下载，播放权限和视频源仍由下载器检查：
+
+```bash
+# 此示例使用 jq 选择第一条搜索结果，仅在前面的步骤成功后下载。
+bycli baijiahao search '科普' --limit 1 -f json > videos.json &&
+video_url="$(jq -er '.[0].url' videos.json)" &&
+bycli baijiahao video-download "$video_url" \
+  --output ./downloads --timeout 60 -f json
+```
+
+也可以直接下载已有链接：
 
 ```bash
 bycli baijiahao video-download \
@@ -86,6 +111,8 @@ bycli baijiahao video-download \
 下载沿用 Node 的代理配置。Chrome 直连不等于 Node 直连；如本机网络需要，可仅为当前进程设置 `NO_PROXY=bdstatic.com no_proxy=bdstatic.com`，不改变系统或 Clash 配置。连接失败会报错，不能当作成功下载。
 
 ## 真实验收
+
+2026-10-27：`baijiahao search '科普' --limit 3` 经好看视频原生页返回 3 条；`search '航天' --limit 15` 经原生滚动返回 15 条。将前者第一条链接 `https://haokan.baidu.com/v?vid=10637456184973686790` 交给现有 `video-download`，下载得到 2,555,902 字节 MP4；`ffprobe` 确认为 H.264/AAC、540×960、33.62 秒。这是样本链路验证，不代表所有检索结果均可下载。
 
 2026-10-19：通过这些命令新发布视频 `1879490486260090068` 和 news `1879490896848503110`，均核对到正式 `publish` 状态。公开文章正文、两图及 AI 声明核对通过；新视频正式页下载经 `ffprobe` 确认为 H.264/AAC、1280×720、174.96 秒。
 

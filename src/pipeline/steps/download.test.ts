@@ -134,4 +134,14 @@ describe('stepDownload', () => {
     );
     expect(mockYtdlpDownload).toHaveBeenCalledTimes(2);
   });
+  it('forwards explicit yt-dlp timeouts and reports the postprocessed path', async () => {
+    mockYtdlpDownload.mockResolvedValue({ success: true, size: 100, path: '/tmp/bycli-actual.mkv' });
+    const result = await stepDownload(null, {
+      url: '${{ item.url }}', dir: '/tmp/bycli-download-test', filename: 'deadline.mp4',
+      timeout: 12, skip_existing: false, progress: false,
+    }, [{ url: 'https://www.youtube.com/watch?v=one' }], {});
+    expect(mockYtdlpDownload).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ timeout: 12000 }));
+    expect(result).toMatchObject([{ _download: { status: 'success', path: '/tmp/bycli-actual.mkv' } }]);
+  });
+
 });

@@ -10,6 +10,8 @@ For the separate upload-and-edit workflow that stops before final publication, s
 |----------|---------------|-------|
 | **xiaohongshu** | Images, Videos | Native MP4 download; use `--type video` to exclude covers |
 | **sohu** | Article videos | Native MP4 download from Sohu account article pages |
+| **youtube** | Videos | yt-dlp + ffmpeg/ffprobe; anonymous by default, optional browser cookies |
+| **tiktok** | Videos | yt-dlp + ffmpeg/ffprobe; supports video and vm/vt share URLs |
 | **bilibili** | Videos | Requires `yt-dlp` installed |
 | **twitter** | Images, Videos | Downloads from user media tab or single tweet |
 | **douban** | Images | Downloads poster / still image lists from movie subjects |
@@ -102,3 +104,51 @@ pipeline:
       skip_existing: true
 ```
 :::
+
+## YouTube and TikTok
+
+```bash
+bycli youtube download "https://www.youtube.com/watch?v=jNQXAC9IVRw" --quality 720p --output ./youtube -f json
+bycli tiktok download "https://www.tiktok.com/@user/video/1234567890" --output ./tiktok -f json
+```
+
+Both run locally without Browser Bridge. Install yt-dlp and ffmpeg/ffprobe first.
+YouTube additionally needs yt-dlp-ejs and a supported JS runtime for full support;
+these adapters enable Node as a yt-dlp runtime. Optional `--cookies-from-browser
+chrome` uses the local browser session. Defaults are anonymous access, `--quality
+best`, and `--timeout 600` seconds. Other qualities are `1080p`, `720p`, `480p`
+(height ceilings). Unavailable formats fail explicitly. Outputs are merged/remuxed
+MP4 files and successful rows include the absolute `path` and `bytes`.
+
+All yt-dlp downloads now use isolated staging, a process deadline (default ten
+minutes), zero exit status and an explicit completed-file receipt. A prefix match,
+old destination or `.part` file is never accepted as success. On POSIX, timeout
+terminates the download process group including ffmpeg, escalating after one second.
+The shared media downloader and pipeline forward their timeout to yt-dlp; pipeline
+`timeout` is in seconds. Changed output extensions are returned as the actual path.
+See the [YouTube](../adapters/browser/youtube.md#video-download) and
+[TikTok](../adapters/browser/tiktok.md#video-download) pages for platform limits.
+
+### Live validation — 2026-10-27
+
+Validated on macOS with yt-dlp 2026.08.19, using anonymous access through the
+new byCLI commands (not only direct yt-dlp invocation):
+
+| Platform / sample | Selection | Saved bytes | ffprobe result |
+| --- | --- | ---: | --- |
+| YouTube `jNQXAC9IVRw` | `--quality 480p` | 533915 | 320×240 AV1 + AAC, 19.064 s |
+| TikTok `@patroxofficial/video/6742501081818877190` | `--quality best` | 2748647 | 540×960 H.264 + AAC, 27.467 s |
+
+Both commands returned exit 0 and JSON with the actual file path. Both files
+passed full `ffmpeg -v error -i FILE -f null -` decoding with exit 0. These samples
+prove the tested paths only; authenticated content, other regions, share links,
+other quality ceilings, watermark behavior and Windows were not live-validated.
+The YouTube height is below the ceiling; this is expected, not an exact-480p promise.
+The TikTok sample with a 480p ceiling returned an explicit unavailable-format error.
+
+A real YouTube retry with `--timeout 1` returned exit 1 and a timeout error;
+the existing file's SHA-256 stayed
+`c523678b1cb3b5302b74c16c7aface30d147901478454d3f6e0153837d2215e6`,
+and no staging directory remained. Regression validation covered 29 test files /
+341 tests, plus the TypeScript/manifest build. Video artifacts were stored under
+`/tmp/bycli-video-live-20261027/` locally, outside the repository.

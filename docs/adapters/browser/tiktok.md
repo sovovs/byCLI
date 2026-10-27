@@ -6,6 +6,7 @@
 
 | Command | Description |
 |---------|-------------|
+| `bycli tiktok download` | Download a video to local MP4 using yt-dlp + ffmpeg (no Browser Bridge required) |
 | `bycli tiktok profile` | Get user profile info |
 | `bycli tiktok search` | Search videos |
 | `bycli tiktok explore` | Trending videos from explore page |
@@ -253,6 +254,34 @@ successful state transition.
 
 ## Prerequisites
 
+For browser commands other than `download`:
+
 - Chrome running and **logged into** tiktok.com
 - [Browser Bridge extension](/guide/browser-bridge) installed
 - `creator-videos` requires access to TikTok Studio for the logged-in creator account
+
+## Video download
+
+```bash
+bycli tiktok download "https://www.tiktok.com/@user/video/1234567890" --output ./tiktok
+bycli tiktok download "https://vm.tiktok.com/SHARE_TOKEN/" --timeout 600 -f json
+# Only when account access is needed:
+bycli tiktok download "https://www.tiktok.com/@user/video/1234567890" --cookies-from-browser chrome
+```
+
+Requires local `yt-dlp`, `ffmpeg` and `ffprobe`, without Browser Bridge. Downloads
+are anonymous unless `--cookies-from-browser` is supplied. Supported inputs are
+`/@user/video/id` URLs on TikTok and `vm.tiktok.com` / `vt.tiktok.com` short links.
+For a short link the result `id` and filename use the input share token.
+`save` adds to Favorites; use `download` to save a file.
+
+`--quality` accepts `best` (default), `1080p`, `720p`, `480p`. Numbered qualities
+are height ceilings; videos without a matching format fail instead of silently
+exceeding the ceiling. `--timeout` is 1–3600 integer seconds (default 600), covering
+extraction, transfer and postprocessing, plus a short termination grace period.
+Results contain `id`, `url`, `status`, absolute `path`, and `bytes`. MP4 structure
+and a video track are validated before saving; no full decode check is performed.
+Failed attempts remove their staging files and preserve existing downloads.
+Resume, live streams, photo posts and batch downloads are out of scope.
+No watermark-free guarantee is made. Site, region and account restrictions may
+prevent extraction even with browser cookies.

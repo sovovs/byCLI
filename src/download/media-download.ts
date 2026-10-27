@@ -46,7 +46,7 @@ export interface MediaDownloadOptions {
   validateMedia?: boolean;
   /** Raw browser cookies — auto-exported to Netscape for yt-dlp, auto-cleaned up */
   browserCookies?: BrowserCookie[];
-  /** Timeout in ms (default: 30000 for images, 60000 for videos) */
+  /** Timeout in ms (default: 30000 for images, 60000 for direct videos, 600000 for yt-dlp) */
   timeout?: number;
   /** File name prefix (default: 'download') */
   filenamePrefix?: string;
@@ -132,12 +132,17 @@ export async function downloadMedia(
       const progressBar = tracker.onFileStart(filename, i);
 
       try {
-        let result: { success: boolean; size: number; error?: string };
+        let result: { success: boolean; size: number; error?: string; path?: string };
         const useYtdlp = (media.type === 'video-tweet' || media.type === 'video-ytdlp') && hasYtdlp;
 
+        if ((media.type === 'video-tweet' || media.type === 'video-ytdlp') && !hasYtdlp) {
+          throw new Error('yt-dlp not installed. Install with: pip install yt-dlp');
+        }
         if (useYtdlp) {
           result = await ytdlpDownload(media.url, destPath, {
             cookiesFile,
+            timeout,
+            expectedMedia: media.expectedMedia,
             extraArgs: ytdlpExtraArgs,
             onProgress: (percent) => {
               if (progressBar) progressBar.update(percent, 100);
@@ -168,7 +173,7 @@ export async function downloadMedia(
           type: media.type === 'video-tweet' || media.type === 'video-ytdlp' ? 'video' : media.type,
           status: result.success ? 'success' : 'failed',
           size: result.success ? formatBytes(result.size) : (result.error || 'unknown error'),
-          ...(result.success && fs.existsSync(destPath) ? { path: destPath, bytes: result.size } : {}),
+          ...(result.success ? { path: result.path || destPath, bytes: result.size } : {}),
         });
       } catch (err) {
         const msg = getErrorMessage(err);

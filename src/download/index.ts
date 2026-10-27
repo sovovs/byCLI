@@ -18,7 +18,6 @@ import { isBinaryInstalled } from '../external.js';
 import type { BrowserCookie } from '../types.js';
 import { getErrorMessage } from '../errors.js';
 import { fetchWithNodeNetwork } from '../node-network.js';
-import { log } from '../logger.js';
 
 export type { BrowserCookie } from '../types.js';
 
@@ -35,6 +34,11 @@ export interface DownloadOptions {
 }
 
 export interface YtdlpOptions {
+  /** Process deadline including extraction, transfer and postprocessing (ms). */
+  timeout?: number;
+  /** false disables the legacy Chrome-cookie fallback. */
+  cookiesFromBrowser?: string | false;
+  expectedMedia?: 'mp4';
   cookies?: string;
   cookiesFile?: string;
   format?: string;
@@ -240,95 +244,120 @@ export async function ytdlpDownload(
   url: string,
   destPath: string,
   options: YtdlpOptions = {},
-): Promise<{ success: boolean; size: number; error?: string }> {
-  const { cookiesFile, format = 'best', extraArgs = [], onProgress } = options;
-
+): Promise<{ success: boolean; size: number; error?: string; path?: string }> {
+  const {
+    cookiesFile, cookiesFromBrowser = 'chrome', format = 'best', extraArgs = [],
+    onProgress, timeout = 600000, expectedMedia,
+  } = options;
+  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 2147483647) {
+    return { success: false, size: 0, error: 'Invalid yt-dlp timeout' };
+  }
   if (!checkYtdlp()) {
     return { success: false, size: 0, error: 'yt-dlp not installed. Install with: pip install yt-dlp' };
   }
+  if (cookiesFile && !fs.existsSync(cookiesFile)) {
+    return { success: false, size: 0, error: 'Cookies file not found' };
+  }
 
-  return new Promise((resolve) => {
-    const dir = path.dirname(destPath);
-    fs.mkdirSync(dir, { recursive: true });
-
-    // Build yt-dlp arguments
-    const args = [
-      url,
-      '-o', destPath,
-      '-f', format,
-      '--no-playlist',
-      '--progress',
-    ];
-
-    if (cookiesFile) {
-      if (fs.existsSync(cookiesFile)) {
-        args.push('--cookies', cookiesFile);
-      } else {
-        log.warn(`[download] Cookies file not found: ${cookiesFile}, falling back to browser cookies`);
-        args.push('--cookies-from-browser', 'chrome');
-      }
-    } else {
-      // Try to use browser cookies
-      args.push('--cookies-from-browser', 'chrome');
+  // Every invocation owns a fresh staging directory. Existing files and partial
+  // downloads can never satisfy this invocation's success check.
+  const destination = path.resolve(destPath);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  const staging = fs.mkdtempSync(path.join(path.dirname(destination), '.bycli-ytdlp-'));
+  const marker = 'BYCLI_FILE:';
+  try {
+    const outcome = await new Promise<{ code: number | null; error: string; files: string[] }>((resolve) => {
+      const args = [
+        '--ignore-config', '-f', format, ...extraArgs,
+        '-o', path.join(staging, path.basename(destination)).replace(/%/g, '%%'),
+        '--no-playlist', '--progress', '--newline', '--no-simulate',
+        '--print', `after_move:${marker}%(filepath)j`,
+      ];
+      if (cookiesFile) args.push('--cookies', cookiesFile);
+      else if (cookiesFromBrowser) args.push('--cookies-from-browser', cookiesFromBrowser);
+      args.push('--', url);
+      // A process group lets the deadline terminate ffmpeg as well as yt-dlp.
+      const proc = spawn('yt-dlp', args, {
+        stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32',
+      });
+      let errorOutput = '';
+      let stdoutTail = '';
+      let timedOut = false;
+      let settled = false;
+      let killTimer: ReturnType<typeof setTimeout> | undefined;
+      const files: string[] = [];
+      const kill = (signal: NodeJS.Signals) => {
+        try {
+          if (process.platform !== 'win32' && proc.pid) process.kill(-proc.pid, signal);
+          else proc.kill(signal);
+        } catch { /* Process already exited. */ }
+      };
+      const timer = setTimeout(() => {
+        timedOut = true;
+        kill('SIGTERM');
+        killTimer = setTimeout(() => kill('SIGKILL'), 1000);
+      }, timeout);
+      const finish = (code: number | null, error?: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (killTimer) clearTimeout(killTimer);
+        if (timedOut) kill('SIGKILL');
+        resolve({ code, files, error: timedOut ? `Download timed out after ${timeout}ms` : error || errorOutput.trim().slice(-2000) });
+      };
+      const progress = (line: string) => {
+        const match = line.match(/(\d+\.?\d*)%/);
+        if (match && onProgress) {
+          try { onProgress(Number(match[1])); } catch { /* UI callbacks must not crash a transfer. */ }
+        }
+      };
+      const parseLine = (line: string) => {
+        if (line.startsWith(marker)) {
+          try {
+            const filename: unknown = JSON.parse(line.slice(marker.length));
+            if (typeof filename === 'string') files.push(filename);
+          } catch { /* Missing/invalid receipt fails closed below. */ }
+        } else progress(line);
+      };
+      proc.stdout.on('data', (data: Buffer) => {
+        stdoutTail += data.toString();
+        const lines = stdoutTail.split(/\r\n|\r|\n/);
+        stdoutTail = lines.pop()!.slice(-65536);
+        for (const line of lines) parseLine(line.trimEnd());
+      });
+      proc.stderr.on('data', (data: Buffer) => {
+        const line = data.toString();
+        errorOutput = (errorOutput + line).slice(-8192);
+        progress(line);
+      });
+      proc.on('error', err => finish(null, err.message));
+      proc.on('close', code => {
+        if (stdoutTail) parseLine(stdoutTail.trimEnd());
+        finish(code);
+      });
+    });
+    if (outcome.code !== 0 || outcome.error.startsWith('Download timed out')) {
+      return { success: false, size: 0, error: outcome.error || `yt-dlp exited with code ${outcome.code}` };
     }
-
-    args.push(...extraArgs);
-
-    const proc = spawn('yt-dlp', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let lastPercent = 0;
-    let errorOutput = '';
-
-    proc.stderr.on('data', (data: Buffer) => {
-      const line = data.toString();
-      errorOutput += line;
-
-      // Parse progress from yt-dlp output
-      const match = line.match(/(\d+\.?\d*)%/);
-      if (match && onProgress) {
-        const percent = parseFloat(match[1]);
-        if (percent > lastPercent) {
-          lastPercent = percent;
-          onProgress(percent);
-        }
-      }
-    });
-
-    proc.stdout.on('data', (data: Buffer) => {
-      const line = data.toString();
-      const match = line.match(/(\d+\.?\d*)%/);
-      if (match && onProgress) {
-        const percent = parseFloat(match[1]);
-        if (percent > lastPercent) {
-          lastPercent = percent;
-          onProgress(percent);
-        }
-      }
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0 && fs.existsSync(destPath)) {
-        const stats = fs.statSync(destPath);
-        resolve({ success: true, size: stats.size });
-      } else {
-        // Check for common yt-dlp output patterns
-        const patterns = fs.readdirSync(dir).filter(f => f.startsWith(path.basename(destPath, path.extname(destPath))));
-        if (patterns.length > 0) {
-          const actualFile = path.join(dir, patterns[0]);
-          const stats = fs.statSync(actualFile);
-          resolve({ success: true, size: stats.size });
-        } else {
-          resolve({ success: false, size: 0, error: errorOutput.slice(0, 200) || `Exit code ${code}` });
-        }
-      }
-    });
-
-    proc.on('error', (err) => {
-      resolve({ success: false, size: 0, error: err.message });
-    });
-  });
+    if (outcome.files.length !== 1) throw new Error('yt-dlp did not report exactly one completed video');
+    const actual = fs.realpathSync(outcome.files[0]);
+    const relative = path.relative(fs.realpathSync(staging), actual);
+    if (!relative || (relative === '..' || relative.startsWith(`..${path.sep}`)) || path.isAbsolute(relative)) throw new Error('yt-dlp output escaped staging directory');
+    const stat = fs.statSync(actual);
+    if (!stat.isFile() || stat.size === 0 || /\.(part|ytdl|tmp|json|jpg|png|webp)$/i.test(actual)) {
+      throw new Error('yt-dlp output is empty or incomplete');
+    }
+    if (expectedMedia === 'mp4') await validateMp4File(actual);
+    // Remuxing can change the extension. Return the actual saved path.
+    const finalPath = path.join(path.dirname(destination),
+      path.basename(destination, path.extname(destination)) + path.extname(actual));
+    fs.renameSync(actual, finalPath);
+    return { success: true, size: stat.size, path: finalPath };
+  } catch (err) {
+    return { success: false, size: 0, error: getErrorMessage(err) };
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 /**
