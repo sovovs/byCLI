@@ -77,6 +77,12 @@ export interface ScreenshotOptions {
   width?: number;
   /** Override viewport height in CSS pixels for the screenshot only (ignored when fullPage). */
   height?: number;
+  /**
+   * Device pixel ratio for the capture (1–4). Output pixels = CSS pixels × dpr,
+   * so a 1280×960 viewport at `--dpr 2` produces a 2560×1920 PNG.
+   * Applied through Emulation.setDeviceMetricsOverride, so it also works with --full-page.
+   */
+  dpr?: number;
   path?: string;
 }
 

@@ -535,6 +535,14 @@ function parseScreenshotDim(val: string, label: string): number {
   return parsed;
 }
 
+function parseScreenshotDpr(val: string): number {
+  const parsed = Number(val);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 4) {
+    throw new InvalidArgumentError(`--dpr must be a number between 1 and 4 (got "${val}")`);
+  }
+  return parsed;
+}
+
 function applyVerbose(opts: { verbose?: boolean }): void {
   if (opts.verbose) process.env.BYCLI_VERBOSE = '1';
 }
@@ -1047,6 +1055,7 @@ Examples:
     .option('--annotate', 'Overlay visible browser state ref labels on the screenshot', false)
     .option('--width <n>', 'Override viewport width in CSS pixels for this screenshot only', (v: string) => parseScreenshotDim(v, 'width'))
     .option('--height <n>', 'Override viewport height in CSS pixels for this screenshot only (ignored with --full-page)', (v: string) => parseScreenshotDim(v, 'height'))
+    .option('--dpr <n>', 'Device pixel ratio 1-4; output is width×dpr by height×dpr pixels (default 1)', (v: string) => parseScreenshotDpr(v))
     .description('Take screenshot')
     .action(browserAction(async (page, path, opts) => {
       const shotOpts: ScreenshotOptions = {
@@ -1054,6 +1063,7 @@ Examples:
         annotate: opts.annotate === true,
         width: opts.width,
         height: opts.height,
+        dpr: opts.dpr,
       };
       const capture = opts.annotate === true
         ? (page.annotatedScreenshot ?? page.screenshot).bind(page)

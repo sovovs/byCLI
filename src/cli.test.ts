@@ -1128,6 +1128,21 @@ describe('browser tab targeting commands', () => {
     expect(process.exitCode).toBeDefined();
   });
 
+  it.each(['1', '2', '4'])('forwards explicit screenshot DPR %s from the CLI', async (dpr) => {
+    const program = createProgram('', '');
+    await program.parseAsync(['node', 'bycli', 'browser', '--session', 'test', 'screenshot', '--dpr', dpr]);
+    expect(browserState.page?.screenshot).toHaveBeenCalledWith(expect.objectContaining({ dpr: Number(dpr) }));
+  });
+
+  it.each(['0', '5', 'NaN', 'Infinity'])('rejects invalid screenshot DPR %s before connecting', async (dpr) => {
+    const program = createProgram('', '');
+    program.commands.find((command) => command.name() === 'browser')!
+      .commands.find((command) => command.name() === 'screenshot')!.exitOverride();
+    await expect(program.parseAsync(['node', 'bycli', 'browser', '--session', 'test', 'screenshot', '--dpr', dpr]))
+      .rejects.toThrow('--dpr must be a number between 1 and 4');
+    expect(mockBrowserConnect).not.toHaveBeenCalled();
+  });
+
   it('captures annotated screenshots through the visual ref overlay path', async () => {
     const program = createProgram('', '');
 
