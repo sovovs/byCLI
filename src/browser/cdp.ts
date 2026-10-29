@@ -437,7 +437,10 @@ class CDPPage extends BasePage {
     const overrideWidth = options.width && options.width > 0 ? Math.ceil(options.width) : undefined;
     // height is ignored under fullPage so the captureBeyondViewport path stays unchanged for users who pass --height alongside --full-page.
     const overrideHeight = !fullPage && options.height && options.height > 0 ? Math.ceil(options.height) : undefined;
-    const needsOverride = overrideWidth !== undefined || overrideHeight !== undefined;
+    // DPR rides the same device-metrics override as width/height. It has to be part of
+    // `needsOverride`: even explicit --dpr 1 must override a higher native DPR.
+    const dpr = options.dpr && options.dpr > 0 ? options.dpr : 1;
+    const needsOverride = overrideWidth !== undefined || overrideHeight !== undefined || options.dpr !== undefined;
 
     if (needsOverride) {
       if (overrideWidth !== undefined && fullPage) {
@@ -445,7 +448,7 @@ class CDPPage extends BasePage {
           mobile: false,
           width: overrideWidth,
           height: 0,
-          deviceScaleFactor: 1,
+          deviceScaleFactor: dpr,
         });
       }
       let finalWidth = overrideWidth ?? 0;
@@ -465,7 +468,7 @@ class CDPPage extends BasePage {
         mobile: false,
         width: finalWidth,
         height: finalHeight,
-        deviceScaleFactor: 1,
+        deviceScaleFactor: dpr,
       });
     }
 

@@ -40,6 +40,35 @@ vi.mock('ws', () => ({
 
 import { CDPBridge } from './cdp.js';
 
+describe('direct CDP screenshot DPR', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it.each([undefined, 1, 2, 4])('captures at DPR %s and clears explicit overrides', async (dpr) => {
+    vi.stubEnv('BYCLI_CDP_ENDPOINT', 'ws://127.0.0.1:9222/devtools/page/1');
+    const bridge = new CDPBridge();
+    const send = vi.spyOn(bridge, 'send').mockResolvedValue({ data: 'BASE64' });
+    try {
+      const page = await bridge.connect();
+      send.mockClear();
+      expect(await page.screenshot({ dpr })).toBe('BASE64');
+      if (dpr === undefined) {
+        expect(send).not.toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', expect.anything());
+        expect(send).not.toHaveBeenCalledWith('Emulation.clearDeviceMetricsOverride');
+      } else {
+        expect(send).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
+          mobile: false, width: 0, height: 0, deviceScaleFactor: dpr,
+        });
+        expect(send).toHaveBeenLastCalledWith('Emulation.clearDeviceMetricsOverride');
+      }
+    } finally {
+      await bridge.close();
+    }
+  });
+});
+
 describe('direct CDP scoped dialogs', () => {
   it('bounds renderer initialization as well as the initial socket connection', async () => {
     vi.stubEnv('BYCLI_CDP_ENDPOINT', 'ws://127.0.0.1:9222/devtools/page/1'); vi.useFakeTimers();
