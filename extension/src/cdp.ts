@@ -445,7 +445,7 @@ export const evaluateAsync = evaluate;
  */
 export async function screenshot(
   tabId: number,
-  options: { format?: 'png' | 'jpeg'; quality?: number; fullPage?: boolean; width?: number; height?: number } = {},
+  options: { format?: 'png' | 'jpeg'; quality?: number; fullPage?: boolean; width?: number; height?: number; dpr?: number } = {},
 ): Promise<string> {
   await ensureAttached(tabId);
 
@@ -454,7 +454,9 @@ export async function screenshot(
   const overrideWidth = options.width && options.width > 0 ? Math.ceil(options.width) : undefined;
   // height is ignored under fullPage so the existing measure-from-content path stays unchanged for users who pass --height alongside --full-page.
   const overrideHeight = !fullPage && options.height && options.height > 0 ? Math.ceil(options.height) : undefined;
-  const needsOverride = fullPage || overrideWidth !== undefined || overrideHeight !== undefined;
+  // DPR rides the same override as width/height; it alone must also trigger one.
+  const dpr = options.dpr && options.dpr > 0 ? options.dpr : 1;
+  const needsOverride = fullPage || overrideWidth !== undefined || overrideHeight !== undefined || options.dpr !== undefined;
 
   if (needsOverride) {
     // When width is set, apply it first so layout reflows before we read content size.
@@ -463,7 +465,7 @@ export async function screenshot(
         mobile: false,
         width: overrideWidth,
         height: 0,
-        deviceScaleFactor: 1,
+        deviceScaleFactor: dpr,
       });
     }
     let finalWidth = overrideWidth ?? 0;
@@ -483,7 +485,7 @@ export async function screenshot(
       mobile: false,
       width: finalWidth,
       height: finalHeight,
-      deviceScaleFactor: 1,
+      deviceScaleFactor: dpr,
     });
   }
 

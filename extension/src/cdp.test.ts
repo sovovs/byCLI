@@ -16,7 +16,7 @@ function createChromeMock() {
   const debuggerApi = {
     attach: vi.fn(async () => {}),
     detach: vi.fn(async () => {}),
-    sendCommand: vi.fn(async (_target: unknown, method: string) => {
+    sendCommand: vi.fn(async (_target: unknown, method: string, _params?: unknown) => {
       if (method === 'Runtime.evaluate') return { result: { value: 'ok' } };
       return {};
     }),
@@ -193,6 +193,31 @@ describe('cdp screenshot', () => {
     expect(overrides[0].params).toEqual({ mobile: false, width: 1080, height: 0, deviceScaleFactor: 1 });
     expect(calls.some((c) => c.method === 'Page.getLayoutMetrics')).toBe(false);
     expect(calls.at(-1)?.method).toBe('Emulation.clearDeviceMetricsOverride');
+  });
+
+  it.each([1, 2, 4])('applies explicit DPR %s without changing the viewport', async (dpr) => {
+    const { chrome, calls } = chromeMockForScreenshot();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./cdp');
+    await mod.screenshot(1, { dpr });
+
+    const overrides = calls.filter((c) => c.method === 'Emulation.setDeviceMetricsOverride');
+    expect(overrides).toHaveLength(1);
+    expect(overrides[0].params).toEqual({ mobile: false, width: 0, height: 0, deviceScaleFactor: dpr });
+    expect(calls.at(-1)?.method).toBe('Emulation.clearDeviceMetricsOverride');
+  });
+
+  it('combines --width/--height with --dpr', async () => {
+    const { chrome, calls } = chromeMockForScreenshot();
+    vi.stubGlobal('chrome', chrome);
+
+    const mod = await import('./cdp');
+    await mod.screenshot(1, { width: 1280, height: 960, dpr: 2 });
+
+    const overrides = calls.filter((c) => c.method === 'Emulation.setDeviceMetricsOverride');
+    expect(overrides).toHaveLength(1);
+    expect(overrides[0].params).toEqual({ mobile: false, width: 1280, height: 960, deviceScaleFactor: 2 });
   });
 
   it('overrides only height when --height is given without --full-page', async () => {
