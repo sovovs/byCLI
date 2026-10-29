@@ -502,14 +502,15 @@ async function screenshot(tabId, options = {}) {
   const fullPage = options.fullPage === true;
   const overrideWidth = options.width && options.width > 0 ? Math.ceil(options.width) : void 0;
   const overrideHeight = !fullPage && options.height && options.height > 0 ? Math.ceil(options.height) : void 0;
-  const needsOverride = fullPage || overrideWidth !== void 0 || overrideHeight !== void 0;
+  const dpr = options.dpr && options.dpr > 0 ? options.dpr : 1;
+  const needsOverride = fullPage || overrideWidth !== void 0 || overrideHeight !== void 0 || options.dpr !== void 0;
   if (needsOverride) {
     if (overrideWidth !== void 0 && fullPage) {
       await chrome.debugger.sendCommand({ tabId }, "Emulation.setDeviceMetricsOverride", {
         mobile: false,
         width: overrideWidth,
         height: 0,
-        deviceScaleFactor: 1
+        deviceScaleFactor: dpr
       });
     }
     let finalWidth = overrideWidth ?? 0;
@@ -526,7 +527,7 @@ async function screenshot(tabId, options = {}) {
       mobile: false,
       width: finalWidth,
       height: finalHeight,
-      deviceScaleFactor: 1
+      deviceScaleFactor: dpr
     });
   }
   try {
@@ -1820,7 +1821,7 @@ async function startDialogPolicy(token, lease, tabId, origin, timeoutMs) {
   }
 }
 
-const RUNTIME_BUILD_ID = "683ba6cf2a6f7d51c570aa216b4fbd3d21074912de1181a314abfc6301f40a57" ;
+const RUNTIME_BUILD_ID = "aa39e2be3774c0c362a7d1916bbe31da47382742a14b59a8e0cb0d79e7ca6143" ;
 Object.defineProperty(globalThis, "__BYCLI_RUNTIME_BUILD_ID__", { value: RUNTIME_BUILD_ID, configurable: true });
 const EXTENSION_CAPABILITIES = ["focus-window-v1", "ima-reader-v1", "console-capture-v1", "file-input-shadow-v1", "dialog-policy-v1"];
 let ws = null;
@@ -3430,7 +3431,8 @@ async function handleScreenshot(cmd, leaseKey) {
       quality: cmd.quality,
       fullPage: cmd.fullPage,
       width: cmd.width,
-      height: cmd.height
+      height: cmd.height,
+      dpr: cmd.dpr
     });
     return pageScopedResult(cmd.id, tabId, data);
   } catch (err) {
