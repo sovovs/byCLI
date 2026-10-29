@@ -51,6 +51,8 @@ export interface DaemonCommand {
   width?: number;
   /** Override viewport height in CSS pixels for screenshot (0 / undefined = use current; ignored when fullPage) */
   height?: number;
+  /** Device pixel ratio for screenshot capture (1-4; output pixels = CSS pixels × dpr) */
+  dpr?: number;
 
   /** Local file paths for set-file-input action */
   files?: string[];

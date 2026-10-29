@@ -691,6 +691,12 @@ describe('Page.screenshot', () => {
     warnMock.mockReset();
   });
 
+  it.each([1, 2])('forwards explicit DPR %s to the extension', async (dpr) => {
+    sendCommandMock.mockResolvedValueOnce('BASE64');
+    await new Page('default').screenshot({ dpr });
+    expect(sendCommandMock).toHaveBeenCalledWith('screenshot', expect.objectContaining({ dpr }));
+  });
+
   it('forwards width / height / fullPage options to the bridge', async () => {
     sendCommandMock.mockResolvedValueOnce('BASE64');
 

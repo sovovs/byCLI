@@ -2038,6 +2038,7 @@ async function handleScreenshot(cmd: Command, leaseKey: string): Promise<Result>
       fullPage: cmd.fullPage,
       width: cmd.width,
       height: cmd.height,
+      dpr: cmd.dpr,
     });
     return pageScopedResult(cmd.id, tabId, data);
   } catch (err) {
