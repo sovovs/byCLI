@@ -1,5 +1,6 @@
 /** Save a Weibo long article draft through the logged-in browser UI. */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ArgumentError, AuthRequiredError, CommandExecutionError } from '@sovovs/bycli/errors';
@@ -100,7 +101,14 @@ function analyzeHtml(html, baseDir) {
     for (const tag of html.match(IMG_TAG) || []) {
         const src = imgSrc(tag);
         if (!src) { errors.push('An <img> has no src'); continue; }
-        if (/^data:/i.test(src)) { errors.push('Inline data: images are not supported; save them as files'); continue; }
+        if (/^data:/i.test(src)) {
+            const match = /^data:image\/([a-z0-9.+-]+);base64,([\s\S]+)$/i.exec(src);
+            if (!match) { errors.push('Unsupported data: image; only base64 image payloads are accepted'); continue; }
+            const ext = match[1].toLowerCase().replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+            if (!BODY_IMAGE_EXT.test(`x.${ext}`)) { errors.push(`Unsupported data: image type: ${match[1]}`); continue; }
+            images.push({ kind: 'data', src, ext, base64: match[2].replace(/\s+/g, '') });
+            continue;
+        }
         if (/^https?:/i.test(src)) {
             if (WEIBO_IMAGE_URL.test(src)) images.push({ kind: 'remote', src });
             else errors.push(`Remote image is not hosted on sinaimg.cn; download it locally first: ${src}`);
@@ -130,14 +138,15 @@ function prepareBody(content) {
     if (report.errors.length) throw new ArgumentError(`HTML is not ready for the Weibo editor:\n- ${report.errors.join('\n- ')}`);
     const uploads = [];
     const placeholder = (file) => { uploads.push(file); return `<p>${IMAGE_TOKEN_PREFIX}${uploads.length - 1}</p>`; };
-    const localFile = (tag) => report.images.find((img) => img.kind === 'local' && img.src === imgSrc(tag))?.file;
+    const imageFor = (tag) => report.images.find((img) => (img.kind === 'local' || img.kind === 'data') && img.src === imgSrc(tag));
     const imageBlock = new RegExp(`${FIGURE_BLOCK.source}|${IMG_TAG.source}`, 'gi');
     const html = content.text.replace(imageBlock, (block) => {
         const tag = (block.match(IMG_TAG) || [])[0];
-        const file = tag && localFile(tag);
-        if (!file) return block;
-        if (/<figcaption\b/i.test(block)) report.warnings.push(`Caption dropped for uploaded image: ${path.basename(file)}`);
-        return placeholder(file);
+        const image = tag && imageFor(tag);
+        if (!image) return block;
+        const label = image.kind === 'local' ? path.basename(image.file) : 'data: image';
+        if (/<figcaption\b/i.test(block)) report.warnings.push(`Caption dropped for uploaded image: ${label}`);
+        return placeholder(image);
     });
     return { html, images: report.images, uploads, warnings: report.warnings };
 }
@@ -201,6 +210,12 @@ async function setBody(page, html, placeholderCount) {
 
 async function figureState(page) {
     return evaluate(page, `(() => { const editor = ${EDITOR_JS}; const figures = []; editor.state.doc.descendants((node) => { if (node.type.name === 'figure') figures.push({ src: String(node.attrs.src || ''), uploadState: node.attrs.uploadState ?? null }); }); return figures; })()`);
+}
+
+function writeTempImage(image) {
+    const file = path.join(os.tmpdir(), `bycli-weibo-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${image.ext}`);
+    fs.writeFileSync(file, Buffer.from(image.base64, 'base64'));
+    return file;
 }
 
 async function uploadBodyImage(page, file, index, expectedFigures) {
@@ -331,7 +346,7 @@ export async function runWeiboArticlePublish(page, kwargs) {
     if (!content.text) throw new ArgumentError('Weibo article content cannot be empty');
     const cover = validateCover(kwargs?.cover);
     const body = prepareBody(content);
-    const localImages = body.images.filter((img) => img.kind === 'local');
+    const localImages = body.images.filter((img) => img.kind === 'local' || img.kind === 'data');
     const row = {
         title,
         content_format: content.format,
@@ -358,7 +373,15 @@ export async function runWeiboArticlePublish(page, kwargs) {
     await setBody(page, body.html, body.uploads?.length || 0);
     const remoteCount = body.images.length - localImages.length;
     for (let i = 0; i < body.uploads.length; i++) {
-        await uploadBodyImage(page, body.uploads[i], i, remoteCount + i + 1);
+        const upload = body.uploads[i];
+        let file = upload.kind === 'local' ? upload.file : null;
+        let tempFile = null;
+        if (!file) { tempFile = writeTempImage(upload); file = tempFile; }
+        try {
+            await uploadBodyImage(page, file, i, remoteCount + i + 1);
+        } finally {
+            if (tempFile) fs.rmSync(tempFile, { force: true });
+        }
     }
     const chars = await verifyBody(page, body.images.length);
     const coverStatus = cover ? await setCover(page, cover) : null;

@@ -45,10 +45,26 @@ describe('weibo article-publish', () => {
 
   it('replaces local images with upload placeholders and keeps sinaimg images', () => {
     const body = prepareBody(readContent({ 'content-file': htmlFile }));
-    expect(body.uploads).toEqual([path.join(dir, 'images', '01.png'), path.join(dir, 'images', '02.jpg')]);
+    expect(body.uploads.map((upload) => [upload.kind, upload.file])).toEqual([
+      ['local', path.join(dir, 'images', '01.png')],
+      ['local', path.join(dir, 'images', '02.jpg')],
+    ]);
     expect(body.html).toContain('<p>BYCLI_WEIBO_IMAGE_0</p><p>BYCLI_WEIBO_IMAGE_1</p>');
     expect(body.html).toContain('<img src="https://wx1.sinaimg.cn/large/a.jpg">');
     expect(body.html).not.toContain('<figure');
+  });
+
+  it('accepts inline data: images and swaps them for upload placeholders', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    const report = analyzeHtml(`<img src="${png}">`, dir);
+    expect(report.errors).toEqual([]);
+    expect(report.images).toHaveLength(1);
+    expect(report.images[0]).toMatchObject({ kind: 'data', ext: 'png' });
+    const body = prepareBody({ text: `<p>正文</p><img src="${png}">`, baseDir: dir, format: 'html', source: 'inline' });
+    expect(body.uploads).toHaveLength(1);
+    expect(body.uploads[0]).toMatchObject({ kind: 'data', ext: 'png' });
+    expect(body.html).toContain('<p>BYCLI_WEIBO_IMAGE_0</p>');
+    expect(analyzeHtml('<img src="data:image/svg+xml;base64,PHN2Zz4=">', dir).errors.join('\n')).toMatch(/Unsupported data: image type/);
   });
 
   it('reports HTML the editor would drop without rewriting it', () => {
