@@ -1526,6 +1526,47 @@ describe('executeCommand — non-browser timeout', () => {
     vi.restoreAllMocks();
   });
 
+  it('isolates retained auth pages by platform and query while defaulting login to foreground', async () => {
+    const closeWindow = vi.fn().mockResolvedValue(undefined);
+    const focusWindow = vi.fn().mockResolvedValue(undefined);
+    const sessions: Array<{ session?: string; windowMode?: string; contextId?: string }> = [];
+    vi.spyOn(capRouting, 'shouldUseBrowserSession').mockReturnValue(true);
+    vi.spyOn(runtime, 'browserSession').mockImplementation(async (_Factory, fn, opts) => {
+      sessions.push(opts ?? {});
+      return fn({ closeWindow, focusWindow, tabs: async () => [{ page: 'auth-owned' }], setActivePage: vi.fn() } as any);
+    });
+    const login = cli({ site: 'auth', name: 'login', access: 'read', browser: true,
+      strategy: Strategy.COOKIE, navigateBefore: false, siteSession: 'persistent',
+      args: [{ name: 'platform', positional: true, required: true }], func: async () => [] });
+    const status = cli({ site: 'auth', name: 'status', access: 'read', browser: true,
+      strategy: Strategy.COOKIE, navigateBefore: false,
+      args: [{ name: 'platform', positional: true, required: true }], func: async () => [] });
+    try {
+      await executeCommand(login, { platform: 'zhihu' }, false, { profile: 'auth-test-profile-a' });
+      await executeCommand(login, { platform: ' ZHIHU ' }, false, { profile: 'auth-test-profile-b' });
+      await executeCommand(login, { platform: 'weibo' });
+      await executeCommand(status, { platform: 'zhihu' });
+      await executeCommand(status, { platform: 'zhihu' }, false, { siteSession: 'persistent' });
+      await executeCommand(login, { platform: 'zhihu' }, false, { windowMode: 'background' });
+      expect(sessions[0].session).toBe(sessions[1].session);
+      expect(sessions[0].contextId).toBe('auth-test-profile-a');
+      expect(sessions[1].contextId).toBe('auth-test-profile-b');
+      for (const i of [2, 3, 4]) expect(sessions[i].session).not.toBe(sessions[0].session);
+      expect(sessions[0].windowMode).toBe('foreground');
+      expect(sessions[3].windowMode).toBe('background');
+      expect(sessions[5].windowMode).toBe('background');
+      expect(focusWindow).toHaveBeenCalledTimes(3);
+      // Only the default ephemeral status query closes its own tab.
+      expect(closeWindow).toHaveBeenCalledTimes(1);
+      login.func = async () => { throw new Error('probe transport unavailable'); };
+      await expect(executeCommand(login, { platform: 'zhihu' })).rejects.toThrow('probe transport unavailable');
+      expect(closeWindow).toHaveBeenCalledTimes(1);
+    } finally {
+      getRegistry().delete('auth/login'); getRegistry().delete('auth/status');
+      vi.restoreAllMocks();
+    }
+  });
+
   it('reuses a persistent site browser session and keeps the tab lease open', async () => {
     const closeWindow = vi.fn().mockResolvedValue(undefined);
     const mockPage = { closeWindow } as any;

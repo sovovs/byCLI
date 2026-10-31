@@ -1916,6 +1916,93 @@
     "sourceFile": "arxiv/search.js"
   },
   {
+    "site": "auth",
+    "name": "login",
+    "description": "Open a retained official login page and wait for human authentication",
+    "access": "read",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "platform",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Platform: weibo, zhihu, xiaohongshu, xiaohongshu-creator, juejin"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 180,
+        "required": false,
+        "help": "Human login wait in seconds (30–900)"
+      }
+    ],
+    "columns": [
+      "status",
+      "platform",
+      "identity",
+      "waited_s",
+      "url",
+      "reason",
+      "message"
+    ],
+    "type": "js",
+    "modulePath": "auth/login.js",
+    "sourceFile": "auth/login.js",
+    "navigateBefore": false,
+    "siteSession": "persistent"
+  },
+  {
+    "site": "auth",
+    "name": "sites",
+    "description": "List authentication recipes and their live verification status",
+    "access": "read",
+    "strategy": "public",
+    "browser": false,
+    "args": [],
+    "columns": [
+      "platform",
+      "label",
+      "surface",
+      "detection",
+      "verification",
+      "login_url"
+    ],
+    "type": "js",
+    "modulePath": "auth/sites.js",
+    "sourceFile": "auth/sites.js"
+  },
+  {
+    "site": "auth",
+    "name": "status",
+    "description": "Check authentication on a separate page without disturbing retained login pages",
+    "access": "read",
+    "strategy": "cookie",
+    "browser": "conditional",
+    "args": [
+      {
+        "name": "platform",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Platform: weibo, zhihu, xiaohongshu, xiaohongshu-creator, juejin"
+      }
+    ],
+    "columns": [
+      "status",
+      "platform",
+      "identity",
+      "url",
+      "reason",
+      "message"
+    ],
+    "type": "js",
+    "modulePath": "auth/status.js",
+    "sourceFile": "auth/status.js",
+    "navigateBefore": false
+  },
+  {
     "site": "baidu",
     "name": "search",
     "description": "Search Baidu",

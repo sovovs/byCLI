@@ -55,6 +55,11 @@ try {
   assert(main.files.has('extension/dist/build-info.json'), 'bycli tarball is missing extension build metadata');
 
   for (const file of [
+    'clis/auth/login.js',
+    'clis/auth/status.js',
+    'clis/auth/sites.js',
+    'clis/auth/_shared.js',
+    'clis/auth/_recipes.js',
     'dist/src/download/media-validation.js',
     'clis/_shared/video-submit.js',
     'clis/_shared/output-filename.js',
@@ -126,6 +131,12 @@ try {
   const config = join(temp, 'private-config');
   const smokeEnv = { ...process.env, BYCLI_CONFIG_DIR: config };
   const installedCli = join(installedRoot, 'dist/src/main.js');
+  const authSites = JSON.parse(execFileSync(process.execPath, [installedCli, 'auth', 'sites', '-f', 'json'], {
+    cwd: project, env: smokeEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  }));
+  for (const platform of ['weibo', 'zhihu', 'xiaohongshu', 'juejin']) {
+    assert(authSites.some(row => row.platform === platform), `installed CLI is missing auth recipe ${platform}`);
+  }
   execFileSync(process.execPath, [installedCli, 'adapter', 'eject', 'weixin-channels'], { cwd: project, env: smokeEnv, stdio: 'pipe' });
   const help = execFileSync(process.execPath, [installedCli, 'weixin-channels', 'video-publish', '--help', '-f', 'json'], { cwd: project, env: smokeEnv, encoding: 'utf8' });
   assert(help.includes('retry-cover-upload'), 'ejected adapter did not load its complete dependency closure');

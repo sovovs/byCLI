@@ -540,7 +540,7 @@ export async function executeCommand(
       assertAdapterSessionLifecycle(siteSession, adapterSession);
       const session = resolveAdapterBrowserSession(cmd, siteSession, adapterSession, kwargs);
       const keepTab = resolveKeepTab(siteSession, opts.keepTab);
-      const windowMode = resolveBrowserWindowMode('background', opts.windowMode);
+      const windowMode = resolveBrowserWindowMode(cmd.site === 'auth' && cmd.name === 'login' ? 'foreground' : 'background', opts.windowMode);
       const executeInBrowser = () => browserSession(BrowserFactory, async (page) => {
         // BrowserBridge.connect() has started/probed the daemon by this point. Resolve
         // the daemon's canonical profile before acquiring a profile-scoped lease.
@@ -618,6 +618,16 @@ export async function executeCommand(
           }
         }
         try {
+          // A retained QR page may already exist in a background window. New
+          // pages honor windowMode during goto; focus the existing owned page
+          // explicitly without navigating away from an in-progress login.
+          if (cmd.site === 'auth' && cmd.name === 'login' && windowMode === 'foreground') {
+            const tabs = await page.tabs() as Array<{ page?: string }>;
+            if (tabs.length === 1 && tabs[0].page) {
+              page.setActivePage?.(tabs[0].page);
+              await page.focusWindow?.();
+            }
+          }
           const browserTimeout = userTimeoutSec !== null
             ? userTimeoutSec + RUNTIME_TIMEOUT_PADDING_SECONDS
             : DEFAULT_BROWSER_COMMAND_TIMEOUT;
@@ -880,6 +890,12 @@ function assertAdapterSessionLifecycle(siteSession: SiteSessionMode, adapterSess
 
 function resolveAdapterBrowserSession(cmd: CliCommand, siteSession: SiteSessionMode, adapterSession?: string, args: Record<string, unknown> = {}): string {
   if (siteSession === 'persistent') {
+    // Each platform retains its own QR/verification page. Queries must never
+    // navigate the login lease, even when --site-session persistent is explicit.
+    if (cmd.site === 'auth') {
+      const platform = crypto.createHash('sha256').update(String(args.platform ?? '').trim().toLowerCase()).digest('hex').slice(0, 16);
+      return `site:auth:${platform}:${cmd.name}${adapterSession ? `:${adapterSession}` : ''}`;
+    }
     // Keep the retained Channels editor on its historical lease, including
     // read-only inspection. Statistics and management queries use other tabs.
     if (cmd.site === 'weixin-channels' && cmd.name !== 'video-publish' && !(cmd.name === 'video-status' && args['inspect-editor'])) {
