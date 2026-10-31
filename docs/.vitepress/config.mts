@@ -53,6 +53,7 @@ export default defineConfig({
               text: 'Browser Adapters',
               collapsed: false,
               items: [
+                { text: 'Auth / Login', link: '/adapters/browser/auth' },
                 { text: 'Twitter / X', link: '/adapters/browser/twitter' },
                 { text: 'Reddit', link: '/adapters/browser/reddit' },
                 { text: 'Tieba', link: '/adapters/browser/tieba' },
