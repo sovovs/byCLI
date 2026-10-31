@@ -33,6 +33,7 @@ export default defineConfig({
                 { text: 'Comparison', link: '/comparison' },
                 { text: 'Browser Bridge', link: '/guide/browser-bridge' },
                 { text: 'Native Content Connectors', link: '/guide/native-connectors' },
+                { text: 'Authentication', link: '/guide/authentication' },
                 { text: 'Remote Orchestration', link: '/guide/remote-orchestration' },
                 { text: 'Troubleshooting', link: '/guide/troubleshooting' },
                 { text: 'Add an Electron App CLI', link: '/guide/electron-app-cli' },

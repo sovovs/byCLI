@@ -30,6 +30,23 @@ bycli 12306 stations 北京        # public command, no login required
 bycli juejin search bycli        # search Juejin
 ```
 
+### Authentication
+
+With Browser Bridge connected, open an official login page and complete the
+QR/SMS verification yourself. Login pages open in the foreground and are retained
+per platform; status checks use separate pages.
+
+```bash
+bycli auth sites
+bycli auth login zhihu --timeout 300
+bycli auth status zhihu -f json
+```
+
+Recipes cover Weibo, Zhihu, Xiaohongshu (www and creator centre) and Juejin. The
+four www recipes were validated with real accounts; the creator-centre recipe is
+still pending. Page or network failures return `unknown`, rather than claiming the
+session is signed out. See [authentication](docs/guide/authentication.md).
+
 ### Search adapters
 
 The following public search commands are available:

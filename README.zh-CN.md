@@ -22,6 +22,21 @@ bycli <site> <command> --help   # 查看命令的参数和选项
 bycli <site> <command> -f yaml  # 结构化输出(适合 agent)
 ```
 
+### 登录与会话检查
+
+连接 Browser Bridge 后，可用统一命令打开官方登录页，由用户完成扫码或短信验证。
+登录页默认在前台打开并按平台保留，状态查询使用独立页面。
+
+```bash
+bycli auth sites
+bycli auth login zhihu --timeout 300
+bycli auth status zhihu -f json
+```
+
+目前提供微博、知乎、小红书（www 与创作中心两面）、掘金配方；四条 www 配方已完成真实账号登录验证，
+创作中心配方仍待现场验证。页面或网络异常返回 `unknown`，不等同于未登录。
+详见[登录与会话检查](docs/guide/authentication.md)。
+
 ### Linux 下载 IMA 知识库 PDF
 
 Linux 不需要安装 IMA 桌面客户端。安装 bycli 后，把 npm 包内的
